@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="winui/SpwLyrics.WinUI/Assets/Square150x150Logo.scale-200.png" width="120" alt="SPW Lyrics 图标">
-</p>
-
 <h1 align="center">🎵 SPW Lyrics</h1>
 
 <p align="center">为 Salt Player for Windows 自动搜索、匹配并加载更完整的歌词。</p>
