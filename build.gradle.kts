@@ -69,7 +69,8 @@ tasks.named<Jar>("jar") {
             "Plugin-Name" to pluginName,
             "Plugin-Version" to project.version.toString(),
             "Plugin-Provider" to pluginProvider,
-            "Plugin-Description" to "Automatic multi-provider lyrics for Salt Player for Windows.",
+            "Plugin-Description" to "为 Salt Player for Windows 自动搜索、匹配并加载多来源歌词。",
+            "Plugin-Open-Source-Url" to "https://github.com/GaBoron/SPW-Lyrics",
             "Plugin-Has-Config" to "true",
         )
     }
