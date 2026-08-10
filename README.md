@@ -1,89 +1,60 @@
-# SPW Lyrics
+<p align="center">
+  <img src="winui/SpwLyrics.WinUI/Assets/Square150x150Logo.scale-200.png" width="120" alt="SPW Lyrics 图标">
+</p>
 
-SPW Lyrics 是一款面向 [Salt Player for Windows（SPW）](https://github.com/Moriafly/SPW) 的歌词增强插件。安装后，它会在播放歌曲时自动寻找更完整的歌词，并尽量保留逐字时间轴、翻译、音译、对唱和背景歌词。
+<h1 align="center">🎵 SPW Lyrics</h1>
 
-当前版本：`0.1.0`。已在 SPW `1.16.2`（Steam、Windows x64）上测试。SPW 创意工坊接口仍处于试验阶段，后续 SPW 更新可能影响插件兼容性。
+<p align="center">为 Salt Player for Windows 自动搜索、匹配并加载更完整的歌词。</p>
 
-## 主要功能
+<p align="center">
+  <a href="https://github.com/GaBoron/SPW-Lyrics/releases/latest"><img src="https://img.shields.io/github/v/release/GaBoron/SPW-Lyrics?label=%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC&color=6750A4" alt="最新版本"></a>
+  <img src="https://img.shields.io/badge/SPW-1.16.2-3A7AFE" alt="已测试 SPW 版本">
+  <img src="https://img.shields.io/badge/Windows-x64-0078D4" alt="Windows x64">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/GaBoron/SPW-Lyrics?color=2E8B57" alt="许可证"></a>
+</p>
 
-- 自动搜索并匹配歌词，无需每次手动操作。
-- 歌词来源依次为：AMLL TTML DB、QQ 音乐、酷狗音乐、网易云音乐，最后回到 SPW 自带的本地歌词。
-- 优先选择逐字歌词，其次是逐行歌词和普通歌词。
-- 支持 TTML、QRC、KRC、YRC、LRC，并尽量保留翻译、音译、背景歌词和对唱的同时显示。
-- 匹配时综合歌名、歌手、专辑和歌曲时长，遇到 Live、Remix、伴奏、翻唱或明显歧义时避免误替换。
-- 自动匹配失败时会提示使用手动搜索；没有匹配到的歌曲下次播放会重新尝试。
-- 提供独立的 WinUI 手动搜索窗口，可修改关键词、指定来源、预览歌词、应用候选或切回本地歌词。
-- 自动缓存已经加载或手动选择的歌词，切歌后可以更快显示。
+SPW Lyrics 是一款面向 [Salt Player for Windows（SPW）](https://github.com/Moriafly/SPW) 的歌词增强插件。安装后正常播放歌曲即可，无需每次手动搜索。
 
-## 下载与安装
+## ✨ 功能亮点
 
-1. 打开本仓库的 [Releases](https://github.com/GaBoron/SPW-Lyrics/releases/latest) 页面。
-2. 下载 `spw-lyrics-0.1.0.zip`，不要解压。
-3. 打开 SPW 的“设置 → 创意工坊”，使用本地安装或导入模组的入口选择这个 ZIP 文件。入口名称可能随 SPW 版本略有不同。
-4. 安装后若插件没有立即出现，请重启一次 SPW。
+- 🔎 **自动搜索**：依次尝试 AMLL TTML DB、QQ 音乐、酷狗音乐和网易云音乐。
+- 🎯 **可靠匹配**：综合歌名、歌手、专辑和歌曲时长，减少同名歌、Live、Remix 等版本误配。
+- 🎤 **丰富歌词**：优先逐字歌词，并支持逐行歌词、普通歌词、翻译、音译、对唱和背景歌词。
+- ⚡ **自动刷新**：找到可靠结果后尝试立即替换当前歌词，不会阻塞音乐播放。
+- 🖱️ **手动选择**：可修改关键词、指定来源、预览候选，或随时切回 SPW 本地歌词。
+- 💾 **本地缓存**：已经找到或手动选择的歌词会保存，之后播放加载更快。
 
-请只从本仓库 Release 下载插件。ZIP 内已包含手动搜索窗口需要的组件，普通用户不需要另外安装 Java、.NET 或其他运行库。
+## 📥 下载与安装
 
-## 使用方法
+1. 前往 [最新 Release](https://github.com/GaBoron/SPW-Lyrics/releases/latest)。
+2. 下载 `spw-lyrics-0.1.0.zip`，**不要解压**。
+3. 打开 SPW 的“**设置 → 创意工坊**”。
+4. 使用本地安装或导入模组的入口，选择刚才下载的 ZIP。
+5. 如果插件没有立即出现，请重启一次 SPW。
 
-正常播放歌曲即可。插件会先读取已有缓存；没有缓存时，SPW 会先继续使用内嵌歌词或同名 `.lrc` 文件，插件同时在后台搜索网络来源。找到可靠结果后会尝试自动刷新当前歌词，不会阻塞音乐播放。
+> [!IMPORTANT]
+> Release 中的 ZIP 已包含全部运行组件。普通用户不需要另外安装 Java、.NET 或其他运行库。
 
-需要自己挑选歌词时：
+## 🚀 开始使用
 
-1. 进入“设置 → 创意工坊 → 模组设置 → SPW Lyrics”。
-2. 点击“手动搜索歌词”。
-3. 在窗口中修改关键词或选择指定来源；窗口打开后会自动搜索一次。
-4. 选择候选并预览，然后点击应用。也可以点击“切回本地歌词”，继续使用 SPW 的内嵌歌词或同名 `.lrc` 文件。
+安装完成后直接播放歌曲。没有缓存时，SPW 会先继续显示内嵌歌词或同名 `.lrc`，插件同时在后台搜索；找到可靠歌词后会尝试自动刷新。
 
-同一时间只会打开一个手动搜索窗口。
+需要手动挑选歌词时，进入：
 
-## 缓存与网络
+> **设置 → 创意工坊 → 模组设置 → SPW Lyrics → 手动搜索歌词**
 
-已成功加载的歌词会缓存 30 天；用户手动选择的来源和“切回本地歌词”会持续保存。没有搜索到歌词的结果不会缓存，因此下次播放仍会重新搜索。
+手动窗口会自动搜索当前歌曲。选择候选后可以预览并应用，也可以点击“切回本地歌词”。同一时间只会打开一个手动窗口。
 
-可在“设置 → 创意工坊 → 模组设置 → SPW Lyrics”点击“查看本地缓存文件夹”。数据默认位于：
+自动匹配失败时，插件会提醒你尝试手动搜索；这类失败结果不会被缓存，下次播放仍会重新搜索。
 
-```text
-%LOCALAPPDATA%\SPW Lyrics
-```
+## 📚 更多帮助
 
-搜索歌词时，插件会把当前歌曲的歌名、歌手、专辑和时长发送给所选歌词服务；不需要登录音乐账号。歌词是否包含翻译、音译或逐字时间轴，取决于来源本身提供的数据。
+- 📖 [详细使用说明](docs/使用说明.md)
+- 🛟 [常见问题](docs/常见问题.md)
+- 🧰 [开发与构建](docs/开发说明.md)
 
-## 常见问题
+## ⚠️ 兼容性
 
-### 自动加载失败怎么办？
+当前版本为 `0.1.0`，已在 SPW `1.16.2`（Steam、Windows x64）上测试。SPW 创意工坊接口仍处于试验阶段，后续 SPW 更新可能影响插件兼容性。
 
-先等待失败提示，再从“设置 → 创意工坊 → 模组设置 → SPW Lyrics → 手动搜索歌词”选择候选。可以修改关键词，或只搜索某一个来源。没有匹配到的歌曲下次播放会自动重试。
-
-### 为什么显示的是本地歌词？
-
-网络搜索仍在后台进行，或所有候选都未达到安全匹配标准。插件宁可保留 SPW 本地歌词，也不会自动套用明显不可靠的结果。
-
-### 为什么没有翻译、音译或逐字效果？
-
-不同平台和歌曲提供的数据并不相同。插件会优先保留可用的丰富歌词，但无法生成来源中不存在的内容。
-
-### 歌词已经找到，却没有立即刷新？
-
-自动刷新依赖 SPW 当前的内部实现。若某个 SPW 版本不兼容，歌词仍会保存在缓存中；重新选择一次歌曲即可加载。
-
-## 开发与构建
-
-项目使用 Kotlin/JVM 21，并包含一个自包含的 WinUI 3 x64 手动搜索伴随程序。开发环境需要 JDK 21 和 .NET 8 SDK：
-
-```powershell
-.\gradlew.bat test plugin
-```
-
-可导入的插件包生成到 `build/plugin/spw-lyrics-0.1.0.zip`。核心代码按统一数据模型、歌词格式解析、来源适配、匹配与缓存、SPW 集成划分；新增歌词来源时无需把平台逻辑耦合到播放回调或界面。
-
-相关项目与资料：
-
-- [SPW 创意工坊 API](https://github.com/Moriafly/spw-workshop-api)
-- [AMLL TTML DB](https://github.com/amll-dev/amll-ttml-db)
-- [Lyrico](https://github.com/Replica0110/Lyrico)
-- [Lyricify Lyrics Helper](https://github.com/WXRIW/Lyricify-Lyrics-Helper)
-
-## 许可证
-
-本项目使用 [MIT License](LICENSE)。
+本项目采用 [MIT License](LICENSE)。
