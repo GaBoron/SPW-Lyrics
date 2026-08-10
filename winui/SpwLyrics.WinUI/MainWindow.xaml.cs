@@ -22,7 +22,7 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
 
-        AppWindow.SetIcon("Assets/AppIcon.ico");
+        AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
         StartupDiagnostics.Stage("MainWindow.SetIcon.complete");
         AppWindow.Resize(new SizeInt32(1180, 760));
         StartupDiagnostics.Stage("MainWindow.Resize.complete");

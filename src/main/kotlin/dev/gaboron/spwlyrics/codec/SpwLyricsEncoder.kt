@@ -1,21 +1,27 @@
 package dev.gaboron.spwlyrics.codec
 
 import dev.gaboron.spwlyrics.domain.LyricLine
+import dev.gaboron.spwlyrics.domain.LyricWord
 import dev.gaboron.spwlyrics.domain.LyricsDocument
 import dev.gaboron.spwlyrics.domain.LyricsQuality
 import kotlin.math.max
 
 object SpwLyricsEncoder {
-    const val VERSION = 3
+    const val VERSION = 4
 
     fun encode(document: LyricsDocument): String {
         if (document.lines.isEmpty()) return ""
+        val sourceLine = "歌词来源：${document.source.displayName}"
         if (document.quality == LyricsQuality.PLAIN) {
-            return document.lines.map(LyricLine::text).filter(String::isNotBlank).joinToString("\n")
+            return buildList {
+                add(sourceLine)
+                addAll(document.lines.map(LyricLine::text).filter(String::isNotBlank))
+            }.joinToString("\n")
         }
 
-        val occupied = mutableSetOf<Long>()
+        val occupied = mutableSetOf(0L)
         return buildList {
+            add(timestamp(0) + sourceLine)
             document.lines.sortedWith(compareBy<LyricLine> { it.startMs ?: Long.MAX_VALUE }.thenBy { it.background })
                 .forEach { line ->
                     val rawStart = line.startMs ?: return@forEach
@@ -37,11 +43,28 @@ object SpwLyricsEncoder {
 
     private fun encodeWords(line: LyricLine, lineStart: Long): String = buildString {
         append(timestamp(lineStart))
+        val segments = timedTextSegments(line)
         line.words.forEachIndexed { index, word ->
             if (index > 0 || word.startMs > lineStart) append(inlineTimestamp(max(word.startMs, lineStart)))
-            append(word.text)
+            append(segments[index])
         }
         line.effectiveEndMs()?.takeIf { it > lineStart }?.let { append(timestamp(it)) }
+    }
+
+    private fun timedTextSegments(line: LyricLine): List<String> {
+        var cursor = 0
+        val starts = line.words.map { word ->
+            if (word.text.isEmpty()) return line.words.map(LyricWord::text)
+            line.text.indexOf(word.text, cursor).also { index ->
+                if (index < 0) return line.words.map(LyricWord::text)
+                cursor = index + word.text.length
+            }
+        }
+        return line.words.indices.map { index ->
+            val start = if (index == 0) 0 else starts[index]
+            val end = starts.getOrNull(index + 1) ?: line.text.length
+            line.text.substring(start, end)
+        }
     }
 
     fun timestamp(milliseconds: Long): String = format(milliseconds, '[', ']')

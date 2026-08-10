@@ -62,7 +62,7 @@ class LyricCodecsTest {
         assertEquals(LyricsQuality.LINE_SYNCED, document.quality)
         assertEquals(listOf("他 他下落不明地出发", "在阳光灿烂的世界"), document.lines.map { it.text })
         assertEquals(listOf("作曲 Composer: 华晨宇", "作词 Lyricist: 唐恬"), document.metadata["credits"])
-        assertTrue(SpwLyricsEncoder.encode(document).startsWith("[00:18.480]"))
+        assertTrue(SpwLyricsEncoder.encode(document).startsWith("[00:00.000]歌词来源：网易云音乐"))
     }
 
     @Test
