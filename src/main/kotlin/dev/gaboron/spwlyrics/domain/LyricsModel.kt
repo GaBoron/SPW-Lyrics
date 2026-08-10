@@ -34,6 +34,7 @@ data class LyricLine(
     val translation: String? = null,
     val romanization: String? = null,
     val background: Boolean = false,
+    val agent: String? = null,
 ) {
     fun effectiveEndMs(): Long? = endMs ?: words.maxOfOrNull(LyricWord::endMs)
 }
@@ -49,19 +50,18 @@ data class LyricsDocument(
         get() {
             val nonEmpty = lines.filter { it.text.isNotBlank() }
             if (nonEmpty.isEmpty()) return LyricsQuality.PLAIN
+            val timed = nonEmpty.filter { it.startMs != null }
+            if (timed.isEmpty()) return LyricsQuality.PLAIN
 
-            val wordTimed = nonEmpty.count { line ->
-                line.words.size >= 2 && line.words.zipWithNext().all { (left, right) ->
-                    left.startMs <= left.endMs && left.endMs <= right.endMs
-                }
+            val wordTimed = timed.count { line ->
+                line.words.isNotEmpty() &&
+                    line.words.all { it.startMs <= it.endMs } &&
+                    line.words.zipWithNext().all { (left, right) ->
+                        left.startMs <= right.startMs && left.endMs <= right.endMs
+                    }
             }
-            if (wordTimed.toDouble() / nonEmpty.size >= 0.8) return LyricsQuality.WORD_SYNCED
-
-            val lineTimed = nonEmpty.count { it.startMs != null }
-            return if (lineTimed.toDouble() / nonEmpty.size >= 0.8) {
-                LyricsQuality.LINE_SYNCED
-            } else {
-                LyricsQuality.PLAIN
-            }
+            return if (wordTimed.toDouble() / timed.size >= 0.8) {
+                LyricsQuality.WORD_SYNCED
+            } else LyricsQuality.LINE_SYNCED
         }
 }

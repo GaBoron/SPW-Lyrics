@@ -7,7 +7,7 @@ import dev.gaboron.spwlyrics.domain.LyricsQuality
 import kotlin.math.max
 
 object SpwLyricsEncoder {
-    const val VERSION = 4
+    const val VERSION = 5
 
     fun encode(document: LyricsDocument): String {
         if (document.lines.isEmpty()) return ""
@@ -19,14 +19,13 @@ object SpwLyricsEncoder {
             }.joinToString("\n")
         }
 
-        val occupied = mutableSetOf(0L)
+        val firstLyricStart = document.lines.mapNotNull(LyricLine::startMs).minOrNull()?.coerceAtLeast(0)
+        val sourceEnd = firstLyricStart?.let { if (it > 0) it else 1L }
         return buildList {
-            add(timestamp(0) + sourceLine)
+            add(timestamp(0) + sourceLine + sourceEnd?.let(::timestamp).orEmpty())
             document.lines.sortedWith(compareBy<LyricLine> { it.startMs ?: Long.MAX_VALUE }.thenBy { it.background })
                 .forEach { line ->
-                    val rawStart = line.startMs ?: return@forEach
-                    var start = rawStart.coerceAtLeast(0)
-                    while (!occupied.add(start)) start++
+                    val start = line.startMs?.coerceAtLeast(0) ?: return@forEach
                     val main = if (document.quality == LyricsQuality.WORD_SYNCED && line.words.isNotEmpty()) {
                         encodeWords(line, start)
                     } else {

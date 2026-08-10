@@ -25,34 +25,64 @@ class TtmlCodec : LyricCodec {
         val document = factory.newDocumentBuilder().parse(InputSource(StringReader(raw)))
         val paragraphs = document.getElementsByTagNameNS("*", "p")
         val primary = mutableListOf<LyricLine>()
+        val backgrounds = mutableListOf<LyricLine>()
         val translations = mutableListOf<LyricLine>()
         val romanizations = mutableListOf<LyricLine>()
 
         for (index in 0 until paragraphs.length) {
             val paragraph = paragraphs.item(index) as? Element ?: continue
-            val line = parseParagraph(paragraph) ?: continue
+            val parsed = parseParagraph(paragraph)
             when (paragraph.role()) {
-                "translation", "x-translation" -> translations += line
-                "romanization", "transliteration", "x-roman" -> romanizations += line
-                else -> primary += line
+                "translation", "x-translation" -> parsed.main?.let(translations::add)
+                "romanization", "transliteration", "x-roman" -> parsed.main?.let(romanizations::add)
+                else -> {
+                    parsed.main?.let(primary::add)
+                    backgrounds += parsed.backgrounds
+                }
             }
         }
 
-        return LyricsTrackMerger.merge(
+        val merged = LyricsTrackMerger.merge(
             LyricsDocument(source, LyricsFormat.TTML, primary),
             translations,
             romanizations,
         )
+        return merged.copy(
+            lines = (merged.lines + backgrounds).sortedWith(
+                compareBy<LyricLine> { it.startMs ?: Long.MAX_VALUE }.thenBy(LyricLine::background),
+            ),
+        )
     }
 
-    private fun parseParagraph(element: Element): LyricLine? {
+    private fun parseParagraph(element: Element): ParsedParagraph {
+        val backgrounds = mutableListOf<LyricLine>()
+        val paragraphIsBackground = element.role() in BACKGROUND_ROLES
+        val line = parseLine(
+            element = element,
+            background = paragraphIsBackground,
+            inheritedAgent = element.attribute("agent").takeIf(String::isNotBlank),
+            backgrounds = backgrounds,
+        )
+        return if (paragraphIsBackground) {
+            ParsedParagraph(main = null, backgrounds = listOfNotNull(line) + backgrounds)
+        } else {
+            ParsedParagraph(main = line, backgrounds = backgrounds)
+        }
+    }
+
+    private fun parseLine(
+        element: Element,
+        background: Boolean,
+        inheritedAgent: String?,
+        backgrounds: MutableList<LyricLine>,
+    ): LyricLine? {
         val lineStart = parseTime(element.attribute("begin"))
-        val lineEnd = parseTime(element.attribute("end"))
+        val lineEnd = parseEnd(element, lineStart)
         val words = mutableListOf<LyricWord>()
         val text = StringBuilder()
-        var background = element.role() in setOf("x-bg", "background")
         var translation: String? = null
         var romanization: String? = null
+        val agent = element.attribute("agent").takeIf(String::isNotBlank) ?: inheritedAgent
 
         fun walk(node: Node) {
             when (node.nodeType) {
@@ -73,11 +103,17 @@ class TtmlCodec : LyricCodec {
                             return
                         }
                     }
-                    if (child.role() in setOf("x-bg", "background")) background = true
+                    if (!background && child.role() in BACKGROUND_ROLES) {
+                        parseLine(child, background = true, inheritedAgent = agent, backgrounds = backgrounds)
+                            ?.let(backgrounds::add)
+                        return
+                    }
                     val childText = child.textContent.orEmpty()
                     val start = parseTime(child.attribute("begin"))
-                    val end = parseTime(child.attribute("end"))
-                    if (child.localName == "span" && start != null && end != null && childText.isNotEmpty()) {
+                    val end = parseEnd(child, start)
+                    val hasElementChildren = (0 until child.childNodes.length)
+                        .any { child.childNodes.item(it).nodeType == Node.ELEMENT_NODE }
+                    if (child.localName == "span" && !hasElementChildren && start != null && end != null && childText.isNotEmpty()) {
                         words += LyricWord(start, end.coerceAtLeast(start), childText)
                         text.append(childText)
                     } else {
@@ -98,8 +134,13 @@ class TtmlCodec : LyricCodec {
             translation = translation,
             romanization = romanization,
             background = background,
+            agent = agent,
         )
     }
+
+    private fun parseEnd(element: Element, start: Long?): Long? =
+        parseTime(element.attribute("end"))
+            ?: parseTime(element.attribute("dur"))?.let { duration -> start?.plus(duration) }
 
     private fun Element.attribute(localName: String): String =
         attributes?.let { attributes ->
@@ -133,6 +174,18 @@ class TtmlCodec : LyricCodec {
             }
             return (match.groupValues[1].toDouble() * multiplier).toLong()
         }
+        Regex("""^(\d+(?:[.,]\d+)?)$""").matchEntire(value)?.let { match ->
+            return (match.groupValues[1].replace(',', '.').toDouble() * 1_000).toLong()
+        }
         return null
+    }
+
+    private data class ParsedParagraph(
+        val main: LyricLine?,
+        val backgrounds: List<LyricLine>,
+    )
+
+    private companion object {
+        val BACKGROUND_ROLES = setOf("x-bg", "background")
     }
 }

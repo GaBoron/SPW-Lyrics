@@ -54,4 +54,31 @@ class LyricsLoadCoordinatorTest {
         assertTrue(coordinator.onBeforeLoad(b)?.contains("B") == true)
         coordinator.close()
     }
+
+    @Test
+    fun `notifies once when every automatic provider fails`() {
+        val cache = FileLyricsCache(createTempDirectory("coordinator-failure-cache"))
+        val notified = CountDownLatch(1)
+        val messages = mutableListOf<String>()
+        val coordinator = LyricsLoadCoordinator(
+            cache = cache,
+            resolver = LyricsResolver(emptyList(), cache),
+            refreshBridge = object : LyricsRefreshBridge {
+                override fun reloadCurrentLyrics() = true
+            },
+            notify = { message ->
+                synchronized(messages) { messages += message }
+                notified.countDown()
+            },
+        )
+        val query = TrackQuery("Missing", listOf("Artist"), "Album", path = "missing.mp3")
+
+        assertNull(coordinator.onBeforeLoad(query))
+        assertTrue(notified.await(2, TimeUnit.SECONDS))
+        assertNull(coordinator.onBeforeLoad(query))
+        Thread.sleep(50)
+
+        assertEquals(listOf("自动加载歌词失败，请尝试手动搜索歌词。"), synchronized(messages) { messages.toList() })
+        coordinator.close()
+    }
 }

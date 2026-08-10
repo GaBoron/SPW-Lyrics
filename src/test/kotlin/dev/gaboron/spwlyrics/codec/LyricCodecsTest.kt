@@ -173,6 +173,41 @@ class LyricCodecsTest {
     }
 
     @Test
+    fun `parses amll bare seconds agents and nested background as parallel lines`() {
+        val raw = """
+            <tt xmlns="http://www.w3.org/ns/ttml"
+                xmlns:ttm="http://www.w3.org/ns/ttml#metadata"
+                xmlns:itunes="http://music.apple.com/lyric-ttml-internal"
+                itunes:timing="Word">
+              <head><metadata>
+                <ttm:agent type="person" xml:id="v1" />
+                <ttm:agent type="person" xml:id="v2" />
+              </metadata></head>
+              <body><div>
+                <p begin="8.098" end="9.500" ttm:agent="v1">
+                  <span begin="8.098" end="8.407">每</span><span begin="8.407" dur="0.500">个</span>
+                  <span ttm:role="x-bg" begin="8.400" end="9.200">
+                    <span begin="8.400" end="8.700">(和</span><span begin="8.700" end="9.200">声)</span>
+                  </span>
+                </p>
+                <p begin="8.098" end="9.500" ttm:agent="v2">
+                  <span begin="8.098" end="8.500">你</span><span begin="8.500" end="9.500">好</span>
+                </p>
+              </div></body>
+            </tt>
+        """.trimIndent()
+
+        val document = TtmlCodec().parse(raw, LyricsSource.AMLL)
+
+        assertEquals(LyricsQuality.WORD_SYNCED, document.quality)
+        assertEquals(listOf("每个", "你好", "(和声)"), document.lines.map(LyricLine::text))
+        assertEquals(listOf("v1", "v2", "v1"), document.lines.map(LyricLine::agent))
+        assertEquals(8_098, document.lines.first().startMs)
+        assertEquals(8_907, document.lines.first().words.last().endMs)
+        assertTrue(document.lines.last().background)
+    }
+
+    @Test
     fun `rejects invalid krc encrypted payload`() {
         assertFails { KrcCodec.decryptBase64("aW52YWxpZA==") }
     }
