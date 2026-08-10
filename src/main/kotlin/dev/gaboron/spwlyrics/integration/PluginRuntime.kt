@@ -23,6 +23,7 @@ import kotlin.io.path.Path
 object PluginRuntime {
     @Volatile private var coordinator: LyricsLoadCoordinator? = null
     @Volatile private var manualUiBridge: ManualUiBridge? = null
+    private val durationProbe: TrackDurationProbe = CachedTrackDurationProbe()
 
     @Synchronized
     fun install(pluginPath: String) {
@@ -41,7 +42,7 @@ object PluginRuntime {
         )
         coordinator = LyricsLoadCoordinator(
             cache = cache,
-            resolver = LyricsResolver(providers, cache),
+            resolver = LyricsResolver(providers),
             refreshBridge = ReflectiveLyricsRefreshBridge(),
             notify = ::toastWarning,
         )
@@ -81,6 +82,7 @@ object PluginRuntime {
         album = album,
         albumArtists = TrackQuery.splitArtists(albumArtist),
         path = path,
+        durationMs = durationProbe.durationMs(path),
     )
 
     private fun toastWarning(message: String) {

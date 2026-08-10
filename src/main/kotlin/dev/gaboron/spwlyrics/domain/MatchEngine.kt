@@ -14,6 +14,7 @@ data class CandidateScore(
     val passesAutomaticGate: Boolean
         get() {
             if (versionConflict) return false
+            if (durationScore != null && durationScore < MatchEngine.MIN_DURATION) return false
             val titleAndArtist = titleScore >= MatchEngine.MIN_TITLE &&
                 artistScore != null && artistScore >= MatchEngine.MIN_ARTIST &&
                 score >= MatchEngine.MIN_TOTAL
@@ -43,6 +44,7 @@ object MatchEngine {
     const val STRONG_ALBUM = 0.82
     const val MIN_TOTAL = 0.80
     const val MIN_TITLE_ALBUM_TOTAL = 0.82
+    const val MIN_DURATION = 0.60
     const val MIN_GAP = 0.04
 
     fun score(query: TrackQuery, candidate: LyricsCandidate): CandidateScore {
@@ -59,7 +61,7 @@ object MatchEngine {
             add(title to 0.55)
             artist?.let { add(it to 0.30) }
             album?.let { add(it to 0.10) }
-            duration?.let { add(it to 0.05) }
+            duration?.let { add(it to 0.20) }
         }
         val totalWeight = components.sumOf { it.second }
         val raw = components.sumOf { (value, weight) -> value * weight } / totalWeight

@@ -34,7 +34,7 @@ class LyricsLoadCoordinatorTest {
         }
         val coordinator = LyricsLoadCoordinator(
             cache,
-            LyricsResolver(listOf(provider), cache),
+            LyricsResolver(listOf(provider)),
             object : LyricsRefreshBridge {
                 override fun reloadCurrentLyrics(): Boolean {
                     reloads++
@@ -62,7 +62,7 @@ class LyricsLoadCoordinatorTest {
         val messages = mutableListOf<String>()
         val coordinator = LyricsLoadCoordinator(
             cache = cache,
-            resolver = LyricsResolver(emptyList(), cache),
+            resolver = LyricsResolver(emptyList()),
             refreshBridge = object : LyricsRefreshBridge {
                 override fun reloadCurrentLyrics() = true
             },
@@ -79,7 +79,7 @@ class LyricsLoadCoordinatorTest {
         Thread.sleep(50)
 
         assertEquals(
-            listOf("自动加载歌词失败，请在“设置 → 模组管理 → SPW Lyrics → 手动搜索歌词”中手动匹配。"),
+            listOf("自动加载歌词失败，请在“设置 → 创意工坊 → 模组设置 → SPW Lyrics → 手动搜索歌词”中手动匹配。"),
             synchronized(messages) { messages.toList() },
         )
         coordinator.close()

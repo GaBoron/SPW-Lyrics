@@ -38,11 +38,6 @@ class LyricsLoadCoordinator(
             notifiedFailures.remove(query.key)
             return it.encoded
         }
-        if (cache.hasRecentMiss(query.key) && override?.candidate == null) {
-            notifyAutomaticFailure(query)
-            return null
-        }
-
         inFlight.computeIfAbsent(query.key) {
             val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
             CompletableFuture.runAsync({ resolveAndRefresh(query, override?.candidate, deadline) }, executor)
@@ -91,7 +86,6 @@ class LyricsLoadCoordinator(
 
     private fun recordAutomaticFailure(query: TrackQuery) {
         if (automaticWasSuperseded(query)) return
-        cache.putMiss(query.key)
         notifyAutomaticFailure(query)
     }
 
@@ -100,7 +94,7 @@ class LyricsLoadCoordinator(
 
     private fun notifyAutomaticFailure(query: TrackQuery) {
         if (current.get()?.key == query.key && notifiedFailures.add(query.key)) {
-            notify("自动加载歌词失败，请在“设置 → 模组管理 → SPW Lyrics → 手动搜索歌词”中手动匹配。")
+            notify("自动加载歌词失败，请在“设置 → 创意工坊 → 模组设置 → SPW Lyrics → 手动搜索歌词”中手动匹配。")
         }
     }
 

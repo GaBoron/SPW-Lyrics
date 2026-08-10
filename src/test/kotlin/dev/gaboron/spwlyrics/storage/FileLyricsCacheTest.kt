@@ -30,4 +30,22 @@ class FileLyricsCacheTest {
         assertEquals("[00:00.000]hello", cache.getLyrics("a".repeat(64))?.encoded)
         assertTrue(cache.getOverride("b".repeat(64))!!.local)
     }
+
+    @Test
+    fun `persists a manually selected provider candidate`() {
+        val root = createTempDirectory("spw-manual-source-cache-test")
+        val candidate = dev.gaboron.spwlyrics.domain.LyricsCandidate(
+            LyricsSource.QQ,
+            "remote-id",
+            "Song",
+            listOf("Artist"),
+            "Album",
+        )
+        FileLyricsCache(root).putOverride(
+            "c".repeat(64),
+            ManualOverride(local = false, source = LyricsSource.QQ, candidate = candidate),
+        )
+
+        assertEquals(candidate, FileLyricsCache(root).getOverride("c".repeat(64))?.candidate)
+    }
 }

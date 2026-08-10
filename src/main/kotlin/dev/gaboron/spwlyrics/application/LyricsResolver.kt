@@ -9,7 +9,6 @@ import dev.gaboron.spwlyrics.domain.MatchEngine
 import dev.gaboron.spwlyrics.domain.TrackQuery
 import dev.gaboron.spwlyrics.provider.LyricsProvider
 import dev.gaboron.spwlyrics.storage.CachedLyrics
-import dev.gaboron.spwlyrics.storage.LyricsCache
 import java.time.Clock
 
 data class ResolvedLyrics(
@@ -20,7 +19,6 @@ data class ResolvedLyrics(
 
 class LyricsResolver(
     providers: List<LyricsProvider>,
-    private val cache: LyricsCache,
     private val clock: Clock = Clock.systemUTC(),
 ) {
     private val providers = providers.associateBy(LyricsProvider::source)
@@ -65,9 +63,7 @@ class LyricsResolver(
     )
 
     private fun search(provider: LyricsProvider, query: TrackQuery, keywords: String): List<LyricsCandidate> =
-        cache.getSearch(provider.source, keywords) ?: runCatching { provider.search(query, keywords) }
-            .getOrDefault(emptyList())
-            .also { cache.putSearch(provider.source, keywords, it) }
+        runCatching { provider.search(query, keywords) }.getOrDefault(emptyList())
 
     private fun fetch(provider: LyricsProvider, candidate: LyricsCandidate): ResolvedLyrics? {
         val document = runCatching { provider.fetch(candidate) }.getOrNull()?.takeIf { it.lines.isNotEmpty() } ?: return null

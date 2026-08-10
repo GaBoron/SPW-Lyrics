@@ -26,13 +26,6 @@ data class CachedLyrics(
 )
 
 @Serializable
-data class CachedSearch(
-    val candidates: List<LyricsCandidate>,
-    val savedAtEpochMs: Long,
-    val modelVersion: Int = CACHE_MODEL_VERSION,
-)
-
-@Serializable
 data class ManualOverride(
     val local: Boolean,
     val source: LyricsSource? = null,
@@ -41,16 +34,10 @@ data class ManualOverride(
 )
 
 const val CACHE_MODEL_VERSION = 1
-private const val MATCH_CACHE_VERSION = 2
 
 interface LyricsCache {
     fun getLyrics(trackKey: String): CachedLyrics?
     fun putLyrics(trackKey: String, lyrics: CachedLyrics)
-    fun getSearch(source: LyricsSource, query: String): List<LyricsCandidate>?
-    fun putSearch(source: LyricsSource, query: String, candidates: List<LyricsCandidate>)
-    fun hasRecentMiss(trackKey: String): Boolean
-    fun putMiss(trackKey: String)
-    fun clearMiss(trackKey: String)
     fun getOverride(trackKey: String): ManualOverride?
     fun putOverride(trackKey: String, override: ManualOverride)
 }
@@ -59,8 +46,6 @@ class FileLyricsCache(
     private val root: Path,
     private val clock: Clock = Clock.systemUTC(),
     private val successTtl: Duration = Duration.ofDays(30),
-    private val searchTtl: Duration = Duration.ofHours(6),
-    private val missTtl: Duration = Duration.ofHours(24),
 ) : LyricsCache {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val memory = object : LinkedHashMap<String, CachedLyrics>(64, 0.75f, true) {
@@ -84,38 +69,6 @@ class FileLyricsCache(
     override fun putLyrics(trackKey: String, lyrics: CachedLyrics) {
         memory[trackKey] = lyrics
         write(cachePath("lyrics", trackKey), json.encodeToString(lyrics))
-        clearMiss(trackKey)
-    }
-
-    override fun getSearch(source: LyricsSource, query: String): List<LyricsCandidate>? {
-        val stored = read(cachePath("search-v$MATCH_CACHE_VERSION-${source.name.lowercase()}", query))
-            ?.let { runCatching { json.decodeFromString<CachedSearch>(it) }.getOrNull() }
-            ?: return null
-        return stored.candidates.takeIf {
-            stored.modelVersion == CACHE_MODEL_VERSION && !expired(stored.savedAtEpochMs, searchTtl)
-        }
-    }
-
-    override fun putSearch(source: LyricsSource, query: String, candidates: List<LyricsCandidate>) {
-        write(
-            cachePath("search-v$MATCH_CACHE_VERSION-${source.name.lowercase()}", query),
-            json.encodeToString(CachedSearch(candidates, clock.millis())),
-        )
-    }
-
-    override fun hasRecentMiss(trackKey: String): Boolean {
-        val stored = read(cachePath("miss-v$MATCH_CACHE_VERSION", trackKey)) ?: return false
-        val parts = stored.split(':', limit = 2)
-        if (parts.size != 2 || parts[0].toIntOrNull() != CACHE_MODEL_VERSION) return false
-        val timestamp = parts[1].toLongOrNull() ?: return false
-        return !expired(timestamp, missTtl)
-    }
-
-    override fun putMiss(trackKey: String) =
-        write(cachePath("miss-v$MATCH_CACHE_VERSION", trackKey), "$CACHE_MODEL_VERSION:${clock.millis()}")
-
-    override fun clearMiss(trackKey: String) {
-        Files.deleteIfExists(cachePath("miss-v$MATCH_CACHE_VERSION", trackKey))
     }
 
     override fun getOverride(trackKey: String): ManualOverride? = read(cachePath("override", trackKey))
@@ -124,7 +77,6 @@ class FileLyricsCache(
 
     override fun putOverride(trackKey: String, override: ManualOverride) {
         write(cachePath("override", trackKey), json.encodeToString(override))
-        clearMiss(trackKey)
         synchronized(this) { memory.remove(trackKey) }
     }
 

@@ -109,4 +109,30 @@ class MatchEngineTest {
 
         assertNull(MatchEngine.decide(query, listOf(candidate)).winner)
     }
+
+    @Test
+    fun `prefers the same title candidate with matching duration`() {
+        val timedQuery = query.copy(durationMs = 240_000)
+        val candidates = listOf(
+            LyricsCandidate(LyricsSource.QQ, "short", query.title, query.artists, query.album, durationMs = 210_000),
+            LyricsCandidate(LyricsSource.QQ, "correct", query.title, query.artists, query.album, durationMs = 240_800),
+        )
+
+        assertEquals("correct", MatchEngine.decide(timedQuery, candidates).winner?.candidate?.remoteId)
+    }
+
+    @Test
+    fun `rejects an otherwise exact candidate with a large duration mismatch`() {
+        val timedQuery = query.copy(durationMs = 240_000)
+        val candidate = LyricsCandidate(
+            LyricsSource.QQ,
+            "wrong-duration",
+            query.title,
+            query.artists,
+            query.album,
+            durationMs = 210_000,
+        )
+
+        assertNull(MatchEngine.decide(timedQuery, listOf(candidate)).winner)
+    }
 }
