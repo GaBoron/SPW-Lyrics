@@ -15,7 +15,7 @@ internal class SpwPlaybackLyricsReloader(
 
     fun reload(): Boolean {
         cached?.let { if (invokeCurrent(it)) return true }
-        val service = ObjectGraphProbe.find(
+        val service = controllerService() ?: ObjectGraphProbe.find(
             roots = roots(),
             maxDepth = 5,
             matches = { it.javaClass.name == PLAYBACK_SERVICE },
@@ -32,6 +32,15 @@ internal class SpwPlaybackLyricsReloader(
         } ?: return false
         return PreparedInvocation(service, method).also { cached = it }.let(::invokeCurrent)
     }
+
+    private fun controllerService(): Any? = runCatching {
+        val controller = Class.forName(PLAYBACK_CONTROLLER)
+        val field = controller.declaredFields.firstOrNull { candidate ->
+            Modifier.isStatic(candidate.modifiers) && candidate.type.name == PLAYBACK_SERVICE
+        } ?: return@runCatching null
+        field.trySetAccessible()
+        field.get(null)
+    }.getOrNull()
 
     private fun invokeCurrent(prepared: PreparedInvocation): Boolean {
         val player = prepared.service.findZeroArgumentResult(PLAYER) ?: return false
@@ -60,6 +69,7 @@ internal class SpwPlaybackLyricsReloader(
 
     companion object {
         private const val PLAYBACK_SERVICE = "com.xuncorp.voxzen.service.PlaybackService"
+        private const val PLAYBACK_CONTROLLER = "com.xuncorp.voxzen.service.PlaybackController"
         private const val PLAYER = "com.xuncorp.pisces.PiscesPlayer"
         private const val MEDIA_ITEM = "com.xuncorp.pisces.PiscesMediaItem"
         private const val ACCESS_UPDATE_LYRICS = "access\$updateLyrics"

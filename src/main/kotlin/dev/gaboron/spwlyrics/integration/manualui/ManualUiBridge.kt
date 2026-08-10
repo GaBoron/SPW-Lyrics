@@ -9,6 +9,7 @@ import java.security.SecureRandom
 import java.util.Base64
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlinx.serialization.json.Json
 
 class ManualUiBridge(
@@ -42,6 +43,7 @@ class ManualUiBridge(
             ).directory(executable.parent.toFile()).redirectErrorStream(true).start()
         }.getOrNull() ?: return false
         workers.execute { process.inputStream.bufferedReader().useLines { lines -> lines.forEach { } } }
+        if (runCatching { process.waitFor(750, TimeUnit.MILLISECONDS) }.getOrDefault(false)) return false
         return true
     }
 

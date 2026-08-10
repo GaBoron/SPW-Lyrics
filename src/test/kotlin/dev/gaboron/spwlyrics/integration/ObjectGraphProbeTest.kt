@@ -2,7 +2,7 @@ package dev.gaboron.spwlyrics.integration
 
 import com.xuncorp.pisces.PiscesMediaItem
 import com.xuncorp.pisces.PiscesPlayer
-import com.xuncorp.spw.testing.PlaybackRoot
+import com.xuncorp.voxzen.service.PlaybackController
 import com.xuncorp.voxzen.service.PlaybackService
 import kotlin.test.Test
 import kotlin.test.assertSame
@@ -29,7 +29,8 @@ class ObjectGraphProbeTest {
         val first = PiscesMediaItem("first")
         val second = PiscesMediaItem("second")
         val player = PiscesPlayer(first)
-        val reloader = SpwPlaybackLyricsReloader { listOf(PlaybackRoot(PlaybackService(player))) }
+        PlaybackController.service = PlaybackService(player)
+        val reloader = SpwPlaybackLyricsReloader { emptyList() }
 
         assertTrue(reloader.reload())
         assertSame(first, PlaybackService.lastUpdated)

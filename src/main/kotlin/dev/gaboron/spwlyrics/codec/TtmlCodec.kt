@@ -119,6 +119,11 @@ class TtmlCodec : LyricCodec {
                 match.groupValues[2].toLong() * 60_000 +
                 match.groupValues[3].toLong() * 1_000 + fraction
         }
+        Regex("^(\\d+):(\\d{1,2})(?:[.,](\\d+))?$").matchEntire(value)?.let { match ->
+            val fraction = match.groupValues[3].padEnd(3, '0').take(3).toLongOrNull() ?: 0L
+            return match.groupValues[1].toLong() * 60_000 +
+                match.groupValues[2].toLong() * 1_000 + fraction
+        }
         Regex("^([0-9.]+)(ms|s|m|h)$").matchEntire(value)?.let { match ->
             val multiplier = when (match.groupValues[2]) {
                 "ms" -> 1.0

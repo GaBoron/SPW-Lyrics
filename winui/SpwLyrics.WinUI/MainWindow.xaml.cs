@@ -15,12 +15,19 @@ public sealed partial class MainWindow : Window
 {
     public MainWindow()
     {
+        StartupDiagnostics.Stage("MainWindow.InitializeComponent.begin");
         InitializeComponent();
+        StartupDiagnostics.Stage("MainWindow.InitializeComponent.complete");
+
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(AppTitleBar);
 
         AppWindow.SetIcon("Assets/AppIcon.ico");
+        StartupDiagnostics.Stage("MainWindow.SetIcon.complete");
         AppWindow.Resize(new SizeInt32(1180, 760));
+        StartupDiagnostics.Stage("MainWindow.Resize.complete");
 
         // Navigate the root frame to the main page on startup.
-        RootFrame.Navigate(typeof(MainPage));
+        StartupDiagnostics.Stage($"MainWindow.Navigate.complete={RootFrame.Navigate(typeof(MainPage))}");
     }
 }

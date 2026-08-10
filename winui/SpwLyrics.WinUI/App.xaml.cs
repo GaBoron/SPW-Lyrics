@@ -31,7 +31,7 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
-        UnhandledException += (_, eventArgs) => LogStartupFailure(eventArgs.Exception);
+        UnhandledException += (_, eventArgs) => StartupDiagnostics.Failure(eventArgs.Exception);
     }
 
     /// <summary>
@@ -48,26 +48,8 @@ public partial class App : Application
         }
         catch (Exception exception)
         {
-            LogStartupFailure(exception);
+            StartupDiagnostics.Failure(exception);
             throw;
-        }
-    }
-
-    private static void LogStartupFailure(Exception exception)
-    {
-        try
-        {
-            var directory = System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "SPW Lyrics");
-            Directory.CreateDirectory(directory);
-            File.AppendAllText(
-                System.IO.Path.Combine(directory, "winui-crash.log"),
-                $"[{DateTimeOffset.Now:O}]{Environment.NewLine}{exception}{Environment.NewLine}{Environment.NewLine}");
-        }
-        catch
-        {
-            // Startup diagnostics must never hide the original WinUI exception.
         }
     }
 }

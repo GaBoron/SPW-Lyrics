@@ -26,12 +26,21 @@ object LrcCodec : LyricCodec {
                 return@forEach
             }
 
+            StructuredLyricsMetadata.creditText(line)?.let { credit ->
+                attributes.getOrPut("credits") { mutableListOf() }.add(credit)
+                return@forEach
+            }
+
             val timestamps = lineTime.findAll(line).toList()
             if (timestamps.isEmpty()) {
                 if (line.isNotBlank() && !line.startsWith('[')) parsed += LyricLine(text = line)
                 return@forEach
             }
             val content = line.substring(timestamps.last().range.last + 1)
+            StructuredLyricsMetadata.creditText(content)?.let { credit ->
+                attributes.getOrPut("credits") { mutableListOf() }.add(credit)
+                return@forEach
+            }
             timestamps.forEach { timestamp ->
                 val start = timestamp.toMillis() + offset
                 val words = parseInlineWords(content, start, offset)

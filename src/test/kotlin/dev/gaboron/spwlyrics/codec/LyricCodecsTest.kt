@@ -48,6 +48,24 @@ class LyricCodecsTest {
     }
 
     @Test
+    fun `removes untimed netease structured credits without degrading lrc`() {
+        val document = LrcCodec.parse(
+            """
+                [00:18.480]他 他下落不明地出发
+                [00:24.730]在阳光灿烂的世界
+                {"t":0,"c":[{"tx":"作曲 Composer: "},{"tx":"华晨宇","li":"https://example.invalid"}]}
+                {"t":1000,"c":[{"tx":"作词 Lyricist: "},{"tx":"唐恬"}]}
+            """.trimIndent(),
+            LyricsSource.NETEASE,
+        )
+
+        assertEquals(LyricsQuality.LINE_SYNCED, document.quality)
+        assertEquals(listOf("他 他下落不明地出发", "在阳光灿烂的世界"), document.lines.map { it.text })
+        assertEquals(listOf("作曲 Composer: 华晨宇", "作词 Lyricist: 唐恬"), document.metadata["credits"])
+        assertTrue(SpwLyricsEncoder.encode(document).startsWith("[00:18.480]"))
+    }
+
+    @Test
     fun `aligns timed translation monotonically without index fallback`() {
         val original = LrcCodec.parse(
             "[00:10.00]First\n[00:20.00]Second\n[00:30.00]Third",
@@ -104,6 +122,26 @@ class LyricCodecsTest {
         assertEquals(LyricsQuality.WORD_SYNCED, document.quality)
         assertEquals("Hello", document.lines.single().text)
         assertEquals("你好", document.lines.single().translation)
+    }
+
+    @Test
+    fun `parses amll minute second clock times`() {
+        val raw = """
+            <tt xmlns="http://www.w3.org/ns/ttml">
+              <body><div begin="00:14.051" end="03:37.527">
+                <p begin="00:14.051" end="00:17.414">
+                  <span begin="00:14.051" end="00:14.318">你</span><span begin="00:14.318" end="00:17.414">好</span>
+                </p>
+              </div></body>
+            </tt>
+        """.trimIndent()
+
+        val document = TtmlCodec().parse(raw, LyricsSource.AMLL)
+
+        assertEquals(LyricsQuality.WORD_SYNCED, document.quality)
+        assertEquals(14_051, document.lines.single().startMs)
+        assertEquals(2, document.lines.single().words.size)
+        assertTrue(SpwLyricsEncoder.encode(document).contains("<00:14.318>"))
     }
 
     @Test
