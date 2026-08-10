@@ -1,0 +1,18 @@
+{
+  "configs": [
+    {
+      "title": "SPW Lyrics",
+      "config": "spw-lyrics.json",
+      "preferences": [
+        {
+          "type": "button",
+          "title": "手动搜索歌词",
+          "summary": "搜索候选歌词并替换当前歌曲",
+          "arrow_type": "none",
+          "on_click": "dev.gaboron.spwlyrics.integration.SpwLyricsActions.openManualSearch"
+        }
+      ]
+    }
+  ]
+}
+
