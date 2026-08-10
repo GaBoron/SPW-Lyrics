@@ -23,6 +23,7 @@ import kotlin.io.path.Path
 object PluginRuntime {
     @Volatile private var coordinator: LyricsLoadCoordinator? = null
     @Volatile private var manualUiBridge: ManualUiBridge? = null
+    @Volatile private var cacheFolderOpener: CacheFolderOpener? = null
     private val durationProbe: TrackDurationProbe = CachedTrackDurationProbe()
 
     @Synchronized
@@ -31,7 +32,9 @@ object PluginRuntime {
         val localData = System.getenv("LOCALAPPDATA")?.takeIf(String::isNotBlank)
             ?.let(::Path) ?: Path(System.getProperty("user.home"))
         val root = localData.resolve("SPW Lyrics")
-        val cache = FileLyricsCache(root.resolve("cache"))
+        val cacheDirectory = root.resolve("cache")
+        val cache = FileLyricsCache(cacheDirectory)
+        cacheFolderOpener = CacheFolderOpener(cacheDirectory)
         val http = ProviderHttpClient()
         val providers = listOf(
             AmllProvider(root.resolve("amll"), ProviderHttpClient(requestTimeout = Duration.ofSeconds(6))),
@@ -67,11 +70,15 @@ object PluginRuntime {
     fun openManualSearch() {
         if (manualUiBridge?.open() != true) ManualSearchWindow.open()
     }
+    fun openCacheFolder() {
+        if (cacheFolderOpener?.open() != true) toastWarning("无法打开 SPW Lyrics 本地缓存文件夹。")
+    }
 
     @Synchronized
     fun close() {
         manualUiBridge?.close()
         manualUiBridge = null
+        cacheFolderOpener = null
         coordinator?.close()
         coordinator = null
     }

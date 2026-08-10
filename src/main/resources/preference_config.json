@@ -10,9 +10,15 @@
           "summary": "搜索候选歌词并替换当前歌曲",
           "arrow_type": "none",
           "on_click": "dev.gaboron.spwlyrics.integration.SpwLyricsActions.openManualSearch"
+        },
+        {
+          "type": "button",
+          "title": "查看本地缓存文件夹",
+          "summary": "在文件资源管理器中打开已缓存的歌词",
+          "arrow_type": "none",
+          "on_click": "dev.gaboron.spwlyrics.integration.SpwLyricsActions.openCacheFolder"
         }
       ]
     }
   ]
 }
-
