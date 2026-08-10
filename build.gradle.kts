@@ -17,7 +17,7 @@ java {
 kotlin {
     compilerOptions {
         jvmTarget = JvmTarget.JVM_21
-        freeCompilerArgs.add("-Xjvm-default=all")
+        freeCompilerArgs.add("-jvm-default=no-compatibility")
     }
 }
 
@@ -29,6 +29,7 @@ dependencies {
     compileOnly("org.pf4j:pf4j:3.12.0")
 
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+    implementation("com.github.houbb:opencc4j:1.14.0")
 
     testImplementation(kotlin("test-junit5"))
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.12.2")
@@ -77,4 +78,3 @@ tasks.register<Zip>("plugin") {
     }
     dependsOn(tasks.named("jar"))
 }
-
