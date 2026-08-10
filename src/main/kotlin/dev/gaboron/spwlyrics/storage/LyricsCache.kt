@@ -41,6 +41,7 @@ data class ManualOverride(
 )
 
 const val CACHE_MODEL_VERSION = 1
+private const val MATCH_CACHE_VERSION = 2
 
 interface LyricsCache {
     fun getLyrics(trackKey: String): CachedLyrics?
@@ -87,7 +88,7 @@ class FileLyricsCache(
     }
 
     override fun getSearch(source: LyricsSource, query: String): List<LyricsCandidate>? {
-        val stored = read(cachePath("search-${source.name.lowercase()}", query))
+        val stored = read(cachePath("search-v$MATCH_CACHE_VERSION-${source.name.lowercase()}", query))
             ?.let { runCatching { json.decodeFromString<CachedSearch>(it) }.getOrNull() }
             ?: return null
         return stored.candidates.takeIf {
@@ -97,23 +98,24 @@ class FileLyricsCache(
 
     override fun putSearch(source: LyricsSource, query: String, candidates: List<LyricsCandidate>) {
         write(
-            cachePath("search-${source.name.lowercase()}", query),
+            cachePath("search-v$MATCH_CACHE_VERSION-${source.name.lowercase()}", query),
             json.encodeToString(CachedSearch(candidates, clock.millis())),
         )
     }
 
     override fun hasRecentMiss(trackKey: String): Boolean {
-        val stored = read(cachePath("miss", trackKey)) ?: return false
+        val stored = read(cachePath("miss-v$MATCH_CACHE_VERSION", trackKey)) ?: return false
         val parts = stored.split(':', limit = 2)
         if (parts.size != 2 || parts[0].toIntOrNull() != CACHE_MODEL_VERSION) return false
         val timestamp = parts[1].toLongOrNull() ?: return false
         return !expired(timestamp, missTtl)
     }
 
-    override fun putMiss(trackKey: String) = write(cachePath("miss", trackKey), "$CACHE_MODEL_VERSION:${clock.millis()}")
+    override fun putMiss(trackKey: String) =
+        write(cachePath("miss-v$MATCH_CACHE_VERSION", trackKey), "$CACHE_MODEL_VERSION:${clock.millis()}")
 
     override fun clearMiss(trackKey: String) {
-        Files.deleteIfExists(cachePath("miss", trackKey))
+        Files.deleteIfExists(cachePath("miss-v$MATCH_CACHE_VERSION", trackKey))
     }
 
     override fun getOverride(trackKey: String): ManualOverride? = read(cachePath("override", trackKey))
