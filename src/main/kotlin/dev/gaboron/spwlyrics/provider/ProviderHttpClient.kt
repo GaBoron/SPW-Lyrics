@@ -1,12 +1,11 @@
 package dev.gaboron.spwlyrics.provider
 
+import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URLEncoder
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
 import java.nio.charset.StandardCharsets
 import java.time.Duration
+import java.util.zip.GZIPInputStream
 
 interface ProviderHttp {
     fun get(url: String, headers: Map<String, String> = emptyMap()): String
@@ -18,44 +17,78 @@ class ProviderHttpClient(
     connectTimeout: Duration = Duration.ofSeconds(2),
     private val requestTimeout: Duration = Duration.ofSeconds(3),
 ) : ProviderHttp {
-    private val client = HttpClient.newBuilder()
-        .connectTimeout(connectTimeout)
-        .followRedirects(HttpClient.Redirect.NORMAL)
-        .build()
+    private val connectTimeoutMs = connectTimeout.toTimeoutMillis()
+    private val readTimeoutMs = requestTimeout.toTimeoutMillis()
 
-    override fun get(url: String, headers: Map<String, String>): String = send(
-        HttpRequest.newBuilder(URI.create(url)).GET(),
-        headers,
-    )
+    override fun get(url: String, headers: Map<String, String>): String = send(url, "GET", null, null, headers)
 
     override fun postJson(url: String, body: String, headers: Map<String, String>): String = send(
-        HttpRequest.newBuilder(URI.create(url))
-            .header("Content-Type", "application/json; charset=utf-8")
-            .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8)),
+        url,
+        "POST",
+        "application/json; charset=utf-8",
+        body.toByteArray(StandardCharsets.UTF_8),
         headers,
     )
 
     override fun postForm(url: String, values: Map<String, String>, headers: Map<String, String>): String {
         val body = values.entries.joinToString("&") { (key, value) -> "${encode(key)}=${encode(value)}" }
         return send(
-            HttpRequest.newBuilder(URI.create(url))
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8)),
+            url,
+            "POST",
+            "application/x-www-form-urlencoded; charset=utf-8",
+            body.toByteArray(StandardCharsets.UTF_8),
             headers,
         )
     }
 
-    private fun send(builder: HttpRequest.Builder, headers: Map<String, String>): String {
-        builder.timeout(requestTimeout)
-            .header("User-Agent", USER_AGENT)
-        headers.forEach(builder::header)
-        val response = client.send(builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
-        check(response.statusCode() in 200..299) { "HTTP ${response.statusCode()}" }
-        return response.body()
+    private fun send(
+        url: String,
+        method: String,
+        contentType: String?,
+        body: ByteArray?,
+        headers: Map<String, String>,
+    ): String {
+        val connection = URI.create(url).toURL().openConnection() as HttpURLConnection
+        try {
+            connection.requestMethod = method
+            connection.connectTimeout = connectTimeoutMs
+            connection.readTimeout = readTimeoutMs
+            connection.instanceFollowRedirects = true
+            connection.useCaches = false
+            connection.setRequestProperty("User-Agent", USER_AGENT)
+            connection.setRequestProperty("Accept-Encoding", "gzip")
+            contentType?.let { connection.setRequestProperty("Content-Type", it) }
+            headers.forEach(connection::setRequestProperty)
+            if (body != null) {
+                connection.doOutput = true
+                connection.setFixedLengthStreamingMode(body.size)
+                connection.outputStream.use { it.write(body) }
+            }
+
+            val status = connection.responseCode
+            check(status in 200..299) { "HTTP $status" }
+            val rawStream = connection.inputStream
+            val stream = if (connection.contentEncoding.equals("gzip", ignoreCase = true)) {
+                GZIPInputStream(rawStream)
+            } else {
+                rawStream
+            }
+            return stream.bufferedReader(responseCharset(connection.contentType)).use { it.readText() }
+        } finally {
+            connection.errorStream?.close()
+            connection.disconnect()
+        }
     }
 
     companion object {
         const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 SPW-Lyrics/0.1.0"
         fun encode(value: String): String = URLEncoder.encode(value, StandardCharsets.UTF_8)
+
+        private fun Duration.toTimeoutMillis(): Int = toMillis().coerceIn(1, Int.MAX_VALUE.toLong()).toInt()
+
+        private fun responseCharset(contentType: String?) = contentType
+            ?.let { Regex("charset=([^;\\s]+)", RegexOption.IGNORE_CASE).find(it)?.groupValues?.get(1) }
+            ?.let { runCatching { java.nio.charset.Charset.forName(it.trim('"')) }.getOrNull() }
+            ?: StandardCharsets.UTF_8
     }
 }
