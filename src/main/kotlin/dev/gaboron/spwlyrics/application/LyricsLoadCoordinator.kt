@@ -100,7 +100,7 @@ class LyricsLoadCoordinator(
 
     private fun notifyAutomaticFailure(query: TrackQuery) {
         if (current.get()?.key == query.key && notifiedFailures.add(query.key)) {
-            notify("自动加载歌词失败，请尝试手动搜索歌词。")
+            notify("自动加载歌词失败，请在“设置 → 模组管理 → SPW Lyrics → 手动搜索歌词”中手动匹配。")
         }
     }
 

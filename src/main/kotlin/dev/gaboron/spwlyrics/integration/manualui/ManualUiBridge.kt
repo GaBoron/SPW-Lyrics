@@ -24,6 +24,7 @@ class ManualUiBridge(
         Thread(task, "spw-lyrics-manual-ui").apply { isDaemon = true }
     }
     private val executable = pluginRoot.resolve("ui").resolve("SpwLyrics.WinUI.exe")
+    @Volatile private var process: Process? = null
 
     init {
         workers.execute {
@@ -33,18 +34,32 @@ class ManualUiBridge(
         }
     }
 
+    @Synchronized
     fun open(): Boolean {
         if (!Files.isRegularFile(executable)) return false
-        val process = runCatching {
+        if (process?.isAlive == true) return true
+        val launched = runCatching {
             ProcessBuilder(
                 executable.toString(),
                 "--port", server.localPort.toString(),
                 "--token", token,
             ).directory(executable.parent.toFile()).redirectErrorStream(true).start()
         }.getOrNull() ?: return false
-        workers.execute { process.inputStream.bufferedReader().useLines { lines -> lines.forEach { } } }
-        if (runCatching { process.waitFor(750, TimeUnit.MILLISECONDS) }.getOrDefault(false)) return false
+        process = launched
+        workers.execute {
+            launched.inputStream.bufferedReader().useLines { lines -> lines.forEach { } }
+            clearProcess(launched)
+        }
+        if (runCatching { launched.waitFor(750, TimeUnit.MILLISECONDS) }.getOrDefault(false)) {
+            clearProcess(launched)
+            return false
+        }
         return true
+    }
+
+    @Synchronized
+    private fun clearProcess(completed: Process) {
+        if (process === completed) process = null
     }
 
     private fun handle(socket: Socket) = socket.use { client ->
@@ -74,7 +89,10 @@ class ManualUiBridge(
         return difference == 0
     }
 
+    @Synchronized
     override fun close() {
+        process?.takeIf(Process::isAlive)?.destroy()
+        process = null
         runCatching { server.close() }
         workers.shutdownNow()
     }

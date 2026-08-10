@@ -4,6 +4,8 @@ import dev.gaboron.spwlyrics.domain.LyricsQuality
 import dev.gaboron.spwlyrics.domain.LyricsSource
 import dev.gaboron.spwlyrics.domain.LyricLine
 import dev.gaboron.spwlyrics.domain.LyricsDocument
+import java.nio.charset.StandardCharsets
+import java.util.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -210,6 +212,24 @@ class LyricCodecsTest {
     @Test
     fun `rejects invalid krc encrypted payload`() {
         assertFails { KrcCodec.decryptBase64("aW52YWxpZA==") }
+    }
+
+    @Test
+    fun `maps kugou translation and multi-part romanization by lyric row`() {
+        val language = """{"content":[{"type":1,"lyricContent":[["你好"],["世界"]]},{"type":0,"lyricContent":[["ni ","hao"],["shi ","jie"]]}]}"""
+        val encoded = Base64.getEncoder().encodeToString(language.toByteArray(StandardCharsets.UTF_8))
+        val document = KrcCodec.parse(
+            """
+                [language:$encoded]
+                [1000,900]<0,400,0>Hel<400,500,0>lo
+                [2000,900]<0,900,0>World
+            """.trimIndent(),
+            LyricsSource.KUGOU,
+        )
+
+        assertEquals("你好", document.lines[0].translation)
+        assertEquals("ni hao", document.lines[0].romanization)
+        assertEquals("世界", document.lines[1].translation)
     }
 
     @Test

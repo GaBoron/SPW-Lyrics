@@ -44,7 +44,7 @@ public partial class App : Application
         {
             Bridge = BridgeClient.FromCommandLine(Environment.GetCommandLineArgs());
             _window = new MainWindow();
-            _window.Activate();
+            ((MainWindow)_window).ActivateForInput();
         }
         catch (Exception exception)
         {

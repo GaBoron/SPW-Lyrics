@@ -7,6 +7,8 @@ import java.awt.Dialog
 import java.awt.Dimension
 import java.awt.FlowLayout
 import java.awt.Window
+import java.awt.event.WindowAdapter
+import java.awt.event.WindowEvent
 import java.util.concurrent.CompletableFuture
 import javax.swing.JButton
 import javax.swing.JComboBox
@@ -25,8 +27,14 @@ import javax.swing.table.AbstractTableModel
 
 object ManualSearchWindow {
     private val sourceChoices = listOf<LyricsSource?>(null) + LyricsSource.entries.filter { it != LyricsSource.LOCAL }
+    @Volatile private var activeDialog: JDialog? = null
 
     fun open() = SwingUtilities.invokeLater {
+        activeDialog?.takeIf { it.isDisplayable }?.let {
+            it.toFront()
+            it.requestFocus()
+            return@invokeLater
+        }
         val query = PluginRuntime.currentQuery()
         if (query == null) {
             JOptionPane.showMessageDialog(null, "请先播放一首歌曲。", "SPW Lyrics", JOptionPane.INFORMATION_MESSAGE)
@@ -34,6 +42,12 @@ object ManualSearchWindow {
         }
 
         val dialog = JDialog(null as Window?, "SPW Lyrics - 手动搜索", Dialog.ModalityType.APPLICATION_MODAL)
+        activeDialog = dialog
+        dialog.addWindowListener(object : WindowAdapter() {
+            override fun windowClosed(event: WindowEvent) {
+                if (activeDialog === dialog) activeDialog = null
+            }
+        })
         val keywords = JTextField(query.searchQueries().firstOrNull().orEmpty(), 42)
         val sources = JComboBox(sourceChoices.map { it?.displayName ?: "全部在线来源" }.toTypedArray())
         val search = JButton("搜索")
@@ -130,6 +144,7 @@ object ManualSearchWindow {
         dialog.contentPane.add(actions, BorderLayout.SOUTH)
         dialog.minimumSize = Dimension(920, 620)
         dialog.setLocationRelativeTo(null)
+        runSearch()
         dialog.isVisible = true
     }
 }

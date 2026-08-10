@@ -39,10 +39,14 @@ class NeteaseMusicProvider(private val http: ProviderHttp) : LyricsProvider {
         }
     }.getOrDefault(emptyList())
 
-    override fun fetch(candidate: LyricsCandidate): LyricsDocument? = runCatching {
+    override fun fetch(candidate: LyricsCandidate): LyricsDocument? =
+        runCatching { fetchEapi(candidate) }.getOrNull()
+            ?: runCatching { fetchFallback(candidate) }.getOrNull()
+
+    private fun fetchEapi(candidate: LyricsCandidate): LyricsDocument? {
         val data = linkedMapOf(
-            "id" to candidate.remoteId, "cp" to "false", "lv" to "0", "kv" to "0", "tv" to "0",
-            "rv" to "0", "yv" to "0", "ytv" to "0", "yrv" to "0", "csrf_token" to "",
+            "id" to candidate.remoteId, "cp" to "false", "lv" to "-1", "kv" to "-1", "tv" to "-1",
+            "rv" to "-1", "yv" to "-1", "ytv" to "-1", "yrv" to "-1", "csrf_token" to "",
         )
         data["header"] = NeteaseEapi.header()
         val response = http.postForm(LYRIC_URL, NeteaseEapi.encrypt(LYRIC_URL, data), HEADERS)
@@ -52,13 +56,15 @@ class NeteaseMusicProvider(private val http: ProviderHttp) : LyricsProvider {
         val original = when {
             !yrc.isNullOrBlank() -> YrcCodec.parse(yrc, source)
             !lrc.isNullOrBlank() -> LrcCodec.parse(lrc, source)
-            else -> return@runCatching null
+            else -> return null
         }
         val translation = secondaryTrack(root, "ytlrc", "tlyric")
         val romanization = secondaryTrack(root, "yromalrc", "romalrc")
-        LyricsTrackMerger.merge(original, translation, romanization)
-    }.recoverCatching {
-        val fallback = "$FALLBACK_LYRIC_URL?id=${candidate.remoteId}&lv=-1&kv=-1&tv=-1&yv=-1&rv=-1"
+        return LyricsTrackMerger.merge(original, translation, romanization)
+    }
+
+    private fun fetchFallback(candidate: LyricsCandidate): LyricsDocument? {
+        val fallback = "$FALLBACK_LYRIC_URL?id=${candidate.remoteId}&lv=-1&kv=-1&tv=-1&yv=-1&rv=-1&ytv=-1&yrv=-1"
         val root = providerJson.parseToJsonElement(http.get(fallback, HEADERS)) as JsonObject
         val yrc = root.obj("yrc")?.string("lyric")
         val original = if (yrc.isNullOrBlank()) {
@@ -66,16 +72,17 @@ class NeteaseMusicProvider(private val http: ProviderHttp) : LyricsProvider {
         } else {
             YrcCodec.parse(yrc, source)
         }
-        LyricsTrackMerger.merge(
+        return LyricsTrackMerger.merge(
             original,
             secondaryTrack(root, "ytlrc", "tlyric"),
             secondaryTrack(root, "yromalrc", "romalrc"),
-        )
-    }.getOrNull()?.takeIf { it.lines.isNotEmpty() }
+        ).takeIf { it.lines.isNotEmpty() }
+    }
 
     private fun secondaryTrack(root: JsonObject, preferred: String, fallback: String) =
-        (root.obj(preferred)?.string("lyric") ?: root.obj(fallback)?.string("lyric"))
-            ?.takeIf(String::isNotBlank)
+        listOf(preferred, fallback).firstNotNullOfOrNull { key ->
+            root.obj(key)?.string("lyric")?.takeIf(String::isNotBlank)
+        }
             ?.let { raw ->
                 if (raw.lineSequence().any { it.matches(Regex("""^\s*\[\d+,\d+].*""")) }) {
                     YrcCodec.parse(raw, source).lines

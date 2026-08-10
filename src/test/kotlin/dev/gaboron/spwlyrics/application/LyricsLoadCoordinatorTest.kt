@@ -78,7 +78,10 @@ class LyricsLoadCoordinatorTest {
         assertNull(coordinator.onBeforeLoad(query))
         Thread.sleep(50)
 
-        assertEquals(listOf("自动加载歌词失败，请尝试手动搜索歌词。"), synchronized(messages) { messages.toList() })
+        assertEquals(
+            listOf("自动加载歌词失败，请在“设置 → 模组管理 → SPW Lyrics → 手动搜索歌词”中手动匹配。"),
+            synchronized(messages) { messages.toList() },
+        )
         coordinator.close()
     }
 }

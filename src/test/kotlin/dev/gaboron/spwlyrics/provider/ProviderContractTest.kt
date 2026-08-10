@@ -54,6 +54,28 @@ class ProviderContractTest {
     }
 
     @Test
+    fun `qq accepts plain lrc translation beside qrc lyrics`() {
+        val candidate = dev.gaboron.spwlyrics.domain.LyricsCandidate(
+            LyricsSource.QQ,
+            "mid",
+            "Song",
+            listOf("Artist"),
+            "Album",
+            context = mapOf("musicId" to "123"),
+        )
+        val http = FakeHttp(
+            getHandler = {
+                """<lyric><content><![CDATA[[1000,1000]Hello(1000,1000)]]></content><contentts><![CDATA[[00:01.00]你好]]></contentts></lyric>"""
+            },
+        )
+
+        val line = QqMusicProvider(http).fetch(candidate)?.lines?.single()
+
+        assertEquals("Hello", line?.text)
+        assertEquals("你好", line?.translation)
+    }
+
+    @Test
     fun `netease falls back to line lyrics when eapi fails`() {
         val candidate = dev.gaboron.spwlyrics.domain.LyricsCandidate(
             LyricsSource.NETEASE, "42", "Song", listOf("Artist"), "Album",
@@ -84,6 +106,20 @@ class ProviderContractTest {
 
         assertEquals("你好", line?.translation)
         assertEquals("ni hao", line?.romanization)
+    }
+
+    @Test
+    fun `netease falls back from an empty preferred translation track`() {
+        val candidate = dev.gaboron.spwlyrics.domain.LyricsCandidate(
+            LyricsSource.NETEASE, "42", "Song", listOf("Artist"), "Album",
+        )
+        val http = FakeHttp(
+            postFormHandler = { _, _ ->
+                """{"lrc":{"lyric":"[00:01.00]Hello"},"ytlrc":{"lyric":""},"tlyric":{"lyric":"[00:01.00]你好"}}"""
+            },
+        )
+
+        assertEquals("你好", NeteaseMusicProvider(http).fetch(candidate)?.lines?.single()?.translation)
     }
 }
 

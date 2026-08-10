@@ -32,13 +32,41 @@ class MatchEngineTest {
     fun `rejects close ambiguous candidates`() {
         val candidates = listOf(
             LyricsCandidate(LyricsSource.QQ, "1", "打上花火", listOf("DAOKO", "米津玄師"), "打上花火"),
-            LyricsCandidate(LyricsSource.QQ, "2", "打上花火", listOf("DAOKO", "米津玄師"), "打上花火"),
+            LyricsCandidate(LyricsSource.QQ, "2", "打上花火", listOf("DAOKO", "米津玄師"), "打上花火 Single"),
         )
 
         val decision = MatchEngine.decide(query, candidates)
 
         assertNull(decision.winner)
         assertTrue(decision.ambiguous)
+    }
+
+    @Test
+    fun `does not treat duplicate provider metadata as ambiguous`() {
+        val candidates = listOf(
+            LyricsCandidate(LyricsSource.QQ, "line", "打上花火", query.artists, query.album, qualityHint = LyricsQuality.LINE_SYNCED),
+            LyricsCandidate(LyricsSource.QQ, "word", "打上花火", query.artists, query.album, qualityHint = LyricsQuality.WORD_SYNCED),
+        )
+
+        val decision = MatchEngine.decide(query, candidates)
+
+        assertEquals("word", decision.winner?.candidate?.remoteId)
+        assertTrue(!decision.ambiguous)
+    }
+
+    @Test
+    fun `accepts a provider that only lists the primary artist`() {
+        val candidate = LyricsCandidate(LyricsSource.AMLL, "primary", "打上花火", listOf("DAOKO"), "打上花火")
+
+        assertEquals(candidate, MatchEngine.decide(query, listOf(candidate)).winner?.candidate)
+    }
+
+    @Test
+    fun `can match title and album when artist metadata is missing`() {
+        val incomplete = TrackQuery("打上花火", emptyList(), "打上花火")
+        val candidate = LyricsCandidate(LyricsSource.NETEASE, "album", "打上花火", emptyList(), "打上花火")
+
+        assertEquals(candidate, MatchEngine.decide(incomplete, listOf(candidate)).winner?.candidate)
     }
 
     @Test
@@ -63,8 +91,8 @@ class MatchEngineTest {
     }
 
     @Test
-    fun `missing artist metadata is manual only`() {
-        val incomplete = TrackQuery("打上花火", emptyList(), "打上花火")
+    fun `missing artist and album metadata is manual only`() {
+        val incomplete = TrackQuery("打上花火", emptyList(), "")
         val candidate = LyricsCandidate(LyricsSource.QQ, "5", "打上花火", listOf("DAOKO"), "打上花火")
 
         assertNull(MatchEngine.decide(incomplete, listOf(candidate)).winner)

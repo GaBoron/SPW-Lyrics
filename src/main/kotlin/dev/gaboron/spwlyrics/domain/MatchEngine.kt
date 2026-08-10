@@ -12,10 +12,20 @@ data class CandidateScore(
     val versionConflict: Boolean,
 ) {
     val passesAutomaticGate: Boolean
-        get() = !versionConflict &&
-            titleScore >= MatchEngine.MIN_TITLE &&
-            (artistScore == null || artistScore >= MatchEngine.MIN_ARTIST) &&
-            score >= MatchEngine.MIN_TOTAL
+        get() {
+            if (versionConflict) return false
+            val titleAndArtist = titleScore >= MatchEngine.MIN_TITLE &&
+                artistScore != null && artistScore >= MatchEngine.MIN_ARTIST &&
+                score >= MatchEngine.MIN_TOTAL
+            val titleAndAlbum = titleScore >= MatchEngine.STRONG_TITLE &&
+                albumScore != null && albumScore >= MatchEngine.MIN_ALBUM &&
+                score >= MatchEngine.MIN_TITLE_ALBUM_TOTAL
+            val corroboratedFields = titleScore >= MatchEngine.RELAXED_TITLE &&
+                artistScore != null && artistScore >= MatchEngine.STRONG_ARTIST &&
+                albumScore != null && albumScore >= MatchEngine.STRONG_ALBUM &&
+                score >= MatchEngine.MIN_TOTAL
+            return titleAndArtist || titleAndAlbum || corroboratedFields
+        }
 }
 data class MatchDecision(
     val winner: CandidateScore?,
@@ -24,20 +34,20 @@ data class MatchDecision(
 )
 
 object MatchEngine {
-    const val MIN_TITLE = 0.90
-    const val MIN_ARTIST = 0.80
-    const val MIN_TOTAL = 0.88
-    const val MIN_GAP = 0.08
+    const val RELAXED_TITLE = 0.78
+    const val MIN_TITLE = 0.84
+    const val STRONG_TITLE = 0.90
+    const val MIN_ARTIST = 0.72
+    const val STRONG_ARTIST = 0.88
+    const val MIN_ALBUM = 0.78
+    const val STRONG_ALBUM = 0.82
+    const val MIN_TOTAL = 0.80
+    const val MIN_TITLE_ALBUM_TOTAL = 0.82
+    const val MIN_GAP = 0.04
 
     fun score(query: TrackQuery, candidate: LyricsCandidate): CandidateScore {
         val title = TextNormalizer.similarity(query.title, candidate.title)
-        val artist = if (query.artists.isEmpty() || candidate.artists.isEmpty()) {
-            null
-        } else {
-            query.artists.map { local ->
-                candidate.artists.maxOf { remote -> TextNormalizer.similarity(local, remote) }
-            }.average()
-        }
+        val artist = artistSimilarity(query, candidate)
         val album = if (query.album.isBlank() || candidate.album.isBlank()) {
             null
         } else {
@@ -62,15 +72,47 @@ object MatchEngine {
     }
 
     fun decide(query: TrackQuery, candidates: List<LyricsCandidate>): MatchDecision {
-        if (query.title.isBlank() || query.artists.isEmpty()) return MatchDecision(null, emptyList(), false)
+        if (query.title.isBlank() || (query.artists.isEmpty() && query.album.isBlank())) {
+            return MatchDecision(null, emptyList(), false)
+        }
         val ranked = candidates.map { score(query, it) }
-            .sortedWith(compareByDescending<CandidateScore> { it.score }.thenBy { it.candidate.remoteId })
+            .sortedWith(
+                compareByDescending<CandidateScore> { it.score }
+                    .thenByDescending { it.candidate.qualityHint?.rank ?: -1 }
+                    .thenBy { it.candidate.remoteId },
+            )
         val best = ranked.firstOrNull() ?: return MatchDecision(null, ranked, false)
         if (!best.passesAutomaticGate) return MatchDecision(null, ranked, false)
-        val second = ranked.drop(1).firstOrNull { it.candidate.remoteId != best.candidate.remoteId }
+        val second = ranked.drop(1).firstOrNull {
+            it.passesAutomaticGate && !sameMetadata(best.candidate, it.candidate)
+        }
         val ambiguous = second != null && best.score - second.score < MIN_GAP
         return MatchDecision(if (ambiguous) null else best, ranked, ambiguous)
     }
+
+    private fun artistSimilarity(query: TrackQuery, candidate: LyricsCandidate): Double? {
+        val localArtists = (query.artists + query.albumArtists)
+            .distinctBy(TextNormalizer::compact)
+        if (localArtists.isEmpty() || candidate.artists.isEmpty()) return null
+
+        val localCoverage = localArtists.map { local ->
+            candidate.artists.maxOf { remote -> TextNormalizer.similarity(local, remote) }
+        }.average()
+        val remoteCoverage = candidate.artists.map { remote ->
+            localArtists.maxOf { local -> TextNormalizer.similarity(local, remote) }
+        }.average()
+        val strongestPair = localArtists.maxOf { local ->
+            candidate.artists.maxOf { remote -> TextNormalizer.similarity(local, remote) }
+        }
+        val balancedCoverage = minOf(localCoverage, remoteCoverage) * 0.35 +
+            maxOf(localCoverage, remoteCoverage) * 0.65
+        return maxOf(strongestPair * 0.85, balancedCoverage).coerceIn(0.0, 1.0)
+    }
+
+    private fun sameMetadata(left: LyricsCandidate, right: LyricsCandidate): Boolean =
+        TextNormalizer.compact(left.title) == TextNormalizer.compact(right.title) &&
+            left.artists.map(TextNormalizer::compact).toSet() == right.artists.map(TextNormalizer::compact).toSet() &&
+            TextNormalizer.compact(left.album) == TextNormalizer.compact(right.album)
 
     private fun durationSimilarity(local: Long?, remote: Long?): Double? {
         if (local == null || remote == null || local <= 0 || remote <= 0) return null

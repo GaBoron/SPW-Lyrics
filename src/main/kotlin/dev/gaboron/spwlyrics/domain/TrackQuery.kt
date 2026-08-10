@@ -34,6 +34,7 @@ data class TrackQuery(
             add(listOf(title, artistText, album).filter(String::isNotBlank).joinToString(" "))
             add(listOf(title, artistText).filter(String::isNotBlank).joinToString(" "))
             add(listOf(cleanTitle, artistText).filter(String::isNotBlank).joinToString(" "))
+            add(listOf(cleanTitle, album).filter(String::isNotBlank).joinToString(" "))
             add(cleanTitle)
         }.map(String::trim).filter(String::isNotBlank).distinct()
     }

@@ -40,18 +40,29 @@ class QqMusicProvider(private val http: ProviderHttp) : LyricsProvider {
         val xml = http.get(url, mapOf("Referer" to "https://y.qq.com/"))
         val values = extractQqLyricValues(xml)
         val original = values["content"]?.takeIf(String::isNotBlank)
-            ?.let { QrcCodec.parse(QrcCodec.decryptHex(it), source) }
+            ?.let(::decodeTrack)
             ?: return@runCatching null
         val translation = values["contentts"]?.takeIf(String::isNotBlank)
-            ?.let { runCatching { QrcCodec.parse(QrcCodec.decryptHex(it), source).lines }.getOrNull() }.orEmpty()
+            ?.let { runCatching { decodeTrack(it).lines }.getOrNull() }.orEmpty()
         val romanization = values["contentroma"]?.takeIf(String::isNotBlank)
-            ?.let { runCatching { QrcCodec.parse(QrcCodec.decryptHex(it), source).lines }.getOrNull() }.orEmpty()
+            ?.let { runCatching { decodeTrack(it).lines }.getOrNull() }.orEmpty()
         LyricsTrackMerger.merge(original, translation, romanization)
     }.getOrNull()
+
+    private fun decodeTrack(content: String): LyricsDocument {
+        val raw = content.trim()
+        val decoded = if (raw.length % 2 == 0 && raw.matches(HEX_PAYLOAD)) {
+            QrcCodec.decryptHex(raw)
+        } else {
+            raw
+        }
+        return QrcCodec.parse(decoded, source)
+    }
 
     companion object {
         const val SEARCH_URL = "https://u.y.qq.com/cgi-bin/musicu.fcg"
         const val LYRIC_URL = "https://c.y.qq.com/qqmusic/fcgi-bin/lyric_download.fcg"
+        private val HEX_PAYLOAD = Regex("^[0-9a-fA-F]+$")
     }
 }
 

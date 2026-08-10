@@ -19,9 +19,6 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         StartupDiagnostics.Stage("MainWindow.InitializeComponent.complete");
 
-        ExtendsContentIntoTitleBar = true;
-        SetTitleBar(AppTitleBar);
-
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
         StartupDiagnostics.Stage("MainWindow.SetIcon.complete");
         AppWindow.Resize(new SizeInt32(1180, 760));
@@ -29,5 +26,12 @@ public sealed partial class MainWindow : Window
 
         // Navigate the root frame to the main page on startup.
         StartupDiagnostics.Stage($"MainWindow.Navigate.complete={RootFrame.Navigate(typeof(MainPage))}");
+    }
+
+    public void ActivateForInput()
+    {
+        Activate();
+        AppWindow.Show(activateWindow: true);
+        DispatcherQueue.TryEnqueue(() => RootFrame.Focus(Microsoft.UI.Xaml.FocusState.Programmatic));
     }
 }

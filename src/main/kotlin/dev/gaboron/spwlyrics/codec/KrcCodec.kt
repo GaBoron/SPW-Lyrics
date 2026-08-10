@@ -51,11 +51,15 @@ object KrcCodec : LyricCodec {
             }.toList()
             LyricLine(lineStart, lineStart + lineDuration, words.joinToString("") { it.text }, words)
         }.toList()
-        val document = LyricsDocument(source, LyricsFormat.KRC, lines)
-        return LyricsTrackMerger.merge(
-            document,
-            translations.map { LyricLine(text = it) },
-            romanizations.map { LyricLine(text = it) },
+        return LyricsDocument(
+            source,
+            LyricsFormat.KRC,
+            lines.mapIndexed { index, line ->
+                line.copy(
+                    translation = translations.getOrNull(index)?.takeIf(String::isNotBlank),
+                    romanization = romanizations.getOrNull(index)?.takeIf(String::isNotBlank),
+                )
+            },
         )
     }
 
@@ -66,8 +70,8 @@ object KrcCodec : LyricCodec {
             val content = Json.parseToJsonElement(languageJson).jsonObject["content"]?.jsonArray.orEmpty()
             val track = content.firstOrNull { it.jsonObject["type"]?.jsonPrimitive?.intOrNull == type }?.jsonObject
                 ?: return@runCatching emptyList()
-            track["lyricContent"]?.jsonArray.orEmpty().mapNotNull { row ->
-                row.jsonArray.firstOrNull()?.jsonPrimitive?.contentOrNull
+            track["lyricContent"]?.jsonArray.orEmpty().map { row ->
+                row.jsonArray.mapNotNull { it.jsonPrimitive.contentOrNull }.joinToString("")
             }
         }.getOrDefault(emptyList())
     }

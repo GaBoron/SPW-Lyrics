@@ -18,6 +18,7 @@ public sealed partial class MainPage : Page
     private readonly ObservableCollection<ManualUiCandidate> _candidates = [];
     private readonly ObservableCollection<ManualUiPreviewLine> _preview = [];
     private int _previewGeneration;
+    private bool _initialized;
 
     public MainPage()
     {
@@ -28,6 +29,8 @@ public sealed partial class MainPage : Page
 
     private async void Page_Loaded(object sender, RoutedEventArgs e)
     {
+        if (_initialized) return;
+        _initialized = true;
         await RunAsync(async () =>
         {
             var response = await App.Bridge.SendAsync("state");
@@ -39,6 +42,10 @@ public sealed partial class MainPage : Page
                 TrackSummary.Text = string.Join("  ·  ", new[] { response.Track.Title, response.Track.Artists, response.Track.Album }.Where(value => !string.IsNullOrWhiteSpace(value)));
             }
             ShowStatus(response.Ok, response.Message);
+            if (response.Ok && response.Track is not null && !string.IsNullOrWhiteSpace(SearchBox.Text))
+            {
+                await SearchCoreAsync();
+            }
         });
     }
 
@@ -51,7 +58,9 @@ public sealed partial class MainPage : Page
         await SearchAsync();
     }
 
-    private async Task SearchAsync() => await RunAsync(async () =>
+    private async Task SearchAsync() => await RunAsync(SearchCoreAsync);
+
+    private async Task SearchCoreAsync()
     {
         var source = (SourceBox.SelectedItem as ManualUiSource)?.Id;
         var response = await App.Bridge.SendAsync("search", SearchBox.Text.Trim(), source);
@@ -62,7 +71,7 @@ public sealed partial class MainPage : Page
         ApplyButton.IsEnabled = false;
         EmptyResults.Visibility = _candidates.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         ShowStatus(response.Ok, response.Message);
-    });
+    }
 
     private async void CandidateList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {

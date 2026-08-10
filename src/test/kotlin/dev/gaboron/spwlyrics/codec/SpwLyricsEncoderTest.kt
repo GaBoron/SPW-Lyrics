@@ -7,7 +7,7 @@ import dev.gaboron.spwlyrics.domain.LyricsFormat
 import dev.gaboron.spwlyrics.domain.LyricsSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class SpwLyricsEncoderTest {
     @Test
@@ -75,7 +75,7 @@ class SpwLyricsEncoderTest {
     }
 
     @Test
-    fun `keeps duet lines at the same timestamp`() {
+    fun `keeps duet lines concurrent without making the second line a translation`() {
         val document = LyricsDocument(
             source = LyricsSource.AMLL,
             format = LyricsFormat.TTML,
@@ -87,8 +87,28 @@ class SpwLyricsEncoderTest {
 
         val encoded = SpwLyricsEncoder.encode(document)
 
-        assertEquals(2, Regex("(?m)^\\[00:01\\.000]").findAll(encoded).count())
-        assertFalse(encoded.contains("[00:01.001]"))
+        assertEquals(1, Regex("(?m)^\\[00:01\\.000]").findAll(encoded).count())
+        assertEquals(1, Regex("(?m)^\\[00:01\\.001]").findAll(encoded).count())
+        assertTrue(encoded.contains("[00:01.001]女声[00:02.000]"))
+    }
+
+    @Test
+    fun `keeps each translation attached to its concurrent main line`() {
+        val document = LyricsDocument(
+            source = LyricsSource.AMLL,
+            format = LyricsFormat.TTML,
+            lines = listOf(
+                LyricLine(1_000, 2_000, "男声", translation = "Male", agent = "v1"),
+                LyricLine(1_000, 2_000, "女声", translation = "Female", agent = "v2"),
+            ),
+        )
+
+        assertEquals(
+            "[00:00.000]歌词来源：AMLL TTML DB[00:01.000]\n" +
+                "[00:01.000]男声[00:02.000]\n[00:01.000]Male\n" +
+                "[00:01.001]女声[00:02.000]\n[00:01.001]Female",
+            SpwLyricsEncoder.encode(document),
+        )
     }
 
     @Test

@@ -12,18 +12,5 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-
-        <TitleBar x:Name="AppTitleBar" Title="SPW Lyrics" Subtitle="手动歌词搜索">
-            <TitleBar.IconSource>
-                <FontIconSource FontFamily="Segoe Fluent Icons" Glyph="&#xE8D6;" />
-            </TitleBar.IconSource>
-        </TitleBar>
-
-        <Frame x:Name="RootFrame" Grid.Row="1" />
-    </Grid>
+    <Frame x:Name="RootFrame" />
 </Window>
