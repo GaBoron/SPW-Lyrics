@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "SpwLyrics.WinUI (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "SpwLyrics.WinUI (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

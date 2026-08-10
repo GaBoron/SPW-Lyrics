@@ -1,5 +1,6 @@
 import org.gradle.jvm.tasks.Jar
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.gradle.api.tasks.Exec
 
 plugins {
     kotlin("jvm") version "2.3.0"
@@ -43,6 +44,22 @@ val pluginClass = "dev.gaboron.spwlyrics.integration.SpwLyricsPlugin"
 val pluginId = "spw-lyrics"
 val pluginName = "SPW Lyrics"
 val pluginProvider = "GaBoron"
+val winUiProject = layout.projectDirectory.file("winui/SpwLyrics.WinUI/SpwLyrics.WinUI.csproj")
+val winUiPublishDirectory = layout.buildDirectory.dir("winui-publish")
+
+val publishWinUi by tasks.registering(Exec::class) {
+    group = "build"
+    description = "Publishes the unpackaged WinUI manual search companion."
+    inputs.files(fileTree("winui/SpwLyrics.WinUI") { exclude("bin/**", "obj/**", "AppPackages/**") })
+    outputs.dir(winUiPublishDirectory)
+    doFirst { delete(winUiPublishDirectory) }
+    commandLine(
+        "dotnet", "publish", winUiProject.asFile.absolutePath,
+        "-c", "Release", "-r", "win-x64", "--self-contained", "true",
+        "-p:Platform=x64", "-p:WindowsAppSDKSelfContained=true",
+        "-o", winUiPublishDirectory.get().asFile.absolutePath,
+    )
+}
 
 tasks.named<Jar>("jar") {
     manifest {
@@ -76,5 +93,6 @@ tasks.register<Zip>("plugin") {
             }
         })
     }
-    dependsOn(tasks.named("jar"))
+    into("ui") { from(winUiPublishDirectory) }
+    dependsOn(tasks.named("jar"), publishWinUi)
 }

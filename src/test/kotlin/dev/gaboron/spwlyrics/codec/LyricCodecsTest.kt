@@ -2,10 +2,13 @@ package dev.gaboron.spwlyrics.codec
 
 import dev.gaboron.spwlyrics.domain.LyricsQuality
 import dev.gaboron.spwlyrics.domain.LyricsSource
+import dev.gaboron.spwlyrics.domain.LyricLine
+import dev.gaboron.spwlyrics.domain.LyricsDocument
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.assertFails
+import kotlin.test.assertNull
 
 class LyricCodecsTest {
     @Test
@@ -28,6 +31,51 @@ class LyricCodecsTest {
         assertEquals(LyricsQuality.WORD_SYNCED, document.quality)
         assertEquals("你好", document.lines.single().text)
         assertEquals(1900, document.lines.single().endMs)
+    }
+
+    @Test
+    fun `removes netease structured credits from instrumental yrc`() {
+        val document = YrcCodec.parse(
+            """
+                [0,1000]{"t":0,"c":[{"tx":"作词："},{"tx":"Wisp X"}]}
+                [1000,2000](1000,2000,0)纯音乐，请欣赏
+            """.trimIndent(),
+            LyricsSource.NETEASE,
+        )
+
+        assertEquals(listOf("纯音乐，请欣赏"), document.lines.map { it.text })
+        assertEquals(listOf("作词：Wisp X"), document.metadata["credits"])
+    }
+
+    @Test
+    fun `aligns timed translation monotonically without index fallback`() {
+        val original = LrcCodec.parse(
+            "[00:10.00]First\n[00:20.00]Second\n[00:30.00]Third",
+            LyricsSource.NETEASE,
+        )
+        val translation = LrcCodec.parse(
+            "[00:00.00]翻译信息\n[00:10.20]第一句\n[00:30.10]第三句",
+            LyricsSource.NETEASE,
+        )
+
+        val merged = LyricsTrackMerger.merge(original, translation.lines)
+
+        assertEquals("第一句", merged.lines[0].translation)
+        assertNull(merged.lines[1].translation)
+        assertEquals("第三句", merged.lines[2].translation)
+    }
+
+    @Test
+    fun `does not index align incomplete untimed secondary text`() {
+        val original = LyricsDocument(
+            LyricsSource.NETEASE,
+            dev.gaboron.spwlyrics.domain.LyricsFormat.PLAIN,
+            listOf(LyricLine(text = "First"), LyricLine(text = "Second")),
+        )
+
+        val merged = LyricsTrackMerger.merge(original, listOf(LyricLine(text = "只有一句")))
+
+        assertTrue(merged.lines.all { it.translation == null })
     }
 
     @Test

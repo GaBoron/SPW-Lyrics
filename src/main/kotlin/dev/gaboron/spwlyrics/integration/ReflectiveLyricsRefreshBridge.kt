@@ -5,7 +5,10 @@ import dev.gaboron.spwlyrics.application.LyricsRefreshBridge
 import java.lang.reflect.Modifier
 
 class ReflectiveLyricsRefreshBridge : LyricsRefreshBridge {
+    private val playbackReloader = SpwPlaybackLyricsReloader()
+
     override fun reloadCurrentLyrics(): Boolean {
+        if (playbackReloader.reload()) return true
         val apiObjects = runCatching { listOf(WorkshopApi.instance, WorkshopApi.playback) }.getOrDefault(emptyList())
         apiObjects.forEach { root ->
             if (invokeCandidate(root)) return true

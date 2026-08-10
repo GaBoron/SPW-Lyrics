@@ -68,6 +68,23 @@ class ProviderContractTest {
         assertEquals("Hello", document?.lines?.single()?.text)
         assertEquals("你好", document?.lines?.single()?.translation)
     }
+
+    @Test
+    fun `netease prefers newer translation and romanization tracks`() {
+        val candidate = dev.gaboron.spwlyrics.domain.LyricsCandidate(
+            LyricsSource.NETEASE, "42", "Song", listOf("Artist"), "Album",
+        )
+        val http = FakeHttp(
+            postFormHandler = { _, _ ->
+                """{"yrc":{"lyric":"[1000,1000](1000,1000,0)Hello"},"ytlrc":{"lyric":"[00:01.10]你好"},"tlyric":{"lyric":"[00:01.10]旧翻译"},"yromalrc":{"lyric":"[00:01.10]ni hao"}}"""
+            },
+        )
+
+        val line = NeteaseMusicProvider(http).fetch(candidate)?.lines?.single()
+
+        assertEquals("你好", line?.translation)
+        assertEquals("ni hao", line?.romanization)
+    }
 }
 
 private class FakeHttp(

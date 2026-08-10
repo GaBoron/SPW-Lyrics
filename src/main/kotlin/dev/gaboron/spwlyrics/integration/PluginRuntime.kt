@@ -14,15 +14,18 @@ import dev.gaboron.spwlyrics.provider.NeteaseMusicProvider
 import dev.gaboron.spwlyrics.provider.ProviderHttpClient
 import dev.gaboron.spwlyrics.provider.QqMusicProvider
 import dev.gaboron.spwlyrics.storage.FileLyricsCache
+import dev.gaboron.spwlyrics.integration.manualui.ManualUiBridge
+import dev.gaboron.spwlyrics.integration.manualui.ManualUiSession
 import java.nio.file.Path
 import java.time.Duration
 import kotlin.io.path.Path
 
 object PluginRuntime {
     @Volatile private var coordinator: LyricsLoadCoordinator? = null
+    @Volatile private var manualUiBridge: ManualUiBridge? = null
 
     @Synchronized
-    fun install() {
+    fun install(pluginPath: String) {
         if (coordinator != null) return
         val localData = System.getenv("LOCALAPPDATA")?.takeIf(String::isNotBlank)
             ?.let(::Path) ?: Path(System.getProperty("user.home"))
@@ -42,6 +45,16 @@ object PluginRuntime {
             refreshBridge = ReflectiveLyricsRefreshBridge(),
             notify = ::toastWarning,
         )
+        manualUiBridge = ManualUiBridge(
+            pluginRoot = Path(pluginPath),
+            session = ManualUiSession(
+                currentQuery = ::currentQuery,
+                search = ::searchManual,
+                preview = ::preview,
+                apply = ::applyManual,
+                useLocal = ::useLocal,
+            ),
+        )
     }
 
     fun beforeLoad(mediaItem: PlaybackExtensionPoint.MediaItem): String? = coordinator?.onBeforeLoad(mediaItem.toQuery())
@@ -50,9 +63,14 @@ object PluginRuntime {
     fun preview(candidate: LyricsCandidate) = coordinator?.preview(candidate)
     fun applyManual(candidate: LyricsCandidate): Boolean = coordinator?.applyManual(candidate) == true
     fun useLocal(): Boolean = coordinator?.useLocal() == true
+    fun openManualSearch() {
+        if (manualUiBridge?.open() != true) ManualSearchWindow.open()
+    }
 
     @Synchronized
     fun close() {
+        manualUiBridge?.close()
+        manualUiBridge = null
         coordinator?.close()
         coordinator = null
     }

@@ -54,18 +54,35 @@ class NeteaseMusicProvider(private val http: ProviderHttp) : LyricsProvider {
             !lrc.isNullOrBlank() -> LrcCodec.parse(lrc, source)
             else -> return@runCatching null
         }
-        val translation = root.obj("tlyric")?.string("lyric")?.takeIf(String::isNotBlank)
-            ?.let { LrcCodec.parse(it, source).lines }.orEmpty()
-        val romanization = root.obj("romalrc")?.string("lyric")?.takeIf(String::isNotBlank)
-            ?.let { LrcCodec.parse(it, source).lines }.orEmpty()
+        val translation = secondaryTrack(root, "ytlrc", "tlyric")
+        val romanization = secondaryTrack(root, "yromalrc", "romalrc")
         LyricsTrackMerger.merge(original, translation, romanization)
     }.recoverCatching {
-        val fallback = "$FALLBACK_LYRIC_URL?id=${candidate.remoteId}&lv=-1&kv=-1&tv=-1"
+        val fallback = "$FALLBACK_LYRIC_URL?id=${candidate.remoteId}&lv=-1&kv=-1&tv=-1&yv=-1&rv=-1"
         val root = providerJson.parseToJsonElement(http.get(fallback, HEADERS)) as JsonObject
-        val original = LrcCodec.parse(root.obj("lrc")?.string("lyric").orEmpty(), source)
-        val translation = root.obj("tlyric")?.string("lyric")?.let { LrcCodec.parse(it, source).lines }.orEmpty()
-        LyricsTrackMerger.merge(original, translation)
+        val yrc = root.obj("yrc")?.string("lyric")
+        val original = if (yrc.isNullOrBlank()) {
+            LrcCodec.parse(root.obj("lrc")?.string("lyric").orEmpty(), source)
+        } else {
+            YrcCodec.parse(yrc, source)
+        }
+        LyricsTrackMerger.merge(
+            original,
+            secondaryTrack(root, "ytlrc", "tlyric"),
+            secondaryTrack(root, "yromalrc", "romalrc"),
+        )
     }.getOrNull()?.takeIf { it.lines.isNotEmpty() }
+
+    private fun secondaryTrack(root: JsonObject, preferred: String, fallback: String) =
+        (root.obj(preferred)?.string("lyric") ?: root.obj(fallback)?.string("lyric"))
+            ?.takeIf(String::isNotBlank)
+            ?.let { raw ->
+                if (raw.lineSequence().any { it.matches(Regex("""^\s*\[\d+,\d+].*""")) }) {
+                    YrcCodec.parse(raw, source).lines
+                } else {
+                    LrcCodec.parse(raw, source).lines
+                }
+            }.orEmpty()
 
     companion object {
         const val SEARCH_URL = "https://music.163.com/api/search/get/web"
