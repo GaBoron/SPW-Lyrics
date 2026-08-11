@@ -6,6 +6,7 @@ import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.util.zip.GZIPInputStream
+import javax.net.ssl.SSLException
 
 interface ProviderHttp {
     fun get(url: String, headers: Map<String, String> = emptyMap()): String
@@ -19,8 +20,17 @@ class ProviderHttpClient(
 ) : ProviderHttp {
     private val connectTimeoutMs = connectTimeout.toTimeoutMillis()
     private val readTimeoutMs = requestTimeout.toTimeoutMillis()
+    private val directHttpsFallback = DirectHttpsFallback(connectTimeoutMs, readTimeoutMs)
 
-    override fun get(url: String, headers: Map<String, String>): String = send(url, "GET", null, null, headers)
+    override fun get(url: String, headers: Map<String, String>): String = try {
+        send(url, "GET", null, null, headers)
+    } catch (failure: Throwable) {
+        if (!url.startsWith("https://") || !failure.hasTlsFailure()) throw failure
+        runCatching { directHttpsFallback.get(url, headers) }.getOrElse { fallbackFailure ->
+            failure.addSuppressed(fallbackFailure)
+            throw failure
+        }
+    }
 
     override fun postJson(url: String, body: String, headers: Map<String, String>): String = send(
         url,
@@ -92,3 +102,6 @@ class ProviderHttpClient(
             ?: StandardCharsets.UTF_8
     }
 }
+
+private fun Throwable.hasTlsFailure(): Boolean =
+    generateSequence(this) { it.cause }.any { it is SSLException }

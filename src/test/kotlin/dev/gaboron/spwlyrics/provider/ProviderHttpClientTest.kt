@@ -47,4 +47,11 @@ class ProviderHttpClientTest {
             worker.join(1_000)
         }
     }
+
+    @Test
+    fun `DNS fallback accepts unique public IPv4 addresses only`() {
+        val payload = """{"Answer":[{"data":"104.21.22.165"},{"data":"192.168.1.1"},{"data":"104.21.22.165"},{"data":"invalid"}]}"""
+
+        assertEquals(listOf("104.21.22.165"), parsePublicIpv4Addresses(payload).map { it.hostAddress })
+    }
 }
