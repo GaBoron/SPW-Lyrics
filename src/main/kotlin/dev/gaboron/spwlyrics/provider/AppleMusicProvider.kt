@@ -1,6 +1,7 @@
 package dev.gaboron.spwlyrics.provider
 
 import dev.gaboron.spwlyrics.codec.TtmlCodec
+import dev.gaboron.spwlyrics.codec.LyricsScriptConverter
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsDocument
 import dev.gaboron.spwlyrics.domain.LyricsQuality
@@ -46,7 +47,7 @@ class AppleMusicProvider(private val http: ProviderHttp) : LyricsProvider {
 
     override fun fetch(candidate: LyricsCandidate): LyricsDocument? = runCatching {
         val url = candidate.context["url"]?.takeIf(::isTrustedLyricsUrl) ?: return@runCatching null
-        TtmlCodec().parse(http.get(url), source)
+        LyricsScriptConverter.toSimplifiedChinese(TtmlCodec().parse(http.get(url), source))
     }.getOrNull()?.takeIf { it.lines.isNotEmpty() }
 
     private fun searchUrl(query: TrackQuery, keywords: String): String {

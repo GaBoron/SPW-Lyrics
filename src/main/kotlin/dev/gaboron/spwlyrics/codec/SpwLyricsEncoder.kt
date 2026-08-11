@@ -7,7 +7,7 @@ import dev.gaboron.spwlyrics.domain.LyricsQuality
 import kotlin.math.max
 
 object SpwLyricsEncoder {
-    const val VERSION = 6
+    const val VERSION = 7
 
     fun encode(document: LyricsDocument): String {
         if (document.lines.isEmpty()) return ""

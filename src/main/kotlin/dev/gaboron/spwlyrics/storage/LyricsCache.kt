@@ -4,6 +4,7 @@ import dev.gaboron.spwlyrics.codec.SpwLyricsEncoder
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsDocument
 import dev.gaboron.spwlyrics.domain.LyricsSource
+import dev.gaboron.spwlyrics.domain.TrackQuery
 import java.nio.charset.StandardCharsets
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
@@ -33,13 +34,13 @@ data class ManualOverride(
     val modelVersion: Int = CACHE_MODEL_VERSION,
 )
 
-const val CACHE_MODEL_VERSION = 1
+const val CACHE_MODEL_VERSION = 2
 
 interface LyricsCache {
-    fun getLyrics(trackKey: String): CachedLyrics?
-    fun putLyrics(trackKey: String, lyrics: CachedLyrics)
-    fun getOverride(trackKey: String): ManualOverride?
-    fun putOverride(trackKey: String, override: ManualOverride)
+    fun getLyrics(query: TrackQuery): CachedLyrics?
+    fun putLyrics(query: TrackQuery, lyrics: CachedLyrics)
+    fun getOverride(query: TrackQuery): ManualOverride?
+    fun putOverride(query: TrackQuery, override: ManualOverride)
 }
 
 class FileLyricsCache(
@@ -48,6 +49,7 @@ class FileLyricsCache(
     private val successTtl: Duration = Duration.ofDays(30),
 ) : LyricsCache {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private val layout = ReadableCacheLayout(root)
     private val memory = object : LinkedHashMap<String, CachedLyrics>(64, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CachedLyrics>?): Boolean = size > 64
     }
@@ -57,27 +59,29 @@ class FileLyricsCache(
     }
 
     @Synchronized
-    override fun getLyrics(trackKey: String): CachedLyrics? {
-        memory[trackKey]?.takeIf(::validLyrics)?.let { return it }
-        val stored = read(cachePath("lyrics", trackKey))?.let { runCatching { json.decodeFromString<CachedLyrics>(it) }.getOrNull() }
+    override fun getLyrics(query: TrackQuery): CachedLyrics? {
+        memory[query.key]?.takeIf(::validLyrics)?.let { return it }
+        val stored = read(layout.lyrics(query))?.let { runCatching { json.decodeFromString<CachedLyrics>(it) }.getOrNull() }
             ?.takeIf(::validLyrics)
-        stored?.let { memory[trackKey] = it }
+        stored?.let { memory[query.key] = it }
         return stored
     }
 
     @Synchronized
-    override fun putLyrics(trackKey: String, lyrics: CachedLyrics) {
-        memory[trackKey] = lyrics
-        write(cachePath("lyrics", trackKey), json.encodeToString(lyrics))
+    override fun putLyrics(query: TrackQuery, lyrics: CachedLyrics) {
+        memory[query.key] = lyrics
+        write(layout.lyrics(query), json.encodeToString(lyrics))
     }
 
-    override fun getOverride(trackKey: String): ManualOverride? = read(cachePath("override", trackKey))
+    @Synchronized
+    override fun getOverride(query: TrackQuery): ManualOverride? = read(layout.override(query))
         ?.let { runCatching { json.decodeFromString<ManualOverride>(it) }.getOrNull() }
         ?.takeIf { it.modelVersion == CACHE_MODEL_VERSION }
 
-    override fun putOverride(trackKey: String, override: ManualOverride) {
-        write(cachePath("override", trackKey), json.encodeToString(override))
-        synchronized(this) { memory.remove(trackKey) }
+    @Synchronized
+    override fun putOverride(query: TrackQuery, override: ManualOverride) {
+        write(layout.override(query), json.encodeToString(override))
+        memory.remove(query.key)
     }
 
     private fun validLyrics(value: CachedLyrics): Boolean =
@@ -86,15 +90,6 @@ class FileLyricsCache(
 
     private fun expired(epochMs: Long, ttl: Duration): Boolean =
         Instant.ofEpochMilli(epochMs).plus(ttl).isBefore(clock.instant())
-
-    private fun cachePath(kind: String, rawKey: String): Path = root.resolve("$kind-${safeKey(rawKey)}.json")
-
-    private fun safeKey(raw: String): String {
-        if (raw.matches(Regex("[a-f0-9]{64}"))) return raw
-        val digest = java.security.MessageDigest.getInstance("SHA-256")
-            .digest(raw.toByteArray(StandardCharsets.UTF_8))
-        return digest.joinToString("") { "%02x".format(it) }
-    }
 
     private fun read(path: Path): String? = if (Files.isRegularFile(path)) {
         runCatching { Files.readString(path, StandardCharsets.UTF_8) }.getOrNull()

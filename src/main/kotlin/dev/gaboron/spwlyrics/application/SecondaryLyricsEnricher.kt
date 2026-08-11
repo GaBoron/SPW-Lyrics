@@ -33,8 +33,12 @@ internal object SecondaryLyricsEnricher {
         )
     }
 
-    fun needsTranslation(document: LyricsDocument): Boolean =
-        document.lines.none { !it.background && !it.translation.isNullOrBlank() }
+    fun needsTranslation(document: LyricsDocument): Boolean {
+        val primary = document.lines.filter { !it.background && it.text.isNotBlank() }
+        if (primary.isEmpty()) return false
+        val translated = primary.count { !it.translation.isNullOrBlank() }
+        return translated * 10 < primary.size * MIN_TRANSLATION_COVERAGE_TENTHS
+    }
 
     private fun LyricLine.secondaryLine(selector: (LyricLine) -> String?): LyricLine? =
         selector(this)?.takeIf(String::isNotBlank)?.let { secondary ->
@@ -43,4 +47,5 @@ internal object SecondaryLyricsEnricher {
 
     const val TRANSLATION_SOURCE_KEY = "translationSource"
     const val ROMANIZATION_SOURCE_KEY = "romanizationSource"
+    private const val MIN_TRANSLATION_COVERAGE_TENTHS = 8
 }

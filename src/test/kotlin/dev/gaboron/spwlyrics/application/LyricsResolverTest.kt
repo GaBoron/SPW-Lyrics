@@ -60,6 +60,19 @@ class LyricsResolverTest {
     }
 
     @Test
+    fun `later word synced source wins over earlier line synced source`() {
+        val called = mutableListOf<LyricsSource>()
+        val amllLine = fakeProvider(LyricsSource.AMLL, called, wordSynced = false)
+        val qqWord = fakeProvider(LyricsSource.QQ, called, wordSynced = true)
+
+        val result = LyricsResolver(listOf(amllLine, qqWord))
+            .resolveAutomatic(TrackQuery("Song", listOf("Artist"), "Album"))
+
+        assertEquals(LyricsSource.QQ, result?.candidate?.source)
+        assertEquals(listOf(LyricsSource.AMLL, LyricsSource.QQ), called.distinct())
+    }
+
+    @Test
     fun `repeats unresolved searches instead of caching provider candidates`() {
         var searches = 0
         val provider = object : LyricsProvider {

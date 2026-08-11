@@ -110,6 +110,22 @@ class LyricCodecsTest {
     }
 
     @Test
+    fun `keeps qrc lines after unescaped quotes inside lyric content`() {
+        val raw = """
+            <?xml version="1.0" encoding="utf-8"?>
+            <QrcInfos><LyricInfo LyricCount="1">
+            <Lyric_1 LyricType="1" LyricContent="[1000,1000]Like, "(1000,400)Where(1400,300)you?(1700,300)
+            [2000,1000]After(2000,1000)"/>
+            </LyricInfo></QrcInfos>
+        """.trimIndent()
+
+        val document = QrcCodec.parse(raw, LyricsSource.QQ)
+
+        assertEquals(listOf("Like, \"Whereyou?", "After"), document.lines.map(LyricLine::text))
+        assertEquals(2_000, document.lines.last().startMs)
+    }
+
+    @Test
     fun `parses ttml words and aligned translation`() {
         val raw = """
             <tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata">

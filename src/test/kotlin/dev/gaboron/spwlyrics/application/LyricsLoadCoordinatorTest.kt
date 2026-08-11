@@ -137,8 +137,8 @@ class LyricsLoadCoordinatorTest {
         val query = TrackQuery("Manual", listOf("Artist"), "Album", path = "manual.mp3")
         val candidate = LyricsCandidate(LyricsSource.AMLL, "manual", query.title, query.artists, query.album)
         val document = LyricsDocument(LyricsSource.AMLL, LyricsFormat.LRC, listOf(LyricLine(1_000, 2_000, "manual")))
-        cache.putOverride(query.key, ManualOverride(local = false, source = candidate.source, candidate = candidate))
-        cache.putLyrics(query.key, CachedLyrics(document, "[00:01.000]manual", System.currentTimeMillis()))
+        cache.putOverride(query, ManualOverride(local = false, source = candidate.source, candidate = candidate))
+        cache.putLyrics(query, CachedLyrics(document, "[00:01.000]manual", System.currentTimeMillis()))
         val coordinator = LyricsLoadCoordinator(
             cache,
             LyricsResolver(emptyList()),

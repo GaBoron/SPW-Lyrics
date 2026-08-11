@@ -25,15 +25,21 @@ class LyricsResolver(
     private val orderedSources = LyricsSource.entries.sortedBy(LyricsSource::priority)
 
     fun resolveAutomatic(query: TrackQuery, deadlineNanos: Long = Long.MAX_VALUE): ResolvedLyrics? {
+        val selection = AutomaticLyricsSelection()
+        val fetchedBySource = linkedMapOf<LyricsSource, LyricsDocument>()
         for (source in orderedSources) {
-            if (System.nanoTime() >= deadlineNanos) return null
-            if (source == LyricsSource.LOCAL) return null
+            if (System.nanoTime() >= deadlineNanos) break
+            if (source == LyricsSource.LOCAL) break
             val provider = providers[source] ?: continue
             val winner = findWinner(provider, query, deadlineNanos) ?: continue
-            if (System.nanoTime() >= deadlineNanos) return null
-            fetch(provider, winner, query, deadlineNanos)?.let { return it }
+            if (System.nanoTime() >= deadlineNanos) break
+            val document = fetchDocument(provider, winner) ?: continue
+            fetchedBySource[source] = document
+            selection.consider(FetchedLyrics(winner, document))?.let { fetched ->
+                return finalize(fetched, query, deadlineNanos, fetchedBySource)
+            }
         }
-        return null
+        return selection.fallback()?.let { finalize(it, query, deadlineNanos, fetchedBySource) }
     }
 
     fun searchManual(query: TrackQuery, keywords: String, source: LyricsSource?): List<CandidateScore> {
@@ -58,7 +64,8 @@ class LyricsResolver(
             durationMs = candidate.durationMs,
             externalIds = candidate.externalIds,
         )
-        fetch(provider, candidate, query)
+        val document = fetchDocument(provider, candidate) ?: return@let null
+        finalize(FetchedLyrics(candidate, document), query)
     }
 
     fun toCache(resolved: ResolvedLyrics): CachedLyrics = CachedLyrics(
@@ -70,35 +77,37 @@ class LyricsResolver(
     private fun search(provider: LyricsProvider, query: TrackQuery, keywords: String): List<LyricsCandidate> =
         runCatching { provider.search(query, keywords) }.getOrDefault(emptyList())
 
-    private fun fetch(
-        provider: LyricsProvider,
-        candidate: LyricsCandidate,
+    private fun finalize(
+        fetched: FetchedLyrics,
         query: TrackQuery,
         deadlineNanos: Long = Long.MAX_VALUE,
+        fetchedBySource: Map<LyricsSource, LyricsDocument> = emptyMap(),
     ): ResolvedLyrics? {
-        val fetched = fetchDocument(provider, candidate) ?: return null
-        val document = if (candidate.source in PRIMARY_WORD_SOURCES) {
-            enrichFromOtherSources(fetched, query, deadlineNanos)
+        val document = if (fetched.candidate.source in PRIMARY_WORD_SOURCES) {
+            enrichFromOtherSources(fetched.document, query, deadlineNanos, fetchedBySource)
         } else {
-            fetched
+            fetched.document
         }
         val encoded = SpwLyricsEncoder.encode(document).takeIf(String::isNotBlank) ?: return null
-        return ResolvedLyrics(candidate, document, encoded)
+        return ResolvedLyrics(fetched.candidate, document, encoded)
     }
 
     private fun enrichFromOtherSources(
         primary: LyricsDocument,
         query: TrackQuery,
         deadlineNanos: Long,
+        fetchedBySource: Map<LyricsSource, LyricsDocument>,
     ): LyricsDocument {
         if (!SecondaryLyricsEnricher.needsTranslation(primary)) return primary
         var enriched = primary
         for (source in TRANSLATION_SOURCES) {
             if (System.nanoTime() >= deadlineNanos) break
             val provider = providers[source] ?: continue
-            val winner = findWinner(provider, query, deadlineNanos) ?: continue
-            if (System.nanoTime() >= deadlineNanos) break
-            val secondary = fetchDocument(provider, winner) ?: continue
+            val secondary = fetchedBySource[source] ?: run {
+                val winner = findWinner(provider, query, deadlineNanos) ?: return@run null
+                if (System.nanoTime() >= deadlineNanos) return@run null
+                fetchDocument(provider, winner)
+            } ?: continue
             enriched = SecondaryLyricsEnricher.enrich(enriched, secondary)
             if (!SecondaryLyricsEnricher.needsTranslation(enriched)) break
         }

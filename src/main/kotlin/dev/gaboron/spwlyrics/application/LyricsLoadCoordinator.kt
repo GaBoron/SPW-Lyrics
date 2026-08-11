@@ -36,18 +36,18 @@ class LyricsLoadCoordinator(
         replacementPolicy: AutomaticReplacementPolicy,
     ): String? {
         current.set(query)
-        val override = cache.getOverride(query.key)
+        val override = cache.getOverride(query)
         if (override?.local == true) return null
         val automaticLoadAllowed = replacementPolicy.allowsAutomaticLoad(phase)
         if (override?.candidate == null && !automaticLoadAllowed) return null
-        cache.getLyrics(query.key)?.let {
+        cache.getLyrics(query)?.let {
             notifiedFailures.remove(query.key)
             return it.encoded
         }
         inFlight.computeIfAbsent(query.key) {
-            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(AUTOMATIC_RESOLUTION_TIMEOUT_SECONDS)
             CompletableFuture.runAsync({ resolveAndRefresh(query, override?.candidate, deadline) }, executor)
-                .orTimeout(8, TimeUnit.SECONDS)
+                .orTimeout(AUTOMATIC_RESOLUTION_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .whenComplete { _, error ->
                     if (error != null && override?.candidate == null) recordAutomaticFailure(query)
                     inFlight.remove(query.key)
@@ -64,8 +64,8 @@ class LyricsLoadCoordinator(
     fun applyManual(candidate: LyricsCandidate): Boolean {
         val query = current.get() ?: return false
         val resolved = resolver.fetchManual(candidate) ?: return false
-        cache.putOverride(query.key, ManualOverride(local = false, source = candidate.source, candidate = candidate))
-        cache.putLyrics(query.key, resolver.toCache(resolved))
+        cache.putOverride(query, ManualOverride(local = false, source = candidate.source, candidate = candidate))
+        cache.putLyrics(query, resolver.toCache(resolved))
         notifiedFailures.remove(query.key)
         refreshOrNotify(query)
         return true
@@ -73,7 +73,7 @@ class LyricsLoadCoordinator(
 
     fun useLocal(): Boolean {
         val query = current.get() ?: return false
-        cache.putOverride(query.key, ManualOverride(local = true))
+        cache.putOverride(query, ManualOverride(local = true))
         refreshOrNotify(query)
         return true
     }
@@ -85,7 +85,7 @@ class LyricsLoadCoordinator(
             if (manual == null) recordAutomaticFailure(query)
             return
         }
-        cache.putLyrics(query.key, resolver.toCache(resolved))
+        cache.putLyrics(query, resolver.toCache(resolved))
         notifiedFailures.remove(query.key)
         if (current.get()?.key == query.key) refreshOrNotify(query)
     }
@@ -96,7 +96,7 @@ class LyricsLoadCoordinator(
     }
 
     private fun automaticWasSuperseded(query: TrackQuery): Boolean =
-        cache.getOverride(query.key)?.let { it.local || it.candidate != null } == true
+        cache.getOverride(query)?.let { it.local || it.candidate != null } == true
 
     private fun notifyAutomaticFailure(query: TrackQuery) {
         if (current.get()?.key == query.key && notifiedFailures.add(query.key)) {
@@ -113,5 +113,9 @@ class LyricsLoadCoordinator(
         current.set(null)
         inFlight.values.forEach { it.cancel(true) }
         executor.shutdownNow()
+    }
+
+    private companion object {
+        const val AUTOMATIC_RESOLUTION_TIMEOUT_SECONDS = 15L
     }
 }

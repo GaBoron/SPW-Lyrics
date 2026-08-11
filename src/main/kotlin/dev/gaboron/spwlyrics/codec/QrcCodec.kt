@@ -48,7 +48,10 @@ object QrcCodec : LyricCodec {
 
     private fun extractLyricContent(raw: String): String {
         if (!raw.contains("<?xml") && !raw.trimStart().startsWith("<Qrc")) return raw
-        Regex("""\bLyricContent="(.*?)"""", RegexOption.DOT_MATCHES_ALL).find(raw)?.let { match ->
+        Regex(
+            """\bLyricContent="(.*)"\s*/>\s*</LyricInfo>""",
+            RegexOption.DOT_MATCHES_ALL,
+        ).find(raw)?.let { match ->
             return unescapeXml(match.groupValues[1])
         }
         return runCatching {
