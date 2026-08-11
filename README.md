@@ -13,7 +13,7 @@ SPW Lyrics 是一款面向 [Salt Player for Windows（SPW）](https://github.com
 
 ## ✨ 功能亮点
 
-- 🔎 **自动搜索**：依次尝试 AMLL TTML DB、QQ 音乐、酷狗音乐和网易云音乐。
+- 🔎 **自动搜索**：支持 AMLL TTML DB、Apple Music、QQ 音乐、酷狗音乐和网易云音乐。
 - 🎯 **可靠匹配**：综合歌名、歌手、专辑和歌曲时长，减少同名歌、Live、Remix 等版本误配。
 - 🎤 **丰富歌词**：优先逐字歌词，并支持逐行歌词、普通歌词、翻译、音译、对唱和背景歌词。
 - ⚡ **自动刷新**：找到可靠结果后尝试立即替换当前歌词，不会阻塞音乐播放。
@@ -23,7 +23,7 @@ SPW Lyrics 是一款面向 [Salt Player for Windows（SPW）](https://github.com
 ## 📥 下载与安装
 
 1. 前往 [最新 Release](https://github.com/GaBoron/SPW-Lyrics/releases/latest)。
-2. 下载 `spw-lyrics-0.1.0.zip`，**不要解压**。
+2. 下载 `spw-lyrics-0.2.0.zip`，**不要解压**。
 3. 打开 SPW 的“**设置 → 创意工坊**”。
 4. 使用本地安装或导入模组的入口，选择刚才下载的 ZIP。
 5. 如果插件没有立即出现，请重启一次 SPW。
@@ -41,7 +41,7 @@ SPW Lyrics 是一款面向 [Salt Player for Windows（SPW）](https://github.com
 
 > **设置 → 创意工坊 → 模组设置 → SPW Lyrics → 手动搜索歌词**
 
-手动窗口会自动搜索当前歌曲。选择候选后可以预览并应用，也可以点击“切回本地歌词”。同一时间只会打开一个手动窗口。
+手动窗口会自动搜索当前歌曲，并按实际歌词内容标注逐字、逐行或普通歌词。选择候选后可以预览并应用，也可以点击“恢复自动匹配”或“切回本地歌词”。同一时间只会打开一个手动窗口。
 
 自动匹配失败时，插件会提醒你尝试手动搜索；这类失败结果不会被缓存，下次播放仍会重新搜索。
 
@@ -53,6 +53,6 @@ SPW Lyrics 是一款面向 [Salt Player for Windows（SPW）](https://github.com
 
 ## ⚠️ 兼容性
 
-当前版本为 `0.1.0`，已在 SPW `1.16.2`（Steam、Windows x64）上测试。SPW 创意工坊接口仍处于试验阶段，后续 SPW 更新可能影响插件兼容性。
+当前版本为 `0.2.0`，已在 SPW `1.16.2`（Steam、Windows x64）上测试。SPW 创意工坊接口仍处于试验阶段，后续 SPW 更新可能影响插件兼容性。
 
 本项目采用 [MIT License](LICENSE)。
