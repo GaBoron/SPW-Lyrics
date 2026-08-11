@@ -6,7 +6,6 @@ import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsDocument
 import dev.gaboron.spwlyrics.domain.LyricsQuality
 import dev.gaboron.spwlyrics.domain.LyricsSource
-import dev.gaboron.spwlyrics.domain.TextNormalizer
 import dev.gaboron.spwlyrics.domain.TrackQuery
 import java.net.URI
 import kotlinx.serialization.json.JsonObject
@@ -20,11 +19,20 @@ import kotlinx.serialization.json.JsonObject
  */
 class AppleMusicProvider(private val http: ProviderHttp) : LyricsProvider {
     override val source = LyricsSource.APPLE_MUSIC
+    private val catalogSearch = AppleCatalogSearch(http)
 
     override fun search(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> =
-        searchRequests(query, keywords).firstNotNullOfOrNull { request ->
+        automaticSearchRequests(query).firstNotNullOfOrNull { request ->
             runCatching { search(request, limit) }.getOrNull()?.takeIf(List<LyricsCandidate>::isNotEmpty)
         }.orEmpty()
+
+    override fun searchManual(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> {
+        val candidates = manualSearchRequests(query, keywords, limit)
+            .flatMap { request -> runCatching { search(request, limit) }.getOrDefault(emptyList()) }
+            .distinctBy(LyricsCandidate::remoteId)
+            .take(limit.coerceAtMost(MAX_MANUAL_RESULTS))
+        return candidates.map { candidate -> candidate.copy(qualityHint = detectQuality(candidate)) }
+    }
 
     private fun search(request: SearchRequest, limit: Int): List<LyricsCandidate> {
         val root = providerJson.parseToJsonElement(http.get(searchUrl(request))) as JsonObject
@@ -56,14 +64,20 @@ class AppleMusicProvider(private val http: ProviderHttp) : LyricsProvider {
         LyricsScriptConverter.toSimplifiedChinese(TtmlCodec().parse(http.get(url), source))
     }.getOrNull()?.takeIf { it.lines.isNotEmpty() }
 
-    private fun searchRequests(query: TrackQuery, keywords: String): List<SearchRequest> {
+    private fun automaticSearchRequests(query: TrackQuery): List<SearchRequest> {
         val artist = query.artists.joinToString(", ")
         val full = SearchRequest(query.title, artist, query.album, query.durationMs)
         val basic = SearchRequest(query.title, artist)
-        val suppliedKeywords = TextNormalizer.normalize(keywords)
-        val automaticKeywords = query.searchQueries().map(TextNormalizer::normalize).toSet()
-        val manual = if (suppliedKeywords !in automaticKeywords) inferManualRequests(keywords, query) else emptyList()
-        return (manual + full + basic).filter { it.track.isNotBlank() && it.artist.isNotBlank() }.distinct()
+        return listOf(full, basic).filter { it.track.isNotBlank() && it.artist.isNotBlank() }.distinct()
+    }
+
+    private fun manualSearchRequests(query: TrackQuery, keywords: String, limit: Int): List<SearchRequest> {
+        val catalog = catalogSearch.search(keywords, limit.coerceAtMost(MAX_CATALOG_RESULTS)).map { track ->
+            SearchRequest(track.title, track.artist, track.album, track.durationMs)
+        }
+        return (catalog + inferManualRequests(keywords, query))
+            .filter { it.track.isNotBlank() && it.artist.isNotBlank() }
+            .distinct()
     }
 
     private fun inferManualRequests(keywords: String, query: TrackQuery): List<SearchRequest> {
@@ -93,6 +107,11 @@ class AppleMusicProvider(private val http: ProviderHttp) : LyricsProvider {
             .entries.joinToString("&") { (key, value) -> "$key=${ProviderHttpClient.encode(value)}" }
     }
 
+    private fun detectQuality(candidate: LyricsCandidate): LyricsQuality? = runCatching {
+        val url = candidate.context["url"]?.takeIf(::isTrustedLyricsUrl) ?: return@runCatching null
+        TtmlCodec().parse(http.get(url), source).quality
+    }.getOrNull()
+
     private fun isTrustedLyricsUrl(url: String): Boolean = runCatching {
         val uri = URI.create(url)
         uri.scheme.equals("https", ignoreCase = true) && uri.host.equals(STORAGE_HOST, ignoreCase = true)
@@ -101,6 +120,8 @@ class AppleMusicProvider(private val http: ProviderHttp) : LyricsProvider {
     companion object {
         const val SEARCH_URL = "https://lyrics-api.binimum.org/"
         const val STORAGE_HOST = "lyrics-storage.binimum.org"
+        private const val MAX_CATALOG_RESULTS = 6
+        private const val MAX_MANUAL_RESULTS = 8
         private const val MAX_MANUAL_PARTS = 8
     }
 

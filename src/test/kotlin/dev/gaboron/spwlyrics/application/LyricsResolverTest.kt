@@ -92,6 +92,34 @@ class LyricsResolverTest {
         assertEquals(2, searches)
     }
 
+    @Test
+    fun `manual search uses the provider manual search boundary`() {
+        var automaticSearches = 0
+        var manualSearches = 0
+        val provider = object : LyricsProvider {
+            override val source = LyricsSource.APPLE_MUSIC
+            override fun search(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> {
+                automaticSearches++
+                return emptyList()
+            }
+            override fun searchManual(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> {
+                manualSearches++
+                return listOf(LyricsCandidate(source, "manual", "Other Song", listOf("Other Artist")))
+            }
+            override fun fetch(candidate: LyricsCandidate): LyricsDocument? = null
+        }
+
+        val results = LyricsResolver(listOf(provider)).searchManual(
+            TrackQuery("Current Song", listOf("Current Artist"), "Current Album"),
+            "Other Song",
+            LyricsSource.APPLE_MUSIC,
+        )
+
+        assertEquals(1, results.size)
+        assertEquals(1, manualSearches)
+        assertEquals(0, automaticSearches)
+    }
+
     private fun fakeProvider(
         source: LyricsSource,
         called: MutableList<LyricsSource>,

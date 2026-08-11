@@ -48,7 +48,7 @@ class LyricsResolver(
         } else {
             listOfNotNull(providers[source])
         }
-        return selected.flatMap { provider -> search(provider, query, keywords).map { MatchEngine.score(query, it) } }
+        return selected.flatMap { provider -> searchManual(provider, query, keywords).map { MatchEngine.score(query, it) } }
             .sortedWith(
                 compareBy<CandidateScore> { it.candidate.source.priority }
                     .thenByDescending { it.candidate.qualityHint?.rank ?: -1 }
@@ -76,6 +76,9 @@ class LyricsResolver(
 
     private fun search(provider: LyricsProvider, query: TrackQuery, keywords: String): List<LyricsCandidate> =
         runCatching { provider.search(query, keywords) }.getOrDefault(emptyList())
+
+    private fun searchManual(provider: LyricsProvider, query: TrackQuery, keywords: String): List<LyricsCandidate> =
+        runCatching { provider.searchManual(query, keywords) }.getOrDefault(emptyList())
 
     private fun finalize(
         fetched: FetchedLyrics,

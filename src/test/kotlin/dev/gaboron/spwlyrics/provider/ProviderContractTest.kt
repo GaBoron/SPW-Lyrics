@@ -90,21 +90,44 @@ class ProviderContractTest {
         val http = FakeHttp(
             getHandler = { url ->
                 requested += url
-                if (url.contains("track=golden+hour&artist=JVKE")) {
-                    """{"results":[{"id":"record","track_name":"golden hour","artist_name":"JVKE","lyricsUrl":"https://lyrics-storage.binimum.org/TEST.ttml"}]}"""
-                } else {
-                    """{"results":[]}"""
+                when {
+                    url.startsWith(AppleCatalogSearch.SEARCH_URL) ->
+                        """{"resultCount":1,"results":[{"trackName":"golden hour","artistName":"JVKE","collectionName":"Album","trackTimeMillis":209000}]}"""
+                    url.contains("track=golden+hour&artist=JVKE") ->
+                        """{"results":[{"id":"record","track_name":"golden hour","artist_name":"JVKE","lyricsUrl":"https://lyrics-storage.binimum.org/TEST.ttml"}]}"""
+                    else -> """<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="1s" end="2s">Line</p></div></body></tt>"""
                 }
             },
         )
 
-        val result = AppleMusicProvider(http).search(
-            TrackQuery("Current Song", emptyList(), ""),
-            "golden hour JVKE",
+        val result = AppleMusicProvider(http).searchManual(
+            TrackQuery("Current Song", listOf("Current Artist"), "Current Album"),
+            "golden hour",
         )
 
         assertEquals("golden hour", result.single().title)
+        assertTrue(requested.any { it.startsWith(AppleCatalogSearch.SEARCH_URL) && it.contains("term=golden+hour") })
         assertTrue(requested.any { it.contains("track=golden+hour&artist=JVKE") })
+    }
+
+    @Test
+    fun `apple manual search reports actual line timing instead of cache hint`() {
+        val http = FakeHttp(
+            getHandler = { url ->
+                when {
+                    url.startsWith(AppleCatalogSearch.SEARCH_URL) ->
+                        """{"resultCount":1,"results":[{"trackName":"Line Song","artistName":"Artist","collectionName":"Album","trackTimeMillis":180000}]}"""
+                    url.startsWith(AppleMusicProvider.SEARCH_URL) ->
+                        """{"results":[{"id":"line-record","track_name":"Line Song","artist_name":"Artist","timing_type":"word","lyricsUrl":"https://lyrics-storage.binimum.org/LINE.ttml"}]}"""
+                    else ->
+                        """<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="1s" end="2s">Line synced</p></div></body></tt>"""
+                }
+            },
+        )
+
+        val candidate = AppleMusicProvider(http).searchManual(query, "unrelated free text").single()
+
+        assertEquals(dev.gaboron.spwlyrics.domain.LyricsQuality.LINE_SYNCED, candidate.qualityHint)
     }
 
     @Test
