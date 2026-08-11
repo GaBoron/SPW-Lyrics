@@ -21,10 +21,15 @@ import kotlinx.serialization.json.put
 class NeteaseMusicProvider(private val http: ProviderHttp) : LyricsProvider {
     override val source = LyricsSource.NETEASE
 
-    override fun search(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> = runCatching {
-        val url = "$SEARCH_URL?s=${ProviderHttpClient.encode(keywords)}&type=1&offset=0&total=true&limit=$limit"
+    override fun search(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> =
+        SEARCH_URLS.firstNotNullOfOrNull { searchUrl ->
+            runCatching { search(searchUrl, keywords, limit) }.getOrNull()?.takeIf(List<LyricsCandidate>::isNotEmpty)
+        }.orEmpty()
+
+    private fun search(searchUrl: String, keywords: String, limit: Int): List<LyricsCandidate> {
+        val url = "$searchUrl?s=${ProviderHttpClient.encode(keywords)}&type=1&offset=0&total=true&limit=$limit"
         val root = providerJson.parseToJsonElement(http.get(url, HEADERS)) as JsonObject
-        root.obj("result")?.array("songs").orEmpty().mapNotNull { element ->
+        return root.obj("result")?.array("songs").orEmpty().mapNotNull { element ->
             val song = element.asObject() ?: return@mapNotNull null
             val id = song.long("id")?.toString() ?: song.string("id") ?: return@mapNotNull null
             LyricsCandidate(
@@ -37,7 +42,7 @@ class NeteaseMusicProvider(private val http: ProviderHttp) : LyricsProvider {
                 qualityHint = LyricsQuality.WORD_SYNCED,
             )
         }
-    }.getOrDefault(emptyList())
+    }
 
     override fun fetch(candidate: LyricsCandidate): LyricsDocument? =
         runCatching { fetchEapi(candidate) }.getOrNull()
@@ -92,7 +97,9 @@ class NeteaseMusicProvider(private val http: ProviderHttp) : LyricsProvider {
             }.orEmpty()
 
     companion object {
-        const val SEARCH_URL = "https://music.163.com/api/search/get/web"
+        const val CLOUD_SEARCH_URL = "https://music.163.com/api/cloudsearch/pc"
+        const val LEGACY_SEARCH_URL = "https://music.163.com/api/search/get"
+        private val SEARCH_URLS = listOf(CLOUD_SEARCH_URL, LEGACY_SEARCH_URL)
         const val LYRIC_URL = "https://interface3.music.163.com/eapi/song/lyric/v1"
         const val FALLBACK_LYRIC_URL = "https://music.163.com/api/song/lyric"
         val HEADERS = mapOf("Referer" to "https://music.163.com/")

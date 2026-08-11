@@ -11,6 +11,7 @@ import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsSource
 import dev.gaboron.spwlyrics.domain.TrackQuery
 import dev.gaboron.spwlyrics.provider.AmllProvider
+import dev.gaboron.spwlyrics.provider.AppleMusicProvider
 import dev.gaboron.spwlyrics.provider.KugouMusicProvider
 import dev.gaboron.spwlyrics.provider.LocalLyricsProvider
 import dev.gaboron.spwlyrics.provider.NeteaseMusicProvider
@@ -44,6 +45,7 @@ object PluginRuntime {
         val http = ProviderHttpClient()
         val providers = listOf(
             AmllProvider(root.resolve("amll"), ProviderHttpClient(requestTimeout = Duration.ofSeconds(6))),
+            AppleMusicProvider(http),
             QqMusicProvider(http),
             KugouMusicProvider(http),
             NeteaseMusicProvider(http),

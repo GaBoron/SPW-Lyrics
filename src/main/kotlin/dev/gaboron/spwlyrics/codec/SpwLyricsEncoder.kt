@@ -11,7 +11,13 @@ object SpwLyricsEncoder {
 
     fun encode(document: LyricsDocument): String {
         if (document.lines.isEmpty()) return ""
-        val sourceLine = "歌词来源：${document.source.displayName}"
+        val translationSources = document.metadata["translationSource"].orEmpty().filter(String::isNotBlank)
+        val romanizationSources = document.metadata["romanizationSource"].orEmpty().filter(String::isNotBlank)
+        val sourceLine = buildString {
+            append("歌词来源：${document.source.displayName}")
+            if (translationSources.isNotEmpty()) append("；翻译：${translationSources.joinToString("、")}")
+            if (romanizationSources.isNotEmpty()) append("；音译：${romanizationSources.joinToString("、")}")
+        }
         if (document.quality == LyricsQuality.PLAIN) {
             return buildList {
                 add(sourceLine)

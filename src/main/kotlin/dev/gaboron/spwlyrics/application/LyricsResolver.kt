@@ -29,13 +29,9 @@ class LyricsResolver(
             if (System.nanoTime() >= deadlineNanos) return null
             if (source == LyricsSource.LOCAL) return null
             val provider = providers[source] ?: continue
-            val candidates = query.searchQueries().takeWhile { System.nanoTime() < deadlineNanos }
-                .flatMap { keywords -> search(provider, query, keywords) }
-                .distinctBy { it.remoteId }
-            val decision = MatchEngine.decide(query, candidates)
-            val winner = decision.winner?.candidate ?: continue
+            val winner = findWinner(provider, query, deadlineNanos) ?: continue
             if (System.nanoTime() >= deadlineNanos) return null
-            fetch(provider, winner)?.let { return it }
+            fetch(provider, winner, query, deadlineNanos)?.let { return it }
         }
         return null
     }
@@ -54,7 +50,16 @@ class LyricsResolver(
             )
     }
 
-    fun fetchManual(candidate: LyricsCandidate): ResolvedLyrics? = providers[candidate.source]?.let { fetch(it, candidate) }
+    fun fetchManual(candidate: LyricsCandidate): ResolvedLyrics? = providers[candidate.source]?.let { provider ->
+        val query = TrackQuery(
+            title = candidate.title,
+            artists = candidate.artists,
+            album = candidate.album,
+            durationMs = candidate.durationMs,
+            externalIds = candidate.externalIds,
+        )
+        fetch(provider, candidate, query)
+    }
 
     fun toCache(resolved: ResolvedLyrics): CachedLyrics = CachedLyrics(
         document = resolved.document,
@@ -65,9 +70,60 @@ class LyricsResolver(
     private fun search(provider: LyricsProvider, query: TrackQuery, keywords: String): List<LyricsCandidate> =
         runCatching { provider.search(query, keywords) }.getOrDefault(emptyList())
 
-    private fun fetch(provider: LyricsProvider, candidate: LyricsCandidate): ResolvedLyrics? {
-        val document = runCatching { provider.fetch(candidate) }.getOrNull()?.takeIf { it.lines.isNotEmpty() } ?: return null
+    private fun fetch(
+        provider: LyricsProvider,
+        candidate: LyricsCandidate,
+        query: TrackQuery,
+        deadlineNanos: Long = Long.MAX_VALUE,
+    ): ResolvedLyrics? {
+        val fetched = fetchDocument(provider, candidate) ?: return null
+        val document = if (candidate.source in PRIMARY_WORD_SOURCES) {
+            enrichFromOtherSources(fetched, query, deadlineNanos)
+        } else {
+            fetched
+        }
         val encoded = SpwLyricsEncoder.encode(document).takeIf(String::isNotBlank) ?: return null
         return ResolvedLyrics(candidate, document, encoded)
+    }
+
+    private fun enrichFromOtherSources(
+        primary: LyricsDocument,
+        query: TrackQuery,
+        deadlineNanos: Long,
+    ): LyricsDocument {
+        if (!SecondaryLyricsEnricher.needsTranslation(primary)) return primary
+        var enriched = primary
+        for (source in TRANSLATION_SOURCES) {
+            if (System.nanoTime() >= deadlineNanos) break
+            val provider = providers[source] ?: continue
+            val winner = findWinner(provider, query, deadlineNanos) ?: continue
+            if (System.nanoTime() >= deadlineNanos) break
+            val secondary = fetchDocument(provider, winner) ?: continue
+            enriched = SecondaryLyricsEnricher.enrich(enriched, secondary)
+            if (!SecondaryLyricsEnricher.needsTranslation(enriched)) break
+        }
+        return enriched
+    }
+
+    private fun fetchDocument(provider: LyricsProvider, candidate: LyricsCandidate): LyricsDocument? =
+        runCatching { provider.fetch(candidate) }.getOrNull()?.takeIf { it.lines.isNotEmpty() }
+
+    private fun findWinner(
+        provider: LyricsProvider,
+        query: TrackQuery,
+        deadlineNanos: Long,
+    ): LyricsCandidate? {
+        val candidates = linkedMapOf<String, LyricsCandidate>()
+        for (keywords in query.searchQueries()) {
+            if (System.nanoTime() >= deadlineNanos) break
+            search(provider, query, keywords).forEach { candidates.putIfAbsent(it.remoteId, it) }
+            MatchEngine.decide(query, candidates.values.toList()).winner?.candidate?.let { return it }
+        }
+        return MatchEngine.decide(query, candidates.values.toList()).winner?.candidate
+    }
+
+    private companion object {
+        val PRIMARY_WORD_SOURCES = setOf(LyricsSource.AMLL, LyricsSource.APPLE_MUSIC)
+        val TRANSLATION_SOURCES = listOf(LyricsSource.QQ, LyricsSource.KUGOU, LyricsSource.NETEASE)
     }
 }

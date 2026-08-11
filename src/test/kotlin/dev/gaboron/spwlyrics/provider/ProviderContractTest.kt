@@ -44,6 +44,100 @@ class ProviderContractTest {
     }
 
     @Test
+    fun `apple music cache maps word synced ttml results`() {
+        val requested = mutableListOf<String>()
+        val http = FakeHttp(
+            getHandler = { url ->
+                requested += url
+                """{"results":[{"id":"record","track_name":"Song","artist_name":"Artist","album_name":"Album","duration":180,"isrc":"TEST123","timing_type":"word","lyricsUrl":"https://lyrics-storage.binimum.org/TEST123.ttml"}]}"""
+            },
+        )
+
+        val candidate = AppleMusicProvider(http).search(query.copy(durationMs = 180_000), "ignored").single()
+
+        assertTrue(requested.single().startsWith("${AppleMusicProvider.SEARCH_URL}?track=Song&artist=Artist&album=Album"))
+        assertEquals(LyricsSource.APPLE_MUSIC, candidate.source)
+        assertEquals(180_000, candidate.durationMs)
+        assertEquals(dev.gaboron.spwlyrics.domain.LyricsQuality.WORD_SYNCED, candidate.qualityHint)
+        assertEquals("TEST123", candidate.externalIds["isrc"])
+    }
+
+    @Test
+    fun `apple music cache fetches and parses word timed ttml`() {
+        val candidate = dev.gaboron.spwlyrics.domain.LyricsCandidate(
+            LyricsSource.APPLE_MUSIC,
+            "record",
+            "Song",
+            listOf("Artist"),
+            context = mapOf("url" to "https://lyrics-storage.binimum.org/TEST123.ttml"),
+        )
+        val http = FakeHttp(
+            getHandler = {
+                """<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="1s" end="2s"><span begin="1s" end="1.5s">Hel</span><span begin="1.5s" end="2s">lo</span></p></div></body></tt>"""
+            },
+        )
+
+        val document = AppleMusicProvider(http).fetch(candidate)
+
+        assertEquals(LyricsSource.APPLE_MUSIC, document?.source)
+        assertEquals("Hello", document?.lines?.single()?.text)
+        assertEquals(2, document?.lines?.single()?.words?.size)
+    }
+
+    @Test
+    fun `apple music cache rejects untrusted lyric download urls`() {
+        val http = FakeHttp(
+            getHandler = {
+                """{"results":[{"id":"record","track_name":"Song","artist_name":"Artist","lyricsUrl":"https://example.com/lyrics.ttml"}]}"""
+            },
+        )
+
+        assertTrue(AppleMusicProvider(http).search(query, "Song").isEmpty())
+    }
+
+    @Test
+    fun `netease cloud search maps the current response shape`() {
+        val requested = mutableListOf<String>()
+        val http = FakeHttp(
+            getHandler = { url ->
+                requested += url
+                """{"code":200,"result":{"songs":[{"id":42,"name":"Song","ar":[{"name":"Artist"}],"al":{"name":"Album"},"dt":180000}]}}"""
+            },
+        )
+
+        val candidate = NeteaseMusicProvider(http).search(query, "Song Artist", limit = 5).single()
+
+        assertTrue(requested.single().startsWith(NeteaseMusicProvider.CLOUD_SEARCH_URL))
+        assertEquals("42", candidate.remoteId)
+        assertEquals(listOf("Artist"), candidate.artists)
+        assertEquals("Album", candidate.album)
+        assertEquals(180_000, candidate.durationMs)
+    }
+
+    @Test
+    fun `netease search falls back when the cloud endpoint has no songs`() {
+        val requested = mutableListOf<String>()
+        val http = FakeHttp(
+            getHandler = { url ->
+                requested += url
+                if (url.startsWith(NeteaseMusicProvider.CLOUD_SEARCH_URL)) {
+                    """{"code":405,"message":"busy"}"""
+                } else {
+                    """{"code":200,"result":{"songs":[{"id":42,"name":"Song","artists":[{"name":"Artist"}],"album":{"name":"Album"},"duration":180000}]}}"""
+                }
+            },
+        )
+
+        val candidate = NeteaseMusicProvider(http).search(query, "Song Artist").single()
+
+        assertEquals(
+            listOf(NeteaseMusicProvider.CLOUD_SEARCH_URL, NeteaseMusicProvider.LEGACY_SEARCH_URL),
+            requested.map { it.substringBefore('?') },
+        )
+        assertEquals("42", candidate.remoteId)
+    }
+
+    @Test
     fun `qq lyric envelope accepts attributes and cdata`() {
         val values = extractQqLyricValues(
             """<lyric><content type="file"><![CDATA[A1B2]]></content><contentts mime="file"><![CDATA[C3D4]]></contentts></lyric>""",
