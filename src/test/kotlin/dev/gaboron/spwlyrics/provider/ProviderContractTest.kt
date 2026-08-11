@@ -53,13 +53,58 @@ class ProviderContractTest {
             },
         )
 
-        val candidate = AppleMusicProvider(http).search(query.copy(durationMs = 180_000), "ignored").single()
+        val candidate = AppleMusicProvider(http).search(query.copy(durationMs = 180_000), "Song Artist").single()
 
         assertTrue(requested.single().startsWith("${AppleMusicProvider.SEARCH_URL}?track=Song&artist=Artist&album=Album"))
         assertEquals(LyricsSource.APPLE_MUSIC, candidate.source)
         assertEquals(180_000, candidate.durationMs)
         assertEquals(dev.gaboron.spwlyrics.domain.LyricsQuality.WORD_SYNCED, candidate.qualityHint)
         assertEquals("TEST123", candidate.externalIds["isrc"])
+    }
+
+    @Test
+    fun `apple music cache retries without optional metadata`() {
+        val requested = mutableListOf<String>()
+        val http = FakeHttp(
+            getHandler = { url ->
+                requested += url
+                if (url.contains("album=")) {
+                    """{"results":[]}"""
+                } else {
+                    """{"results":[{"id":"record","track_name":"Song","artist_name":"Artist","lyricsUrl":"https://lyrics-storage.binimum.org/TEST.ttml"}]}"""
+                }
+            },
+        )
+
+        val result = AppleMusicProvider(http).search(query.copy(durationMs = 180_000), "Song Artist")
+
+        assertEquals(1, result.size)
+        assertEquals(2, requested.size)
+        assertTrue(requested.last().contains("track=Song&artist=Artist"))
+        assertTrue(!requested.last().contains("album="))
+    }
+
+    @Test
+    fun `apple music cache honors manual title and artist keywords`() {
+        val requested = mutableListOf<String>()
+        val http = FakeHttp(
+            getHandler = { url ->
+                requested += url
+                if (url.contains("track=golden+hour&artist=JVKE")) {
+                    """{"results":[{"id":"record","track_name":"golden hour","artist_name":"JVKE","lyricsUrl":"https://lyrics-storage.binimum.org/TEST.ttml"}]}"""
+                } else {
+                    """{"results":[]}"""
+                }
+            },
+        )
+
+        val result = AppleMusicProvider(http).search(
+            TrackQuery("Current Song", emptyList(), ""),
+            "golden hour JVKE",
+        )
+
+        assertEquals("golden hour", result.single().title)
+        assertTrue(requested.any { it.contains("track=golden+hour&artist=JVKE") })
     }
 
     @Test
