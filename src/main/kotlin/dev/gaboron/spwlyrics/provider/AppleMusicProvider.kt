@@ -36,11 +36,10 @@ class AppleMusicProvider(private val http: ProviderHttp) : LyricsProvider {
     }
 
     override fun searchManual(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> {
-        val candidates = manualSearchRequests(query, keywords, limit)
+        return manualSearchRequests(query, keywords, limit)
             .flatMap { request -> runCatching { search(request, limit) }.getOrDefault(emptyList()) }
             .distinctBy(LyricsCandidate::remoteId)
             .take(limit.coerceAtMost(MAX_MANUAL_RESULTS))
-        return candidates.map { candidate -> candidate.copy(qualityHint = detectQuality(candidate)) }
     }
 
     private fun search(request: SearchRequest, limit: Int): List<LyricsCandidate> {
@@ -115,11 +114,6 @@ class AppleMusicProvider(private val http: ProviderHttp) : LyricsProvider {
             .filterValues(String::isNotBlank)
             .entries.joinToString("&") { (key, value) -> "$key=${ProviderHttpClient.encode(value)}" }
     }
-
-    private fun detectQuality(candidate: LyricsCandidate): LyricsQuality? = runCatching {
-        val url = candidate.context["url"]?.takeIf(::isTrustedLyricsUrl) ?: return@runCatching null
-        TtmlCodec().parse(http.get(url), source).quality
-    }.getOrNull()
 
     private fun markCatalogResolved(candidate: LyricsCandidate): LyricsCandidate = candidate.copy(
         context = candidate.context + (CandidateEvidence.CATALOG_RESOLVED to "true"),

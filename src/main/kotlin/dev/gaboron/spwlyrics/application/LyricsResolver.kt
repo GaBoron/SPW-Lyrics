@@ -23,6 +23,7 @@ class LyricsResolver(
 ) {
     private val providers = providers.associateBy(LyricsProvider::source)
     private val orderedSources = LyricsSource.entries.sortedBy(LyricsSource::priority)
+    private val manualCandidateInspector = ManualCandidateInspector()
 
     fun resolveAutomatic(query: TrackQuery, deadlineNanos: Long = Long.MAX_VALUE): ResolvedLyrics? {
         val selection = AutomaticLyricsSelection()
@@ -48,10 +49,14 @@ class LyricsResolver(
         } else {
             listOfNotNull(providers[source])
         }
-        return selected.flatMap { provider -> searchManual(provider, query, keywords).map { MatchEngine.score(query, it) } }
+        val requests = selected.flatMap { provider ->
+            searchManual(provider, query, keywords).map { ManualCandidateRequest(provider, it) }
+        }
+        return manualCandidateInspector.inspect(requests)
+            .map { MatchEngine.score(query, it) }
             .sortedWith(
-                compareBy<CandidateScore> { it.candidate.source.priority }
-                    .thenByDescending { it.candidate.qualityHint?.rank ?: -1 }
+                compareByDescending<CandidateScore> { it.candidate.qualityHint?.rank ?: -1 }
+                    .thenBy { it.candidate.source.priority }
                     .thenByDescending(CandidateScore::score),
             )
     }
@@ -64,7 +69,7 @@ class LyricsResolver(
             durationMs = candidate.durationMs,
             externalIds = candidate.externalIds,
         )
-        val document = fetchDocument(provider, candidate) ?: return@let null
+        val document = manualCandidateInspector.cached(candidate) ?: fetchDocument(provider, candidate) ?: return@let null
         finalize(FetchedLyrics(candidate, document), query)
     }
 
@@ -78,7 +83,7 @@ class LyricsResolver(
         runCatching { provider.search(query, keywords) }.getOrDefault(emptyList())
 
     private fun searchManual(provider: LyricsProvider, query: TrackQuery, keywords: String): List<LyricsCandidate> =
-        runCatching { provider.searchManual(query, keywords) }.getOrDefault(emptyList())
+        runCatching { provider.searchManual(query, keywords, MANUAL_RESULTS_PER_SOURCE) }.getOrDefault(emptyList())
 
     private fun finalize(
         fetched: FetchedLyrics,
@@ -139,5 +144,6 @@ class LyricsResolver(
     private companion object {
         val PRIMARY_WORD_SOURCES = setOf(LyricsSource.AMLL, LyricsSource.APPLE_MUSIC)
         val TRANSLATION_SOURCES = listOf(LyricsSource.QQ, LyricsSource.KUGOU, LyricsSource.NETEASE)
+        const val MANUAL_RESULTS_PER_SOURCE = 8
     }
 }

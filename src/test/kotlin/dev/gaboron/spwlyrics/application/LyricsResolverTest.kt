@@ -4,6 +4,7 @@ import dev.gaboron.spwlyrics.domain.LyricLine
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsDocument
 import dev.gaboron.spwlyrics.domain.LyricsFormat
+import dev.gaboron.spwlyrics.domain.LyricsQuality
 import dev.gaboron.spwlyrics.domain.LyricsSource
 import dev.gaboron.spwlyrics.domain.TrackQuery
 import dev.gaboron.spwlyrics.provider.LyricsProvider
@@ -148,6 +149,69 @@ class LyricsResolverTest {
 
         assertEquals(LyricsSource.QQ, result?.candidate?.source)
         assertEquals(listOf(LyricsSource.AMLL, LyricsSource.QQ), called.distinct())
+    }
+
+    @Test
+    fun `word synced provider is preferred when Apple only has line timing`() {
+        val called = mutableListOf<LyricsSource>()
+        val appleLine = fakeProvider(LyricsSource.APPLE_MUSIC, called, wordSynced = false)
+        val neteaseWord = fakeProvider(LyricsSource.NETEASE, called, wordSynced = true)
+
+        val result = LyricsResolver(listOf(appleLine, neteaseWord))
+            .resolveAutomatic(TrackQuery("Song", listOf("Artist"), "Album"))
+
+        assertEquals(LyricsSource.NETEASE, result?.candidate?.source)
+        assertEquals(listOf(LyricsSource.APPLE_MUSIC, LyricsSource.NETEASE), called.distinct())
+    }
+
+    @Test
+    fun `manual results use actual quality and put word timing before Apple line timing`() {
+        fun provider(source: LyricsSource, document: LyricsDocument) = object : LyricsProvider {
+            override val source = source
+            override fun search(query: TrackQuery, keywords: String, limit: Int) = listOf(
+                LyricsCandidate(source, source.name, "Song", listOf("Artist"), qualityHint = LyricsQuality.WORD_SYNCED),
+            )
+            override fun fetch(candidate: LyricsCandidate): LyricsDocument = document
+        }
+        val apple = provider(
+            LyricsSource.APPLE_MUSIC,
+            LyricsDocument(LyricsSource.APPLE_MUSIC, LyricsFormat.TTML, listOf(LyricLine(1_000, 2_000, "line"))),
+        )
+        val qq = provider(LyricsSource.QQ, wordDocument(LyricsSource.QQ))
+
+        val results = LyricsResolver(listOf(apple, qq)).searchManual(
+            TrackQuery("Song", listOf("Artist"), "Album"),
+            "Song Artist",
+            null,
+        )
+
+        assertEquals(LyricsSource.QQ, results.first().candidate.source)
+        assertEquals(LyricsQuality.WORD_SYNCED, results.first().candidate.qualityHint)
+        assertEquals(LyricsQuality.LINE_SYNCED, results.last().candidate.qualityHint)
+    }
+
+    @Test
+    fun `manual preview reuses the document downloaded while detecting quality`() {
+        var fetches = 0
+        val qq = object : LyricsProvider {
+            override val source = LyricsSource.QQ
+            override fun search(query: TrackQuery, keywords: String, limit: Int) = listOf(
+                LyricsCandidate(source, "qq", "Song", listOf("Artist"), "Album"),
+            )
+            override fun fetch(candidate: LyricsCandidate): LyricsDocument =
+                wordDocument(source).also { fetches++ }
+        }
+        val resolver = LyricsResolver(listOf(qq))
+        val candidate = resolver.searchManual(
+            TrackQuery("Song", listOf("Artist"), "Album"),
+            "Song Artist",
+            LyricsSource.QQ,
+        ).single().candidate
+
+        val resolved = resolver.fetchManual(candidate)
+
+        assertEquals(LyricsQuality.WORD_SYNCED, resolved?.document?.quality)
+        assertEquals(1, fetches)
     }
 
     @Test

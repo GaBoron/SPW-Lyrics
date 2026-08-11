@@ -139,26 +139,6 @@ class ProviderContractTest {
     }
 
     @Test
-    fun `apple manual search reports actual line timing instead of cache hint`() {
-        val http = FakeHttp(
-            getHandler = { url ->
-                when {
-                    url.startsWith(AppleCatalogSearch.SEARCH_URL) ->
-                        """{"resultCount":1,"results":[{"trackName":"Line Song","artistName":"Artist","collectionName":"Album","trackTimeMillis":180000}]}"""
-                    url.startsWith(AppleMusicProvider.SEARCH_URL) ->
-                        """{"results":[{"id":"line-record","track_name":"Line Song","artist_name":"Artist","timing_type":"word","lyricsUrl":"https://lyrics-storage.binimum.org/LINE.ttml"}]}"""
-                    else ->
-                        """<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="1s" end="2s">Line synced</p></div></body></tt>"""
-                }
-            },
-        )
-
-        val candidate = AppleMusicProvider(http).searchManual(query, "unrelated free text").single()
-
-        assertEquals(dev.gaboron.spwlyrics.domain.LyricsQuality.LINE_SYNCED, candidate.qualityHint)
-    }
-
-    @Test
     fun `apple music cache fetches and parses word timed ttml`() {
         val candidate = dev.gaboron.spwlyrics.domain.LyricsCandidate(
             LyricsSource.APPLE_MUSIC,
