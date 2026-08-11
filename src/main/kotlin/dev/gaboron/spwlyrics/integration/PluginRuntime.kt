@@ -1,7 +1,10 @@
 package dev.gaboron.spwlyrics.integration
 
 import com.xuncorp.spw.workshop.api.PlaybackExtensionPoint
+import com.xuncorp.spw.workshop.api.UnstableSpwWorkshopApi
 import com.xuncorp.spw.workshop.api.WorkshopApi
+import dev.gaboron.spwlyrics.application.AutomaticReplacementPolicy
+import dev.gaboron.spwlyrics.application.LyricsLoadPhase
 import dev.gaboron.spwlyrics.application.LyricsLoadCoordinator
 import dev.gaboron.spwlyrics.application.LyricsResolver
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
@@ -22,11 +25,13 @@ import kotlin.io.path.Path
 
 object PluginRuntime {
     @Volatile private var coordinator: LyricsLoadCoordinator? = null
+    @Volatile private var settings: PluginSettings? = null
     @Volatile private var manualUiBridge: ManualUiBridge? = null
     @Volatile private var cacheFolderOpener: CacheFolderOpener? = null
     private val durationProbe: TrackDurationProbe = CachedTrackDurationProbe()
 
     @Synchronized
+    @OptIn(UnstableSpwWorkshopApi::class)
     fun install(pluginPath: String) {
         if (coordinator != null) return
         val localData = System.getenv("LOCALAPPDATA")?.takeIf(String::isNotBlank)
@@ -34,6 +39,7 @@ object PluginRuntime {
         val root = localData.resolve("SPW Lyrics")
         val cacheDirectory = root.resolve("cache")
         val cache = FileLyricsCache(cacheDirectory)
+        settings = PluginSettings(WorkshopApi.manager.createConfigManager())
         cacheFolderOpener = CacheFolderOpener(cacheDirectory)
         val http = ProviderHttpClient()
         val providers = listOf(
@@ -61,7 +67,9 @@ object PluginRuntime {
         )
     }
 
-    fun beforeLoad(mediaItem: PlaybackExtensionPoint.MediaItem): String? = coordinator?.onBeforeLoad(mediaItem.toQuery())
+    fun beforeLoad(mediaItem: PlaybackExtensionPoint.MediaItem): String? = load(mediaItem, LyricsLoadPhase.BEFORE_LOCAL)
+    fun afterLocalLyricsMissing(mediaItem: PlaybackExtensionPoint.MediaItem): String? =
+        load(mediaItem, LyricsLoadPhase.AFTER_LOCAL_MISSING)
     fun currentQuery(): TrackQuery? = coordinator?.currentQuery()
     fun searchManual(keywords: String, source: LyricsSource?) = coordinator?.searchManual(keywords, source).orEmpty()
     fun preview(candidate: LyricsCandidate) = coordinator?.preview(candidate)
@@ -79,9 +87,18 @@ object PluginRuntime {
         manualUiBridge?.close()
         manualUiBridge = null
         cacheFolderOpener = null
+        settings?.close()
+        settings = null
         coordinator?.close()
         coordinator = null
     }
+
+    private fun load(mediaItem: PlaybackExtensionPoint.MediaItem, phase: LyricsLoadPhase): String? =
+        coordinator?.onLoad(
+            mediaItem.toQuery(),
+            phase,
+            settings?.automaticReplacementPolicy() ?: AutomaticReplacementPolicy.ALWAYS,
+        )
 
     private fun PlaybackExtensionPoint.MediaItem.toQuery() = TrackQuery(
         title = title,

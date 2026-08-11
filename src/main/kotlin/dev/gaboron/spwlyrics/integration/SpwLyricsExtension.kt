@@ -7,4 +7,7 @@ import org.pf4j.Extension
 class SpwLyricsExtension : PlaybackExtensionPoint {
     override fun onBeforeLoadLyrics(mediaItem: PlaybackExtensionPoint.MediaItem): String? =
         PluginRuntime.beforeLoad(mediaItem)
+
+    override fun onAfterLoadLyrics(mediaItem: PlaybackExtensionPoint.MediaItem): String? =
+        PluginRuntime.afterLocalLyricsMissing(mediaItem)
 }

@@ -30,10 +30,16 @@ class LyricsLoadCoordinator(
 
     fun currentQuery(): TrackQuery? = current.get()
 
-    fun onBeforeLoad(query: TrackQuery): String? {
+    fun onLoad(
+        query: TrackQuery,
+        phase: LyricsLoadPhase,
+        replacementPolicy: AutomaticReplacementPolicy,
+    ): String? {
         current.set(query)
         val override = cache.getOverride(query.key)
         if (override?.local == true) return null
+        val automaticLoadAllowed = replacementPolicy.allowsAutomaticLoad(phase)
+        if (override?.candidate == null && !automaticLoadAllowed) return null
         cache.getLyrics(query.key)?.let {
             notifiedFailures.remove(query.key)
             return it.encoded

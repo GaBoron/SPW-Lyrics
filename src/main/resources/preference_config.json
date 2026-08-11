@@ -5,6 +5,15 @@
       "config": "spw-lyrics.json",
       "preferences": [
         {
+          "key": "automatic_replacement_policy",
+          "type": "list",
+          "title": "自动替换歌词",
+          "summary": "控制插件何时搜索并替换 SPW 本地歌词",
+          "entries": ["始终优先使用插件歌词", "仅在本地无歌词时补充", "仅手动选择时替换"],
+          "entry_values": ["always", "when_local_missing", "manual_only"],
+          "default_value": "always"
+        },
+        {
           "type": "button",
           "title": "手动搜索歌词",
           "summary": "搜索候选歌词并替换当前歌曲",
