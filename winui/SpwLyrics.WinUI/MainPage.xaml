@@ -67,11 +67,11 @@
                             <DataTemplate>
                                 <Grid Padding="10,8" ColumnSpacing="10">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="74" />
+                                        <ColumnDefinition Width="108" />
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="62" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock VerticalAlignment="Center" Text="{Binding Source}" />
+                                    <TextBlock VerticalAlignment="Center" Text="{Binding Source}" TextTrimming="CharacterEllipsis" />
                                     <StackPanel Grid.Column="1" Spacing="2">
                                         <TextBlock FontWeight="SemiBold" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
                                         <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="{Binding Artists}" TextTrimming="CharacterEllipsis" />

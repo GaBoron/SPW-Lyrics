@@ -60,6 +60,32 @@ class LyricsResolverTest {
     }
 
     @Test
+    fun `relaxed regional Apple match keeps priority over exact QQ lyrics`() {
+        val called = mutableListOf<LyricsSource>()
+        val apple = object : LyricsProvider {
+            override val source = LyricsSource.APPLE_MUSIC
+            override fun search(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> {
+                called += source
+                return listOf(LyricsCandidate(source, "apple", "Song International", listOf("Artist"), "Other Album"))
+            }
+            override fun fetch(candidate: LyricsCandidate): LyricsDocument = wordDocument(source)
+        }
+        val qq = object : LyricsProvider {
+            override val source = LyricsSource.QQ
+            override fun search(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> {
+                called += source
+                return listOf(LyricsCandidate(source, "qq", "Song", listOf("Artist"), "Album"))
+            }
+            override fun fetch(candidate: LyricsCandidate): LyricsDocument = wordDocument(source, translation = "翻译")
+        }
+
+        val result = LyricsResolver(listOf(qq, apple)).resolveAutomatic(TrackQuery("Song", listOf("Artist"), "Album"))
+
+        assertEquals(LyricsSource.APPLE_MUSIC, result?.candidate?.source)
+        assertEquals("翻译", result?.document?.lines?.single()?.translation)
+    }
+
+    @Test
     fun `later word synced source wins over earlier line synced source`() {
         val called = mutableListOf<LyricsSource>()
         val amllLine = fakeProvider(LyricsSource.AMLL, called, wordSynced = false)
@@ -132,26 +158,11 @@ class LyricsResolverTest {
             return listOf(LyricsCandidate(source, "id", "Song", listOf("Artist"), "Album"))
         }
 
-        override fun fetch(candidate: LyricsCandidate): LyricsDocument = LyricsDocument(
-            source,
-            if (wordSynced) LyricsFormat.TTML else LyricsFormat.LRC,
-            listOf(
-                LyricLine(
-                    1_000,
-                    2_000,
-                    "lyrics",
-                    words = if (wordSynced) {
-                        listOf(
-                            dev.gaboron.spwlyrics.domain.LyricWord(1_000, 1_500, "ly"),
-                            dev.gaboron.spwlyrics.domain.LyricWord(1_500, 2_000, "rics"),
-                        )
-                    } else {
-                        emptyList()
-                    },
-                    translation = translation,
-                ),
-            ),
-        )
+        override fun fetch(candidate: LyricsCandidate): LyricsDocument = if (wordSynced) {
+            wordDocument(source, translation)
+        } else {
+            LyricsDocument(source, LyricsFormat.LRC, listOf(LyricLine(1_000, 2_000, "lyrics", translation = translation)))
+        }
     }
 
     private fun emptyProvider(source: LyricsSource, called: MutableList<LyricsSource>) = object : LyricsProvider {
@@ -163,4 +174,21 @@ class LyricsResolverTest {
 
         override fun fetch(candidate: LyricsCandidate): LyricsDocument? = null
     }
+
+    private fun wordDocument(source: LyricsSource, translation: String? = null) = LyricsDocument(
+        source,
+        LyricsFormat.TTML,
+        listOf(
+            LyricLine(
+                1_000,
+                2_000,
+                "lyrics",
+                words = listOf(
+                    dev.gaboron.spwlyrics.domain.LyricWord(1_000, 1_500, "ly"),
+                    dev.gaboron.spwlyrics.domain.LyricWord(1_500, 2_000, "rics"),
+                ),
+                translation = translation,
+            ),
+        ),
+    )
 }

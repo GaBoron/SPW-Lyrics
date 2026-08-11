@@ -21,10 +21,17 @@ class AppleMusicProvider(private val http: ProviderHttp) : LyricsProvider {
     override val source = LyricsSource.APPLE_MUSIC
     private val catalogSearch = AppleCatalogSearch(http)
 
-    override fun search(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> =
+    override fun search(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> {
         automaticSearchRequests(query).firstNotNullOfOrNull { request ->
             runCatching { search(request, limit) }.getOrNull()?.takeIf(List<LyricsCandidate>::isNotEmpty)
+        }?.let { return it }
+        val regionalRequests = catalogSearch.search(keywords, MAX_AUTOMATIC_CATALOG_RESULTS).map { track ->
+            SearchRequest(track.title, track.artist, track.album, track.durationMs)
+        }
+        return regionalRequests.firstNotNullOfOrNull { request ->
+            runCatching { search(request, limit) }.getOrNull()?.takeIf(List<LyricsCandidate>::isNotEmpty)
         }.orEmpty()
+    }
 
     override fun searchManual(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> {
         val candidates = manualSearchRequests(query, keywords, limit)
@@ -120,6 +127,7 @@ class AppleMusicProvider(private val http: ProviderHttp) : LyricsProvider {
     companion object {
         const val SEARCH_URL = "https://lyrics-api.binimum.org/"
         const val STORAGE_HOST = "lyrics-storage.binimum.org"
+        private const val MAX_AUTOMATIC_CATALOG_RESULTS = 4
         private const val MAX_CATALOG_RESULTS = 6
         private const val MAX_MANUAL_RESULTS = 8
         private const val MAX_MANUAL_PARTS = 8

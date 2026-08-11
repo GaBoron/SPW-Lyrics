@@ -129,9 +129,10 @@ class LyricsResolver(
         for (keywords in query.searchQueries()) {
             if (System.nanoTime() >= deadlineNanos) break
             search(provider, query, keywords).forEach { candidates.putIfAbsent(it.remoteId, it) }
-            MatchEngine.decide(query, candidates.values.toList()).winner?.candidate?.let { return it }
+            MatchEngine.decide(query, candidates.values.toList(), PreferredSourceMatchPolicy::accepts)
+                .winner?.candidate?.let { return it }
         }
-        return MatchEngine.decide(query, candidates.values.toList()).winner?.candidate
+        return MatchEngine.decide(query, candidates.values.toList(), PreferredSourceMatchPolicy::accepts).winner?.candidate
     }
 
     private companion object {

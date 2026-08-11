@@ -85,6 +85,32 @@ class ProviderContractTest {
     }
 
     @Test
+    fun `apple automatic search falls back through regional catalog metadata`() {
+        val requested = mutableListOf<String>()
+        val http = FakeHttp(
+            getHandler = { url ->
+                requested += url
+                when {
+                    url.startsWith(AppleCatalogSearch.SEARCH_URL) ->
+                        """{"resultCount":1,"results":[{"trackName":"Regional Title","artistName":"Artist","collectionName":"Regional Album","trackTimeMillis":180000}]}"""
+                    url.contains("track=Regional+Title&artist=Artist") ->
+                        """{"results":[{"id":"regional","track_name":"Regional Title","artist_name":"Artist","album_name":"Regional Album","duration":180,"lyricsUrl":"https://lyrics-storage.binimum.org/REGIONAL.ttml"}]}"""
+                    else -> """{"results":[]}"""
+                }
+            },
+        )
+
+        val result = AppleMusicProvider(http).search(
+            TrackQuery("Localized Title", listOf("Artist"), "Localized Album", durationMs = 180_000),
+            "Localized Title Artist",
+        )
+
+        assertEquals("Regional Title", result.single().title)
+        assertTrue(requested.any { it.startsWith(AppleCatalogSearch.SEARCH_URL) })
+        assertTrue(requested.any { it.contains("track=Regional+Title&artist=Artist") })
+    }
+
+    @Test
     fun `apple music cache honors manual title and artist keywords`() {
         val requested = mutableListOf<String>()
         val http = FakeHttp(

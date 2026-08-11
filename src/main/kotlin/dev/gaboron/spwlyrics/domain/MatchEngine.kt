@@ -73,7 +73,11 @@ object MatchEngine {
         return CandidateScore(candidate, if (conflict) raw - 0.25 else raw, title, artist, album, duration, conflict)
     }
 
-    fun decide(query: TrackQuery, candidates: List<LyricsCandidate>): MatchDecision {
+    fun decide(
+        query: TrackQuery,
+        candidates: List<LyricsCandidate>,
+        accepts: (CandidateScore) -> Boolean = CandidateScore::passesAutomaticGate,
+    ): MatchDecision {
         if (query.title.isBlank() || (query.artists.isEmpty() && query.album.isBlank())) {
             return MatchDecision(null, emptyList(), false)
         }
@@ -84,9 +88,9 @@ object MatchEngine {
                     .thenBy { it.candidate.remoteId },
             )
         val best = ranked.firstOrNull() ?: return MatchDecision(null, ranked, false)
-        if (!best.passesAutomaticGate) return MatchDecision(null, ranked, false)
+        if (!accepts(best)) return MatchDecision(null, ranked, false)
         val second = ranked.drop(1).firstOrNull {
-            it.passesAutomaticGate && !sameMetadata(best.candidate, it.candidate)
+            accepts(it) && !sameMetadata(best.candidate, it.candidate)
         }
         val ambiguous = second != null && best.score - second.score < MIN_GAP
         return MatchDecision(if (ambiguous) null else best, ranked, ambiguous)
@@ -111,10 +115,14 @@ object MatchEngine {
         return maxOf(strongestPair * 0.85, balancedCoverage).coerceIn(0.0, 1.0)
     }
 
-    private fun sameMetadata(left: LyricsCandidate, right: LyricsCandidate): Boolean =
-        TextNormalizer.compact(left.title) == TextNormalizer.compact(right.title) &&
-            left.artists.map(TextNormalizer::compact).toSet() == right.artists.map(TextNormalizer::compact).toSet() &&
-            TextNormalizer.compact(left.album) == TextNormalizer.compact(right.album)
+    private fun sameMetadata(left: LyricsCandidate, right: LyricsCandidate): Boolean {
+        val sameTitleAndArtists = TextNormalizer.compact(left.title) == TextNormalizer.compact(right.title) &&
+            left.artists.map(TextNormalizer::compact).toSet() == right.artists.map(TextNormalizer::compact).toSet()
+        val sameAlbum = TextNormalizer.compact(left.album) == TextNormalizer.compact(right.album)
+        val sameDuration = left.durationMs != null && right.durationMs != null &&
+            abs(left.durationMs - right.durationMs) <= SAME_RECORDING_DURATION_TOLERANCE_MS
+        return sameTitleAndArtists && (sameAlbum || sameDuration)
+    }
 
     private fun durationSimilarity(local: Long?, remote: Long?): Double? {
         if (local == null || remote == null || local <= 0 || remote <= 0) return null
@@ -126,4 +134,6 @@ object MatchEngine {
             else -> 0.0
         }
     }
+
+    private const val SAME_RECORDING_DURATION_TOLERANCE_MS = 3_000
 }

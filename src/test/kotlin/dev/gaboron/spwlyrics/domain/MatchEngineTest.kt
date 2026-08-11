@@ -55,6 +55,19 @@ class MatchEngineTest {
     }
 
     @Test
+    fun `does not treat regional album releases with the same duration as ambiguous`() {
+        val candidates = listOf(
+            LyricsCandidate(LyricsSource.APPLE_MUSIC, "album-a", "打上花火", query.artists, "Album A", 240_000),
+            LyricsCandidate(LyricsSource.APPLE_MUSIC, "album-b", "打上花火", query.artists, "Album B", 241_000),
+        )
+
+        val decision = MatchEngine.decide(query.copy(durationMs = 240_500), candidates)
+
+        assertTrue(decision.winner != null)
+        assertTrue(!decision.ambiguous)
+    }
+
+    @Test
     fun `accepts a provider that only lists the primary artist`() {
         val candidate = LyricsCandidate(LyricsSource.AMLL, "primary", "打上花火", listOf("DAOKO"), "打上花火")
 
