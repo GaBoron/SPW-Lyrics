@@ -39,8 +39,10 @@ const val CACHE_MODEL_VERSION = 2
 interface LyricsCache {
     fun getLyrics(query: TrackQuery): CachedLyrics?
     fun putLyrics(query: TrackQuery, lyrics: CachedLyrics)
+    fun removeLyrics(query: TrackQuery)
     fun getOverride(query: TrackQuery): ManualOverride?
     fun putOverride(query: TrackQuery, override: ManualOverride)
+    fun removeOverride(query: TrackQuery)
 }
 
 class FileLyricsCache(
@@ -74,6 +76,12 @@ class FileLyricsCache(
     }
 
     @Synchronized
+    override fun removeLyrics(query: TrackQuery) {
+        memory.remove(query.key)
+        Files.deleteIfExists(layout.lyrics(query))
+    }
+
+    @Synchronized
     override fun getOverride(query: TrackQuery): ManualOverride? = read(layout.override(query))
         ?.let { runCatching { json.decodeFromString<ManualOverride>(it) }.getOrNull() }
         ?.takeIf { it.modelVersion == CACHE_MODEL_VERSION }
@@ -81,6 +89,12 @@ class FileLyricsCache(
     @Synchronized
     override fun putOverride(query: TrackQuery, override: ManualOverride) {
         write(layout.override(query), json.encodeToString(override))
+        memory.remove(query.key)
+    }
+
+    @Synchronized
+    override fun removeOverride(query: TrackQuery) {
+        Files.deleteIfExists(layout.override(query))
         memory.remove(query.key)
     }
 

@@ -63,6 +63,22 @@ class FileLyricsCacheTest {
     }
 
     @Test
+    fun `removes lyrics and manual override for one track`() {
+        val root = createTempDirectory("spw-cache-removal-test")
+        val query = TrackQuery("Song", listOf("Artist"), "Album")
+        val document = LyricsDocument(LyricsSource.QQ, LyricsFormat.LRC, listOf(LyricLine(0, 1_000, "cached")))
+        val cache = FileLyricsCache(root)
+        cache.putLyrics(query, CachedLyrics(document, "cached", System.currentTimeMillis()))
+        cache.putOverride(query, ManualOverride(local = true))
+
+        cache.removeLyrics(query)
+        cache.removeOverride(query)
+
+        assertEquals(null, cache.getLyrics(query))
+        assertEquals(null, cache.getOverride(query))
+    }
+
+    @Test
     fun `removes legacy flat cache files instead of maintaining compatibility paths`() {
         val root = createTempDirectory("spw-legacy-cache-test")
         val legacyLyrics = root.resolve("lyrics-${"a".repeat(64)}.json")

@@ -14,6 +14,7 @@ class ManualUiSession(
     private val preview: (LyricsCandidate) -> ResolvedLyrics?,
     private val apply: (LyricsCandidate) -> Boolean,
     private val useLocal: () -> Boolean,
+    private val useAutomatic: () -> Boolean,
 ) {
     private val candidates = ConcurrentHashMap<String, LyricsCandidate>()
 
@@ -28,6 +29,9 @@ class ManualUiSession(
         } ?: ManualUiResponse(false, "候选已失效，请重新搜索。")
         "local" -> useLocal().let { applied ->
             ManualUiResponse(applied, if (applied) "已切回 SPW 本地歌词流程。" else "当前没有可切换的歌曲。")
+        }
+        "automatic" -> useAutomatic().let { applied ->
+            ManualUiResponse(applied, if (applied) "已清除手动锁定，正在重新自动匹配。" else "当前没有可切换的歌曲。")
         }
         else -> ManualUiResponse(false, "未知请求。")
     }

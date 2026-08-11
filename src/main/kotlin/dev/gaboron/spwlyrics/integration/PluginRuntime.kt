@@ -65,6 +65,7 @@ object PluginRuntime {
                 preview = ::preview,
                 apply = ::applyManual,
                 useLocal = ::useLocal,
+                useAutomatic = ::useAutomatic,
             ),
         )
     }
@@ -77,6 +78,7 @@ object PluginRuntime {
     fun preview(candidate: LyricsCandidate) = coordinator?.preview(candidate)
     fun applyManual(candidate: LyricsCandidate): Boolean = coordinator?.applyManual(candidate) == true
     fun useLocal(): Boolean = coordinator?.useLocal() == true
+    fun useAutomatic(): Boolean = coordinator?.useAutomatic() == true
     fun openManualSearch() {
         if (manualUiBridge?.open() != true) ManualSearchWindow.open()
     }

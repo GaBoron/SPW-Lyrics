@@ -86,6 +86,58 @@ class LyricsResolverTest {
     }
 
     @Test
+    fun `manually selected Apple lyrics receive translation across artist aliases`() {
+        val apple = object : LyricsProvider {
+            override val source = LyricsSource.APPLE_MUSIC
+            override fun search(query: TrackQuery, keywords: String, limit: Int) = emptyList<LyricsCandidate>()
+            override fun fetch(candidate: LyricsCandidate): LyricsDocument = wordDocument(source)
+        }
+        val qq = object : LyricsProvider {
+            override val source = LyricsSource.QQ
+            override fun search(query: TrackQuery, keywords: String, limit: Int) = listOf(
+                LyricsCandidate(source, "qq", "unravel", listOf("TK from 凛として時雨"), "unravel", 238_000),
+            )
+            override fun fetch(candidate: LyricsCandidate): LyricsDocument = wordDocument(source, "翻译")
+        }
+        val selected = LyricsCandidate(
+            LyricsSource.APPLE_MUSIC,
+            "apple",
+            "Unravel",
+            listOf("TK from Ling tosite sigure"),
+            "Fantastic Magic",
+            238_360,
+        )
+
+        val result = LyricsResolver(listOf(apple, qq)).fetchManual(selected)
+
+        assertEquals(LyricsSource.APPLE_MUSIC, result?.candidate?.source)
+        assertEquals("翻译", result?.document?.lines?.single()?.translation)
+        assertEquals(listOf("QQ音乐"), result?.document?.metadata?.get("translationSource"))
+    }
+
+    @Test
+    fun `translation enrichment continues after a source without translations`() {
+        fun provider(source: LyricsSource, translation: String?) = object : LyricsProvider {
+            override val source = source
+            override fun search(query: TrackQuery, keywords: String, limit: Int) = listOf(
+                LyricsCandidate(source, source.name, "Song", listOf("Artist"), "Album", 180_000),
+            )
+            override fun fetch(candidate: LyricsCandidate): LyricsDocument = wordDocument(source, translation)
+        }
+        val apple = provider(LyricsSource.APPLE_MUSIC, null)
+        val qq = provider(LyricsSource.QQ, null)
+        val kugou = provider(LyricsSource.KUGOU, "酷狗翻译")
+        val selected = LyricsCandidate(
+            LyricsSource.APPLE_MUSIC, "apple", "Song", listOf("Artist"), "Album", 180_000,
+        )
+
+        val result = LyricsResolver(listOf(apple, qq, kugou)).fetchManual(selected)
+
+        assertEquals("酷狗翻译", result?.document?.lines?.single()?.translation)
+        assertEquals(listOf("酷狗音乐"), result?.document?.metadata?.get("translationSource"))
+    }
+
+    @Test
     fun `later word synced source wins over earlier line synced source`() {
         val called = mutableListOf<LyricsSource>()
         val amllLine = fakeProvider(LyricsSource.AMLL, called, wordSynced = false)

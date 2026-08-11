@@ -1,6 +1,7 @@
 package dev.gaboron.spwlyrics.application
 
 import dev.gaboron.spwlyrics.domain.CandidateScore
+import dev.gaboron.spwlyrics.domain.CandidateEvidence
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsSource
 import kotlin.test.Test
@@ -20,6 +21,22 @@ class PreferredSourceMatchPolicyTest {
                 score(LyricsSource.APPLE_MUSIC, title = 0.50, artist = 0.95, total = 0.69, duration = 1.0),
             ),
         )
+    }
+
+    @Test
+    fun `accepts catalog resolved Apple recording across artist scripts`() {
+        val candidate = score(LyricsSource.APPLE_MUSIC, title = 1.0, artist = 0.35, total = 0.72, duration = 1.0)
+            .copy(
+                candidate = LyricsCandidate(
+                    LyricsSource.APPLE_MUSIC,
+                    "id",
+                    "unravel",
+                    listOf("TK from Ling tosite sigure"),
+                    context = mapOf(CandidateEvidence.CATALOG_RESOLVED to "true"),
+                ),
+            )
+
+        assertTrue(PreferredSourceMatchPolicy.accepts(candidate))
     }
 
     @Test

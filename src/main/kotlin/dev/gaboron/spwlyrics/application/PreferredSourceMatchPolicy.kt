@@ -1,6 +1,7 @@
 package dev.gaboron.spwlyrics.application
 
 import dev.gaboron.spwlyrics.domain.CandidateScore
+import dev.gaboron.spwlyrics.domain.CandidateEvidence
 import dev.gaboron.spwlyrics.domain.LyricsSource
 import dev.gaboron.spwlyrics.domain.MatchEngine
 
@@ -19,7 +20,11 @@ internal object PreferredSourceMatchPolicy {
                 val sameRecording = candidate.titleScore >= 0.45 &&
                     candidate.artistScore != null && candidate.artistScore >= MatchEngine.STRONG_ARTIST &&
                     candidate.durationScore != null && candidate.durationScore >= 0.85
-                regionalMetadata || sameRecording
+                val catalogResolvedRecording =
+                    candidate.candidate.context[CandidateEvidence.CATALOG_RESOLVED] == "true" &&
+                        candidate.titleScore >= MatchEngine.MIN_TITLE &&
+                        candidate.durationScore != null && candidate.durationScore >= 0.85
+                regionalMetadata || sameRecording || catalogResolvedRecording
             }
             else -> false
         }

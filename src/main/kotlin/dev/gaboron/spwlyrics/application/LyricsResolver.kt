@@ -107,7 +107,7 @@ class LyricsResolver(
             if (System.nanoTime() >= deadlineNanos) break
             val provider = providers[source] ?: continue
             val secondary = fetchedBySource[source] ?: run {
-                val winner = findWinner(provider, query, deadlineNanos) ?: return@run null
+                val winner = findWinner(provider, query, deadlineNanos, TranslationMatchPolicy::accepts) ?: return@run null
                 if (System.nanoTime() >= deadlineNanos) return@run null
                 fetchDocument(provider, winner)
             } ?: continue
@@ -124,15 +124,16 @@ class LyricsResolver(
         provider: LyricsProvider,
         query: TrackQuery,
         deadlineNanos: Long,
+        accepts: (CandidateScore) -> Boolean = PreferredSourceMatchPolicy::accepts,
     ): LyricsCandidate? {
         val candidates = linkedMapOf<String, LyricsCandidate>()
         for (keywords in query.searchQueries()) {
             if (System.nanoTime() >= deadlineNanos) break
             search(provider, query, keywords).forEach { candidates.putIfAbsent(it.remoteId, it) }
-            MatchEngine.decide(query, candidates.values.toList(), PreferredSourceMatchPolicy::accepts)
+            MatchEngine.decide(query, candidates.values.toList(), accepts)
                 .winner?.candidate?.let { return it }
         }
-        return MatchEngine.decide(query, candidates.values.toList(), PreferredSourceMatchPolicy::accepts).winner?.candidate
+        return MatchEngine.decide(query, candidates.values.toList(), accepts).winner?.candidate
     }
 
     private companion object {

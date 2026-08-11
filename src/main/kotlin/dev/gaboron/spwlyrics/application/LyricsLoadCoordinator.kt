@@ -78,6 +78,23 @@ class LyricsLoadCoordinator(
         return true
     }
 
+    fun useAutomatic(): Boolean {
+        val query = current.get() ?: return false
+        inFlight.remove(query.key)?.cancel(true)
+        cache.removeOverride(query)
+        cache.removeLyrics(query)
+        notifiedFailures.remove(query.key)
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(AUTOMATIC_RESOLUTION_TIMEOUT_SECONDS)
+        val future = CompletableFuture.runAsync({ resolveAndRefresh(query, null, deadline) }, executor)
+            .orTimeout(AUTOMATIC_RESOLUTION_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        inFlight[query.key] = future
+        future.whenComplete { _, error ->
+            if (error != null) recordAutomaticFailure(query)
+            inFlight.remove(query.key, future)
+        }
+        return true
+    }
+
     private fun resolveAndRefresh(query: TrackQuery, manual: LyricsCandidate?, deadlineNanos: Long) {
         val resolved = if (manual == null) resolver.resolveAutomatic(query, deadlineNanos) else resolver.fetchManual(manual)
         if (manual == null && automaticWasSuperseded(query)) return

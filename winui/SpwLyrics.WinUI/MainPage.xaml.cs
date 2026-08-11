@@ -105,6 +105,12 @@ public sealed partial class MainPage : Page
         ShowStatus(response.Ok, response.Message);
     });
 
+    private async void AutomaticButton_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
+    {
+        var response = await App.Bridge.SendAsync("automatic");
+        ShowStatus(response.Ok, response.Message);
+    });
+
     private async Task RunAsync(Func<Task> action, bool disableSearch = true)
     {
         BusyRing.IsActive = true;

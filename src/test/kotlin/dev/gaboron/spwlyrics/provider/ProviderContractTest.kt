@@ -1,6 +1,7 @@
 package dev.gaboron.spwlyrics.provider
 
 import dev.gaboron.spwlyrics.domain.LyricsSource
+import dev.gaboron.spwlyrics.domain.CandidateEvidence
 import dev.gaboron.spwlyrics.domain.TrackQuery
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -106,6 +107,7 @@ class ProviderContractTest {
         )
 
         assertEquals("Regional Title", result.single().title)
+        assertEquals("true", result.single().context[CandidateEvidence.CATALOG_RESOLVED])
         assertTrue(requested.any { it.startsWith(AppleCatalogSearch.SEARCH_URL) })
         assertTrue(requested.any { it.contains("track=Regional+Title&artist=Artist") })
     }

@@ -105,6 +105,7 @@
                         </ListView.ItemTemplate>
                     </ListView>
                     <StackPanel Grid.Row="2" HorizontalAlignment="Right" Orientation="Horizontal" Spacing="10">
+                        <Button x:Name="AutomaticButton" Click="AutomaticButton_Click" Content="恢复自动匹配" />
                         <Button x:Name="LocalButton" Click="LocalButton_Click" Content="切回本地歌词" />
                         <Button x:Name="ApplyButton" Click="ApplyButton_Click" Content="应用此歌词" IsEnabled="False" Style="{StaticResource AccentButtonStyle}" />
                     </StackPanel>

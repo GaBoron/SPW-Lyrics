@@ -2,6 +2,7 @@ package dev.gaboron.spwlyrics.provider
 
 import dev.gaboron.spwlyrics.codec.TtmlCodec
 import dev.gaboron.spwlyrics.codec.LyricsScriptConverter
+import dev.gaboron.spwlyrics.domain.CandidateEvidence
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsDocument
 import dev.gaboron.spwlyrics.domain.LyricsQuality
@@ -29,7 +30,8 @@ class AppleMusicProvider(private val http: ProviderHttp) : LyricsProvider {
             SearchRequest(track.title, track.artist, track.album, track.durationMs)
         }
         return regionalRequests.firstNotNullOfOrNull { request ->
-            runCatching { search(request, limit) }.getOrNull()?.takeIf(List<LyricsCandidate>::isNotEmpty)
+            runCatching { search(request, limit).map(::markCatalogResolved) }
+                .getOrNull()?.takeIf(List<LyricsCandidate>::isNotEmpty)
         }.orEmpty()
     }
 
@@ -118,6 +120,10 @@ class AppleMusicProvider(private val http: ProviderHttp) : LyricsProvider {
         val url = candidate.context["url"]?.takeIf(::isTrustedLyricsUrl) ?: return@runCatching null
         TtmlCodec().parse(http.get(url), source).quality
     }.getOrNull()
+
+    private fun markCatalogResolved(candidate: LyricsCandidate): LyricsCandidate = candidate.copy(
+        context = candidate.context + (CandidateEvidence.CATALOG_RESOLVED to "true"),
+    )
 
     private fun isTrustedLyricsUrl(url: String): Boolean = runCatching {
         val uri = URI.create(url)

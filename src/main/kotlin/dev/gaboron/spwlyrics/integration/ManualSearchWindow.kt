@@ -64,6 +64,7 @@ object ManualSearchWindow {
         }
         val apply = JButton("应用所选歌词").apply { isEnabled = false }
         val local = JButton("切回本地歌词")
+        val automatic = JButton("恢复自动匹配")
         val close = JButton("关闭")
 
         fun selected(): CandidateScore? {
@@ -126,13 +127,17 @@ object ManualSearchWindow {
             val success = PluginRuntime.useLocal()
             status.text = if (success) "已切回 SPW 的内嵌歌词/同名 .lrc 默认流程" else "当前没有正在播放的歌曲"
         }
+        automatic.addActionListener {
+            val success = PluginRuntime.useAutomatic()
+            status.text = if (success) "已清除手动锁定，正在重新自动匹配" else "当前没有正在播放的歌曲"
+        }
         close.addActionListener { dialog.dispose() }
 
         val controls = JPanel(FlowLayout(FlowLayout.LEADING)).apply {
             add(JLabel("关键词")); add(keywords); add(JLabel("来源")); add(sources); add(search)
         }
         val actions = JPanel(FlowLayout(FlowLayout.TRAILING)).apply {
-            add(status); add(local); add(apply); add(close)
+            add(status); add(automatic); add(local); add(apply); add(close)
         }
         dialog.contentPane.add(controls, BorderLayout.NORTH)
         dialog.contentPane.add(

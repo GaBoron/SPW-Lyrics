@@ -153,4 +153,47 @@ class LyricsLoadCoordinatorTest {
         )
         coordinator.close()
     }
+
+    @Test
+    fun `restoring automatic matching clears manual lock and cached lyrics`() {
+        val cache = FileLyricsCache(createTempDirectory("coordinator-restore-automatic-cache"))
+        val query = TrackQuery("Song", listOf("Artist"), "Album", path = "song.mp3")
+        val manual = LyricsCandidate(LyricsSource.QQ, "manual", query.title, query.artists, query.album)
+        cache.putOverride(query, ManualOverride(local = false, source = LyricsSource.QQ, candidate = manual))
+        cache.putLyrics(
+            query,
+            CachedLyrics(
+                LyricsDocument(LyricsSource.QQ, LyricsFormat.LRC, listOf(LyricLine(1_000, 2_000, "old"))),
+                "old",
+                System.currentTimeMillis(),
+            ),
+        )
+        val reloaded = CountDownLatch(1)
+        val provider = object : LyricsProvider {
+            override val source = LyricsSource.AMLL
+            override fun search(query: TrackQuery, keywords: String, limit: Int) = listOf(
+                LyricsCandidate(source, "automatic", query.title, query.artists, query.album),
+            )
+            override fun fetch(candidate: LyricsCandidate) =
+                LyricsDocument(source, LyricsFormat.LRC, listOf(LyricLine(1_000, 2_000, "automatic")))
+        }
+        val coordinator = LyricsLoadCoordinator(
+            cache,
+            LyricsResolver(listOf(provider)),
+            object : LyricsRefreshBridge {
+                override fun reloadCurrentLyrics(): Boolean {
+                    reloaded.countDown()
+                    return true
+                }
+            },
+        )
+        assertEquals("old", coordinator.onLoad(query, LyricsLoadPhase.BEFORE_LOCAL, AutomaticReplacementPolicy.ALWAYS))
+
+        assertTrue(coordinator.useAutomatic())
+        assertTrue(reloaded.await(2, TimeUnit.SECONDS))
+
+        assertNull(cache.getOverride(query))
+        assertEquals(LyricsSource.AMLL, cache.getLyrics(query)?.document?.source)
+        coordinator.close()
+    }
 }
