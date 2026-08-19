@@ -139,6 +139,81 @@ class LyricsResolverTest {
     }
 
     @Test
+    fun `non-English AM lyrics accept a translated-title candidate after content verification`() {
+        val originalTexts = listOf("夜に駆ける", "沈むように", "溶けてゆくように", "二人だけの空")
+        val apple = documentProvider(
+            LyricsSource.APPLE_MUSIC,
+            LyricsDocument(
+                LyricsSource.APPLE_MUSIC,
+                LyricsFormat.TTML,
+                originalTexts.mapIndexed { index, text -> LyricLine(index * 5_000L, text = text) },
+            ),
+        )
+        val qq = object : LyricsProvider {
+            override val source = LyricsSource.QQ
+            override fun search(query: TrackQuery, keywords: String, limit: Int) = listOf(
+                LyricsCandidate(source, "qq", "奔向夜晚", listOf("YOASOBI"), "夜に駆ける", 240_500),
+            )
+            override fun fetch(candidate: LyricsCandidate) = LyricsDocument(
+                source,
+                LyricsFormat.QRC,
+                originalTexts.mapIndexed { index, text ->
+                    LyricLine(index * 5_000L + 200, text = text, translation = "中文翻译 $index")
+                },
+            )
+        }
+        val selected = LyricsCandidate(
+            LyricsSource.APPLE_MUSIC,
+            "apple",
+            "夜に駆ける",
+            listOf("YOASOBI"),
+            "THE BOOK",
+            240_000,
+        )
+
+        val result = LyricsResolver(listOf(apple, qq)).fetchManual(selected)
+
+        assertEquals(originalTexts.indices.map { "中文翻译 $it" }, result?.document?.lines?.map(LyricLine::translation))
+        assertEquals(listOf("QQ音乐"), result?.document?.metadata?.get("translationSource"))
+    }
+
+    @Test
+    fun `same-duration candidate with unrelated lyrics is not used as translation`() {
+        val originalTexts = listOf("First lyric", "Second lyric", "Third lyric", "Fourth lyric")
+        val apple = documentProvider(
+            LyricsSource.APPLE_MUSIC,
+            LyricsDocument(
+                LyricsSource.APPLE_MUSIC,
+                LyricsFormat.TTML,
+                originalTexts.mapIndexed { index, text -> LyricLine(index * 5_000L, text = text) },
+            ),
+        )
+        val qq = object : LyricsProvider {
+            override val source = LyricsSource.QQ
+            override fun search(query: TrackQuery, keywords: String, limit: Int) = listOf(
+                LyricsCandidate(source, "wrong", "Different title", listOf("Artist"), durationMs = 240_200),
+            )
+            override fun fetch(candidate: LyricsCandidate) = LyricsDocument(
+                source,
+                LyricsFormat.QRC,
+                List(4) { index -> LyricLine(index * 5_000L, text = "Unrelated $index", translation = "错误 $index") },
+            )
+        }
+        val selected = LyricsCandidate(
+            LyricsSource.APPLE_MUSIC,
+            "apple",
+            "Original title",
+            listOf("Artist"),
+            durationMs = 240_000,
+        )
+
+        val result = LyricsResolver(listOf(apple, qq)).fetchManual(selected)
+
+        assertTrue(result?.document?.lines.orEmpty().all { it.translation == null })
+        assertNull(result?.document?.metadata?.get("translationSource"))
+    }
+
+    @Test
     fun `later word synced source wins over earlier line synced source`() {
         val called = mutableListOf<LyricsSource>()
         val amllLine = fakeProvider(LyricsSource.AMLL, called, wordSynced = false)
@@ -289,6 +364,12 @@ class LyricsResolverTest {
         }
 
         override fun fetch(candidate: LyricsCandidate): LyricsDocument? = null
+    }
+
+    private fun documentProvider(source: LyricsSource, document: LyricsDocument) = object : LyricsProvider {
+        override val source = source
+        override fun search(query: TrackQuery, keywords: String, limit: Int) = emptyList<LyricsCandidate>()
+        override fun fetch(candidate: LyricsCandidate) = document
     }
 
     private fun wordDocument(source: LyricsSource, translation: String? = null) = LyricsDocument(
