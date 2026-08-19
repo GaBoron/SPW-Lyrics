@@ -1,12 +1,59 @@
 name: 🎯 歌词匹配错误
-description: 匹配到同名歌、错误版本（Live/Remix/伴奏/翻唱），或歌词时间轴与演唱不匹配。
+description: 自动匹配到另一首歌或错误录音版本（Live、Remix、伴奏、翻唱等）。
 title: "[匹配错误] "
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        请尽量完整填写歌曲信息，便于复现和定位匹配问题。可先参考 [歌词错误怎么办](https://github.com/GaBoron/SPW-Lyrics/blob/main/docs/常见问题.md#歌词错误怎么办)。
+        此表单适用于插件选错歌曲或录音版本的情况。当前歌曲正确、但歌词有错字、翻译或时间轴问题时，请改用“歌词内容问题”。
+
+        提交前可先参考 [歌词错误怎么办](https://github.com/GaBoron/SPW-Lyrics/blob/main/docs/常见问题.md#歌词错误怎么办)，并在手动搜索窗口对照专辑和时长。
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已搜索现有 Issue，并确认没有相同歌曲和匹配结果的报告。
+          required: true
+  - type: input
+    id: plugin-version
+    attributes:
+      label: 插件版本
+      description: 例如 0.3.0，可从安装的 ZIP 文件名或插件信息中确认。
+      placeholder: "0.3.0"
+    validations:
+      required: true
+  - type: input
+    id: spw-version
+    attributes:
+      label: SPW 版本
+      description: 例如 1.16.2，可在 SPW“关于”中查看。
+      placeholder: "1.16.2"
+    validations:
+      required: true
+  - type: dropdown
+    id: trigger
+    attributes:
+      label: 出现错误匹配的方式
+      options:
+        - 播放歌曲时自动匹配
+        - 点击“恢复自动匹配”后
+        - 手动搜索的候选或预览
+        - 其他或不确定
+    validations:
+      required: true
+  - type: dropdown
+    id: replacement-policy
+    attributes:
+      label: 自动替换歌词设置
+      options:
+        - 始终优先使用插件歌词
+        - 仅在本地无歌词时补充
+        - 仅手动选择时替换
+        - 不确定
+    validations:
+      required: true
   - type: input
     id: title
     attributes:
@@ -27,8 +74,10 @@ body:
     id: duration
     attributes:
       label: 歌曲时长
-      description: 例如 4:05。
+      description: 例如 4:05，用于区分不同录音版本。
       placeholder: "4:05"
+    validations:
+      required: true
   - type: dropdown
     id: matched-source
     attributes:
@@ -39,16 +88,34 @@ body:
         - QQ音乐
         - 酷狗音乐
         - 网易云音乐
-        - 本地歌词
-  - type: textarea
-    id: description
-    attributes:
-      label: 问题描述
-      description: 说明实际匹配到了什么、期望匹配到什么，以及两者差异所在。
     validations:
       required: true
   - type: textarea
-    id: screenshot
+    id: actual-match
     attributes:
-      label: 截图
-      description: 拖入手动搜索窗口或播放界面的截图。
+      label: 实际匹配结果
+      description: 写明被错误选中的歌曲名、歌手、专辑、时长，以及 Live、Remix、伴奏等版本标记。
+    validations:
+      required: true
+  - type: textarea
+    id: expected-match
+    attributes:
+      label: 预期匹配结果
+      description: 写明正确的歌曲或录音版本；如果手动搜索能找到，请说明正确候选的来源和信息。
+    validations:
+      required: true
+  - type: dropdown
+    id: retry-result
+    attributes:
+      label: 清除该歌曲缓存或恢复自动匹配后是否仍会选错
+      options:
+        - 仍然选错
+        - 已恢复正常
+        - 尚未尝试
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 截图或其他线索
+      description: 可拖入手动搜索候选、预览内容或播放界面的截图。

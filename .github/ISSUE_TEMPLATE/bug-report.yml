@@ -1,12 +1,34 @@
 name: 🐛 缺陷报告
-description: 插件安装失败、崩溃、无法加载、设置失效或缓存刷新异常等。
+description: 安装、加载、设置、缓存、自动刷新、手动窗口或快捷键发生异常。
 title: "[缺陷] "
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        感谢反馈！提交前请先确认已阅读 [常见问题](https://github.com/GaBoron/SPW-Lyrics/blob/main/docs/常见问题.md)，多数安装与使用问题已有解答。
+        感谢反馈！提交前请先查看 [常见问题](https://github.com/GaBoron/SPW-Lyrics/blob/main/docs/常见问题.md)。
+
+        如果是匹配到错误歌曲或版本，请改用“歌词匹配错误”；如果是正确歌曲的错字、翻译或时间轴问题，请改用“歌词内容问题”。
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已搜索现有 Issue，并确认没有相同问题。
+          required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 问题所在环节
+      options:
+        - 安装或启用插件
+        - 自动搜索、加载或刷新歌词
+        - 手动搜索窗口或快捷键
+        - 插件设置
+        - 本地缓存
+        - 其他
+    validations:
+      required: true
   - type: input
     id: spw-version
     attributes:
@@ -15,12 +37,32 @@ body:
       placeholder: "1.16.2"
     validations:
       required: true
+  - type: dropdown
+    id: spw-channel
+    attributes:
+      label: SPW 安装来源
+      options:
+        - Steam
+        - 其他来源
+        - 不确定
+    validations:
+      required: true
   - type: input
     id: plugin-version
     attributes:
       label: 插件版本
-      description: 例如 0.3.0，对应你安装的 ZIP 文件名。
+      description: 例如 0.3.0，可从安装的 ZIP 文件名或插件信息中确认。
       placeholder: "0.3.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: install-source
+    attributes:
+      label: 插件安装来源
+      options:
+        - GitHub Release ZIP
+        - 自行构建
+        - 其他来源或不确定
     validations:
       required: true
   - type: dropdown
@@ -28,27 +70,51 @@ body:
     attributes:
       label: 操作系统
       options:
-        - Windows 11
-        - Windows 10
-        - 其他
+        - Windows 11 x64
+        - Windows 10 x64
+        - Windows on ARM
+        - 其他或不确定
+    validations:
+      required: true
+  - type: dropdown
+    id: replacement-policy
+    attributes:
+      label: 自动替换歌词设置
+      options:
+        - 始终优先使用插件歌词
+        - 仅在本地无歌词时补充
+        - 仅手动选择时替换
+        - 不涉及或不确定
+    validations:
+      required: true
   - type: textarea
     id: description
     attributes:
-      label: 问题描述
-      description: 清晰描述发生了什么，以及你期望的行为。
-      placeholder: "例如：安装 ZIP 后创意工坊里看不到插件……"
+      label: 实际情况与预期行为
+      description: 说明实际发生了什么、你原本期望什么，以及界面上出现的提示。
+      placeholder: "例如：点击“手动搜索歌词”后没有打开窗口；预期应显示当前歌曲的候选列表。"
     validations:
       required: true
   - type: textarea
     id: steps
     attributes:
       label: 复现步骤
-      description: 按顺序列出能稳定复现问题的步骤。
+      description: 从启动 SPW 开始，按顺序列出能复现问题的操作。
       placeholder: "1. 打开 SPW\n2. 进入设置 → 创意工坊\n3. ……"
     validations:
       required: true
-  - type: textarea
-    id: logs
+  - type: dropdown
+    id: frequency
     attributes:
-      label: 日志或截图
-      description: 粘贴相关日志，或拖入截图。数据目录可通过插件设置“查看本地缓存文件夹”定位。
+      label: 复现频率
+      options:
+        - 每次都能复现
+        - 偶尔出现
+        - 只出现过一次
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: 日志、截图或其他线索
+      description: 可拖入截图或日志。手动窗口无法启动时，可附上 `%LOCALAPPDATA%\SPW Lyrics\winui-startup.log` 和 `winui-crash.log`；请先移除敏感信息。

@@ -1,12 +1,29 @@
 name: 📝 歌词内容问题
-description: 歌词有错字、缺行，翻译或音译缺失/错误，或时间轴偏移等。
+description: 正确歌曲的歌词有错字、缺行、翻译/音译问题、结构异常或时间轴错误。
 title: "[歌词内容] "
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        请提供歌曲信息与问题来源，无需粘贴整首歌词。
+        此表单适用于已经匹配到正确歌曲和版本，但歌词内容或时间轴仍有问题的情况。匹配到另一首歌、Live、Remix、伴奏或翻唱时，请改用“歌词匹配错误”。
+
+        请提供具体时间点和少量必要片段，无需粘贴整首歌词。
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已确认当前匹配的是正确歌曲和版本，并搜索过现有 Issue。
+          required: true
+  - type: input
+    id: plugin-version
+    attributes:
+      label: 插件版本
+      description: 例如 0.3.0，可从安装的 ZIP 文件名或插件信息中确认。
+      placeholder: "0.3.0"
+    validations:
+      required: true
   - type: input
     id: title
     attributes:
@@ -23,10 +40,19 @@ body:
     id: album
     attributes:
       label: 专辑
+  - type: input
+    id: duration
+    attributes:
+      label: 歌曲时长
+      description: 例如 4:05，用于区分不同录音版本。
+      placeholder: "4:05"
+    validations:
+      required: true
   - type: dropdown
     id: source
     attributes:
       label: 歌词来源
+      description: 可在手动搜索窗口的当前候选中确认。
       options:
         - AMLL TTML DB
         - Apple Music
@@ -41,24 +67,35 @@ body:
       label: 问题类型
       multiple: true
       options:
-        - 错字 / 别字
-        - 缺行 / 缺失歌词
-        - 翻译错误
-        - 缺少翻译
-        - 音译错误 / 缺失
-        - 时间轴不准
+        - 主歌词错字、别字或缺行
+        - 翻译错误或缺失
+        - 音译错误或缺失
+        - 整体或局部时间轴不准
+        - 逐字、逐行或分段结构异常
+        - 对唱、背景歌词或多行结构异常
         - 其他
     validations:
       required: true
   - type: textarea
-    id: description
+    id: details
     attributes:
-      label: 具体描述
-      description: 描述具体哪一句或哪段时间存在问题，方便定位。
+      label: 具体问题与预期内容
+      description: 写明出错的时间点、少量必要歌词片段、当前内容和预期内容。
+      placeholder: "例如：01:23 处当前显示“……”，应为“……”。"
+    validations:
+      required: true
+  - type: dropdown
+    id: source-comparison
+    attributes:
+      label: 其他在线来源是否也有相同问题
+      options:
+        - 仅当前来源存在
+        - 多个在线来源都存在
+        - 未比较或不确定
     validations:
       required: true
   - type: textarea
-    id: screenshot
+    id: evidence
     attributes:
-      label: 截图
-      description: 拖入播放界面或手动搜索窗口的截图。
+      label: 截图或来源链接
+      description: 可拖入播放界面或手动搜索窗口截图，也可附上能证明正确内容的公开来源链接。

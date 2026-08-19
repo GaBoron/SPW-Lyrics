@@ -1,29 +1,54 @@
 name: 💡 功能建议
-description: 建议新功能、新歌词来源或使用体验改进。
+description: 建议新的歌词能力、歌词来源、设置选项或使用体验改进。
 title: "[建议] "
 labels: ["enhancement"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        请先说明实际使用场景和当前遇到的不便，方案可以保持简短。
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已搜索现有 Issue 和 Discussions，并确认没有相同建议。
+          required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 建议涉及的功能
+      options:
+        - 自动搜索与匹配
+        - 手动搜索窗口与快捷键
+        - 歌词内容、格式或显示
+        - 新增或调整歌词来源
+        - 设置与缓存
+        - SPW 兼容性
+        - 其他
+    validations:
+      required: true
   - type: textarea
     id: problem
     attributes:
       label: 想解决的问题
-      description: 描述当前遇到的不便或缺失的能力。
+      description: 描述具体使用场景、当前行为和造成的不便。
     validations:
       required: true
   - type: textarea
     id: proposal
     attributes:
       label: 期望的方案
-      description: 描述你希望的功能或行为，例如希望新增的歌词来源。
+      description: 描述你希望插件增加或改变的行为；如果建议新来源，请附上服务名称和公开链接。
     validations:
       required: true
   - type: textarea
     id: alternative
     attributes:
       label: 已尝试的替代方案
-      description: 说明你目前是如何绕开这个问题的。
+      description: 如果目前有临时解决方法，请说明其不足。
   - type: textarea
     id: context
     attributes:
-      label: 其他信息
-      description: 补充任何有助于理解该建议的背景或参考链接。
+      label: 补充信息
+      description: 可补充界面草图、示例歌曲、参考项目或其他背景。
