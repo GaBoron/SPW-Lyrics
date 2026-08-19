@@ -81,7 +81,7 @@ class LyricsLoadCoordinatorTest {
         Thread.sleep(50)
 
         assertEquals(
-            listOf("自动加载歌词失败，请在“设置 → 创意工坊 → 模组设置 → SPW Lyrics → 手动搜索歌词”中手动匹配。"),
+            listOf("自动加载歌词失败；请确保设置中的“通过快捷键开启”已打开，然后在 SPW 前台按 Ctrl+Shift+M 手动匹配。"),
             synchronized(messages) { messages.toList() },
         )
         coordinator.close()

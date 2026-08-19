@@ -8,21 +8,35 @@ import java.nio.file.Path
 import java.util.function.Consumer
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 @OptIn(UnstableSpwWorkshopApi::class)
 class PluginSettingsTest {
     @Test
     fun `tracks changes saved through the SPW config manager`() {
-        val helper = FakeConfigHelper(mutableMapOf(PluginSettings.REPLACEMENT_POLICY_KEY to "when_local_missing"))
+        val helper = FakeConfigHelper(
+            mutableMapOf(
+                PluginSettings.REPLACEMENT_POLICY_KEY to "when_local_missing",
+                PluginSettings.MANUAL_SEARCH_SHORTCUT_ENABLED_KEY to false,
+            ),
+        )
         val manager = FakeConfigManager(helper)
-        val settings = PluginSettings(manager)
+        val shortcutChanges = mutableListOf<Boolean>()
+        val settings = PluginSettings(manager, shortcutChanges::add)
 
         assertEquals(AutomaticReplacementPolicy.WHEN_LOCAL_MISSING, settings.automaticReplacementPolicy())
+        assertFalse(settings.manualSearchShortcutEnabled())
 
         helper.set(PluginSettings.REPLACEMENT_POLICY_KEY, "manual_only")
+        helper.set(PluginSettings.MANUAL_SEARCH_SHORTCUT_ENABLED_KEY, true)
         manager.notifyChanged()
 
         assertEquals(AutomaticReplacementPolicy.MANUAL_ONLY, settings.automaticReplacementPolicy())
+        assertTrue(settings.manualSearchShortcutEnabled())
+        assertEquals(listOf(true), shortcutChanges)
+        manager.notifyChanged()
+        assertEquals(listOf(true), shortcutChanges)
         settings.close()
         assertEquals(null, manager.listener)
     }

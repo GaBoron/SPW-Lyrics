@@ -20,7 +20,7 @@ import dev.gaboron.spwlyrics.provider.QqMusicProvider
 import dev.gaboron.spwlyrics.storage.FileLyricsCache
 import dev.gaboron.spwlyrics.integration.manualui.ManualUiBridge
 import dev.gaboron.spwlyrics.integration.manualui.ManualUiSession
-import dev.gaboron.spwlyrics.integration.shortcut.AwtManualSearchShortcut
+import dev.gaboron.spwlyrics.integration.shortcut.ManualSearchShortcutController
 import java.nio.file.Path
 import java.time.Duration
 import kotlin.io.path.Path
@@ -29,7 +29,7 @@ object PluginRuntime {
     @Volatile private var coordinator: LyricsLoadCoordinator? = null
     @Volatile private var settings: PluginSettings? = null
     @Volatile private var manualUiBridge: ManualUiBridge? = null
-    @Volatile private var manualSearchShortcut: AutoCloseable? = null
+    @Volatile private var manualSearchShortcut: ManualSearchShortcutController? = null
     @Volatile private var cacheFolderOpener: CacheFolderOpener? = null
     private val durationProbe: TrackDurationProbe = CachedTrackDurationProbe()
 
@@ -42,7 +42,6 @@ object PluginRuntime {
         val root = localData.resolve("SPW Lyrics")
         val cacheDirectory = root.resolve("cache")
         val cache = FileLyricsCache(cacheDirectory)
-        settings = PluginSettings(WorkshopApi.manager.createConfigManager())
         cacheFolderOpener = CacheFolderOpener(cacheDirectory)
         val http = ProviderHttpClient()
         val providers = listOf(
@@ -74,10 +73,19 @@ object PluginRuntime {
                 useAutomatic = ::useAutomatic,
             ),
         )
-        manualSearchShortcut = AwtManualSearchShortcut.start(
+        val shortcutController = ManualSearchShortcutController(
             onPressed = ::openManualSearch,
-            onFailure = { toastWarning("快捷键监听未启动，仍可从插件设置打开手动搜索。") },
+            onFailure = {
+                toastWarning("快捷键监听未启动，请在插件设置中关闭并重新开启“通过快捷键开启”后重试。")
+            },
         )
+        manualSearchShortcut = shortcutController
+        val pluginSettings = PluginSettings(
+            manager = WorkshopApi.manager.createConfigManager(),
+            onManualSearchShortcutEnabledChanged = shortcutController::setEnabled,
+        )
+        settings = pluginSettings
+        shortcutController.setEnabled(pluginSettings.manualSearchShortcutEnabled())
     }
 
     fun beforeLoad(mediaItem: PlaybackExtensionPoint.MediaItem): String? = load(mediaItem, LyricsLoadPhase.BEFORE_LOCAL)
