@@ -62,6 +62,7 @@ val publishWinUi by tasks.registering(Exec::class) {
         "-p:Platform=x64", "-p:WindowsAppSDKSelfContained=true",
         "-p:Version=${project.version}", "-p:AssemblyVersion=${project.version}.0",
         "-p:FileVersion=${project.version}.0", "-p:InformationalVersion=${project.version}",
+        "-p:IncludeSourceRevisionInInformationalVersion=false",
         "-o", winUiPublishDirectory.get().asFile.absolutePath,
     )
 }
