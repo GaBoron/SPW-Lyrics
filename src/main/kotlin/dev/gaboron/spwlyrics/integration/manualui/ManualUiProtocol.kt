@@ -15,6 +15,7 @@ data class ManualUiRequest(
 data class ManualUiResponse(
     val ok: Boolean,
     val message: String = "",
+    val activate: Boolean = false,
     val track: ManualUiTrack? = null,
     val sources: List<ManualUiSource> = emptyList(),
     val candidates: List<ManualUiCandidate> = emptyList(),

@@ -20,6 +20,7 @@ import dev.gaboron.spwlyrics.provider.QqMusicProvider
 import dev.gaboron.spwlyrics.storage.FileLyricsCache
 import dev.gaboron.spwlyrics.integration.manualui.ManualUiBridge
 import dev.gaboron.spwlyrics.integration.manualui.ManualUiSession
+import dev.gaboron.spwlyrics.integration.shortcut.AwtManualSearchShortcut
 import java.nio.file.Path
 import java.time.Duration
 import kotlin.io.path.Path
@@ -28,6 +29,7 @@ object PluginRuntime {
     @Volatile private var coordinator: LyricsLoadCoordinator? = null
     @Volatile private var settings: PluginSettings? = null
     @Volatile private var manualUiBridge: ManualUiBridge? = null
+    @Volatile private var manualSearchShortcut: AutoCloseable? = null
     @Volatile private var cacheFolderOpener: CacheFolderOpener? = null
     private val durationProbe: TrackDurationProbe = CachedTrackDurationProbe()
 
@@ -72,6 +74,10 @@ object PluginRuntime {
                 useAutomatic = ::useAutomatic,
             ),
         )
+        manualSearchShortcut = AwtManualSearchShortcut.start(
+            onPressed = ::openManualSearch,
+            onFailure = { toastWarning("快捷键监听未启动，仍可从插件设置打开手动搜索。") },
+        )
     }
 
     fun beforeLoad(mediaItem: PlaybackExtensionPoint.MediaItem): String? = load(mediaItem, LyricsLoadPhase.BEFORE_LOCAL)
@@ -83,8 +89,10 @@ object PluginRuntime {
     fun applyManual(candidate: LyricsCandidate): Boolean = coordinator?.applyManual(candidate) == true
     fun useLocal(): Boolean = coordinator?.useLocal() == true
     fun useAutomatic(): Boolean = coordinator?.useAutomatic() == true
+    @Synchronized
     fun openManualSearch() {
-        if (manualUiBridge?.open() != true) ManualSearchWindow.open()
+        val bridge = manualUiBridge ?: return
+        if (!bridge.open()) ManualSearchWindow.open()
     }
     fun openCacheFolder() {
         if (cacheFolderOpener?.open() != true) toastWarning("无法打开 SPW Lyrics 本地缓存文件夹。")
@@ -92,6 +100,8 @@ object PluginRuntime {
 
     @Synchronized
     fun close() {
+        manualSearchShortcut?.close()
+        manualSearchShortcut = null
         manualUiBridge?.close()
         manualUiBridge = null
         cacheFolderOpener = null
