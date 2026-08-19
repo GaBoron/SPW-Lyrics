@@ -12,4 +12,8 @@ internal object TranslationMatchPolicy {
         return candidate.titleScore >= MatchEngine.STRONG_TITLE &&
             candidate.durationScore != null && candidate.durationScore >= 0.85
     }
+
+    /** Allows alias candidates to be downloaded only when lyric text can prove the recording afterwards. */
+    fun canVerifyByLyrics(candidate: CandidateScore): Boolean =
+        !candidate.versionConflict && candidate.durationScore != null && candidate.durationScore >= 0.85
 }
