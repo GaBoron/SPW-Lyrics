@@ -19,8 +19,8 @@ body:
     id: plugin-version
     attributes:
       label: 插件版本
-      description: 例如 0.2.0，对应你安装的 ZIP 文件名。
-      placeholder: "0.2.0"
+      description: 例如 0.3.0，对应你安装的 ZIP 文件名。
+      placeholder: "0.3.0"
     validations:
       required: true
   - type: dropdown

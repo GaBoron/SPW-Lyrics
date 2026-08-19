@@ -23,7 +23,7 @@ SPW Lyrics 是一款面向 [Salt Player for Windows（SPW）](https://github.com
 ## 📥 下载与安装
 
 1. 前往 [最新 Release](https://github.com/GaBoron/SPW-Lyrics/releases/latest)。
-2. 下载 `spw-lyrics-0.2.0.zip`，**不要解压**。
+2. 下载 `spw-lyrics-0.3.0.zip`，**不要解压**。
 3. 打开 SPW 的“**设置 → 创意工坊**”。
 4. 使用本地安装或导入模组的入口，选择刚才下载的 ZIP。
 5. 如果插件没有立即出现，请重启一次 SPW。
@@ -53,6 +53,6 @@ SPW Lyrics 是一款面向 [Salt Player for Windows（SPW）](https://github.com
 
 ## ⚠️ 兼容性
 
-当前版本为 `0.2.0`，已在 SPW `1.16.2`（Steam、Windows x64）上测试。SPW 创意工坊接口仍处于试验阶段，后续 SPW 更新可能影响插件兼容性。
+当前版本为 `0.3.0`，已在 SPW `1.16.2`（Steam、Windows x64）上测试。SPW 创意工坊接口仍处于试验阶段，后续 SPW 更新可能影响插件兼容性。
 
 本项目采用 [MIT License](LICENSE)。

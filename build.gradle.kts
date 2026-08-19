@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "dev.gaboron.spwlyrics"
-version = "0.2.0"
+version = "0.3.0"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21
@@ -60,6 +60,8 @@ val publishWinUi by tasks.registering(Exec::class) {
         "dotnet", "publish", winUiProject.asFile.absolutePath,
         "-c", "Release", "-r", "win-x64", "--self-contained", "true",
         "-p:Platform=x64", "-p:WindowsAppSDKSelfContained=true",
+        "-p:Version=${project.version}", "-p:AssemblyVersion=${project.version}.0",
+        "-p:FileVersion=${project.version}.0", "-p:InformationalVersion=${project.version}",
         "-o", winUiPublishDirectory.get().asFile.absolutePath,
     )
 }

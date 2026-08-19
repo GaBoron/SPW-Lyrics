@@ -91,7 +91,7 @@ class ProviderHttpClient(
     }
 
     companion object {
-        const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 SPW-Lyrics/0.2.0"
+        const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 SPW-Lyrics/0.3.0"
         fun encode(value: String): String = URLEncoder.encode(value, StandardCharsets.UTF_8)
 
         private fun Duration.toTimeoutMillis(): Int = toMillis().coerceIn(1, Int.MAX_VALUE.toLong()).toInt()
