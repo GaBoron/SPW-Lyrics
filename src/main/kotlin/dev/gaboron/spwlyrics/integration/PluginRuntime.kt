@@ -44,7 +44,11 @@ object PluginRuntime {
         cacheFolderOpener = CacheFolderOpener(cacheDirectory)
         val http = ProviderHttpClient()
         val providers = listOf(
-            AmllProvider(root.resolve("amll"), ProviderHttpClient(requestTimeout = Duration.ofSeconds(6))),
+            AmllProvider(
+                cacheDirectory.resolve("AMLL 索引"),
+                ProviderHttpClient(requestTimeout = Duration.ofSeconds(6)),
+                legacyIndexPath = root.resolve("amll").resolve("amll-index.jsonl"),
+            ),
             AppleMusicProvider(http),
             QqMusicProvider(http),
             KugouMusicProvider(http),
