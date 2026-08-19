@@ -22,6 +22,7 @@ namespace SpwLyrics_WinUI;
 public partial class App : Application
 {
     private Window? _window;
+    private BridgeActivationListener? _activationListener;
     internal static BridgeClient Bridge { get; private set; } = BridgeClient.FromCommandLine([]);
 
     /// <summary>
@@ -43,8 +44,16 @@ public partial class App : Application
         try
         {
             Bridge = BridgeClient.FromCommandLine(Environment.GetCommandLineArgs());
-            _window = new MainWindow();
-            ((MainWindow)_window).ActivateForInput();
+            var window = new MainWindow();
+            _window = window;
+            window.ActivateForInput();
+            _activationListener = new BridgeActivationListener(Bridge, window.DispatcherQueue, window.ActivateForInput);
+            window.Closed += (_, _) =>
+            {
+                _activationListener?.Dispose();
+                _activationListener = null;
+            };
+            _activationListener.Start();
         }
         catch (Exception exception)
         {

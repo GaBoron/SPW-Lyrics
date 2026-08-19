@@ -6,6 +6,7 @@ import java.net.Socket
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.SecureRandom
+import java.time.Duration
 import java.util.Base64
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -24,6 +25,7 @@ class ManualUiBridge(
         Thread(task, "spw-lyrics-manual-ui").apply { isDaemon = true }
     }
     private val executable = pluginRoot.resolve("ui").resolve("SpwLyrics.WinUI.exe")
+    private val activation = ManualUiActivationSignal()
     @Volatile private var process: Process? = null
 
     init {
@@ -37,7 +39,10 @@ class ManualUiBridge(
     @Synchronized
     fun open(): Boolean {
         if (!Files.isRegularFile(executable)) return false
-        if (process?.isAlive == true) return true
+        if (process?.isAlive == true) {
+            activation.request()
+            return true
+        }
         val launched = runCatching {
             ProcessBuilder(
                 executable.toString(),
@@ -72,6 +77,10 @@ class ManualUiBridge(
             when {
                 request == null -> ManualUiResponse(false, "请求格式无效。")
                 !constantTimeEquals(request.token, token) -> ManualUiResponse(false, "连接认证失败。")
+                request.action == "wait_activation" -> ManualUiResponse(
+                    ok = true,
+                    activate = activation.await(ACTIVATION_WAIT),
+                )
                 else -> runCatching { session.handle(request) }
                     .getOrElse { ManualUiResponse(false, it.message ?: "操作失败。") }
             }
@@ -99,5 +108,6 @@ class ManualUiBridge(
 
     companion object {
         private const val MAX_REQUEST_LENGTH = 1_048_576
+        private val ACTIVATION_WAIT: Duration = Duration.ofSeconds(15)
     }
 }

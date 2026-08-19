@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Windowing;
 using Windows.Graphics;
 
 // To learn more about WinUI, the WinUI project structure,
@@ -30,6 +31,10 @@ public sealed partial class MainWindow : Window
 
     public void ActivateForInput()
     {
+        if (AppWindow.Presenter is OverlappedPresenter presenter && presenter.State == OverlappedPresenterState.Minimized)
+        {
+            presenter.Restore(activateWindow: true);
+        }
         Activate();
         AppWindow.Show(activateWindow: true);
         DispatcherQueue.TryEnqueue(() => RootFrame.Focus(Microsoft.UI.Xaml.FocusState.Programmatic));

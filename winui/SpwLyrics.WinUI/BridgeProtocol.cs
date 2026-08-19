@@ -15,6 +15,7 @@ public sealed class ManualUiResponse
 {
     public bool Ok { get; init; }
     public string Message { get; init; } = "";
+    public bool Activate { get; init; }
     public ManualUiTrack? Track { get; init; }
     public List<ManualUiSource> Sources { get; init; } = [];
     public List<ManualUiCandidate> Candidates { get; init; } = [];
