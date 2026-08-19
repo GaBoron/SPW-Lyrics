@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🛟 常见问题
+    url: https://github.com/GaBoron/SPW-Lyrics/blob/main/docs/常见问题.md
+    about: 提问前请先查看常见问题，多数安装与使用问题已有解答。
+  - name: 📖 使用说明
+    url: https://github.com/GaBoron/SPW-Lyrics/blob/main/docs/使用说明.md
+    about: 了解自动匹配、手动搜索、歌词来源与缓存的使用方式。
+  - name: 💬 讨论区
+    url: https://github.com/GaBoron/SPW-Lyrics/discussions
+    about: 一般性交流或不属于以上类型的问题，请到 Discussions。

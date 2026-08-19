@@ -1,0 +1,54 @@
+name: 🐛 缺陷报告
+description: 插件安装失败、崩溃、无法加载、设置失效或缓存刷新异常等。
+title: "[缺陷] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！提交前请先确认已阅读 [常见问题](https://github.com/GaBoron/SPW-Lyrics/blob/main/docs/常见问题.md)，多数安装与使用问题已有解答。
+  - type: input
+    id: spw-version
+    attributes:
+      label: SPW 版本
+      description: 例如 1.16.2，可在 SPW“关于”中查看。
+      placeholder: "1.16.2"
+    validations:
+      required: true
+  - type: input
+    id: plugin-version
+    attributes:
+      label: 插件版本
+      description: 例如 0.2.0，对应你安装的 ZIP 文件名。
+      placeholder: "0.2.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: 操作系统
+      options:
+        - Windows 11
+        - Windows 10
+        - 其他
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述
+      description: 清晰描述发生了什么，以及你期望的行为。
+      placeholder: "例如：安装 ZIP 后创意工坊里看不到插件……"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 按顺序列出能稳定复现问题的步骤。
+      placeholder: "1. 打开 SPW\n2. 进入设置 → 创意工坊\n3. ……"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志或截图
+      description: 粘贴相关日志，或拖入截图。数据目录可通过插件设置“查看本地缓存文件夹”定位。

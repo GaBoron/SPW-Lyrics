@@ -1,0 +1,54 @@
+name: 🎯 歌词匹配错误
+description: 匹配到同名歌、错误版本（Live/Remix/伴奏/翻唱），或歌词时间轴与演唱不匹配。
+title: "[匹配错误] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请尽量完整填写歌曲信息，便于复现和定位匹配问题。可先参考 [歌词错误怎么办](https://github.com/GaBoron/SPW-Lyrics/blob/main/docs/常见问题.md#歌词错误怎么办)。
+  - type: input
+    id: title
+    attributes:
+      label: 歌曲名
+    validations:
+      required: true
+  - type: input
+    id: artist
+    attributes:
+      label: 歌手
+    validations:
+      required: true
+  - type: input
+    id: album
+    attributes:
+      label: 专辑
+  - type: input
+    id: duration
+    attributes:
+      label: 歌曲时长
+      description: 例如 4:05。
+      placeholder: "4:05"
+  - type: dropdown
+    id: matched-source
+    attributes:
+      label: 当前匹配到的来源
+      options:
+        - AMLL TTML DB
+        - Apple Music
+        - QQ音乐
+        - 酷狗音乐
+        - 网易云音乐
+        - 本地歌词
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述
+      description: 说明实际匹配到了什么、期望匹配到什么，以及两者差异所在。
+    validations:
+      required: true
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: 截图
+      description: 拖入手动搜索窗口或播放界面的截图。

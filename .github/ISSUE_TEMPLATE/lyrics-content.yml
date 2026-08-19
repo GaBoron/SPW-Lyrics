@@ -1,0 +1,64 @@
+name: 📝 歌词内容问题
+description: 歌词有错字、缺行，翻译或音译缺失/错误，或时间轴偏移等。
+title: "[歌词内容] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请提供歌曲信息与问题来源，无需粘贴整首歌词。
+  - type: input
+    id: title
+    attributes:
+      label: 歌曲名
+    validations:
+      required: true
+  - type: input
+    id: artist
+    attributes:
+      label: 歌手
+    validations:
+      required: true
+  - type: input
+    id: album
+    attributes:
+      label: 专辑
+  - type: dropdown
+    id: source
+    attributes:
+      label: 歌词来源
+      options:
+        - AMLL TTML DB
+        - Apple Music
+        - QQ音乐
+        - 酷狗音乐
+        - 网易云音乐
+    validations:
+      required: true
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: 问题类型
+      multiple: true
+      options:
+        - 错字 / 别字
+        - 缺行 / 缺失歌词
+        - 翻译错误
+        - 缺少翻译
+        - 音译错误 / 缺失
+        - 时间轴不准
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: 具体描述
+      description: 描述具体哪一句或哪段时间存在问题，方便定位。
+    validations:
+      required: true
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: 截图
+      description: 拖入播放界面或手动搜索窗口的截图。

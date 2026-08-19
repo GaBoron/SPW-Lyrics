@@ -1,0 +1,29 @@
+name: 💡 功能建议
+description: 建议新功能、新歌词来源或使用体验改进。
+title: "[建议] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 想解决的问题
+      description: 描述当前遇到的不便或缺失的能力。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望的方案
+      description: 描述你希望的功能或行为，例如希望新增的歌词来源。
+    validations:
+      required: true
+  - type: textarea
+    id: alternative
+    attributes:
+      label: 已尝试的替代方案
+      description: 说明你目前是如何绕开这个问题的。
+  - type: textarea
+    id: context
+    attributes:
+      label: 其他信息
+      description: 补充任何有助于理解该建议的背景或参考链接。
