@@ -3,18 +3,20 @@ package dev.gaboron.spwlyrics.application
 import dev.gaboron.spwlyrics.domain.LyricsDocument
 
 internal object SecondaryLyricsEnricher {
-    fun enrich(primary: LyricsDocument, secondary: LyricsDocument): LyricsDocument {
-        val alignment = CrossSourceLyricsAligner.align(primary, secondary)
-        if (alignment.matches.isEmpty()) return primary
+    fun enrich(
+        primary: LyricsDocument,
+        secondary: LyricsDocument,
+        alignment: CrossSourceAlignment = CrossSourceLyricsAligner.align(primary, secondary),
+    ): LyricsDocument {
+        val projection = TranslationProjectionPolicy.project(alignment)
+        if (projection.translations.isEmpty() && projection.romanizations.isEmpty()) return primary
         var addedTranslations = false
         var addedRomanizations = false
-        val matchedByPrimaryIndex = alignment.matches.associateBy(CrossSourceLineMatch::primaryIndex)
         val lines = primary.lines.mapIndexed { index, line ->
-            val matched = matchedByPrimaryIndex[index]?.secondaryLine ?: return@mapIndexed line
             val translation = line.translation?.takeIf(String::isNotBlank)
-                ?: matched.translation?.takeIf(String::isNotBlank)
+                ?: projection.translations[index]
             val romanization = line.romanization?.takeIf(String::isNotBlank)
-                ?: matched.romanization?.takeIf(String::isNotBlank)
+                ?: projection.romanizations[index]
             if (line.translation.isNullOrBlank() && translation != null) addedTranslations = true
             if (line.romanization.isNullOrBlank() && romanization != null) addedRomanizations = true
             line.copy(translation = translation, romanization = romanization)

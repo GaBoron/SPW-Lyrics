@@ -143,7 +143,7 @@ class LyricsResolver(
             val secondary = fetchOnce(candidate) ?: return null
             val alignment = CrossSourceLyricsAligner.align(primary, secondary)
             if (requireRecordingEvidence && !alignment.provesSameRecording) return null
-            return SecondaryLyricsEnricher.enrich(primary, secondary).takeIf { it != primary }
+            return SecondaryLyricsEnricher.enrich(primary, secondary, alignment).takeIf { it != primary }
         }
 
         for (lookupQuery in lookupQueries) {
