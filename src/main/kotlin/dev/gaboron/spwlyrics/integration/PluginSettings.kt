@@ -17,6 +17,8 @@ class PluginSettings(
     private val replacementPolicy = AtomicReference(readPolicy(initialConfig))
     private val manualSearchShortcutEnabled = AtomicBoolean(readManualSearchShortcutEnabled(initialConfig))
     private val listener = Consumer<ConfigHelper> {
+        // SPW saves settings through a separate helper; the callback can still hold cached values.
+        if (!it.reload()) return@Consumer
         replacementPolicy.set(readPolicy(it))
         val enabled = readManualSearchShortcutEnabled(it)
         if (manualSearchShortcutEnabled.getAndSet(enabled) != enabled) {
