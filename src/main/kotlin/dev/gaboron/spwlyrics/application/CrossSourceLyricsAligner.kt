@@ -2,7 +2,6 @@ package dev.gaboron.spwlyrics.application
 
 import dev.gaboron.spwlyrics.domain.LyricLine
 import dev.gaboron.spwlyrics.domain.LyricsDocument
-import dev.gaboron.spwlyrics.domain.TextNormalizer
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -16,10 +15,11 @@ internal object CrossSourceLyricsAligner {
         if (primaryLines.isEmpty() || secondaryLines.isEmpty()) {
             return CrossSourceAlignment(
                 groups = emptyList(),
+                auxiliaryGroups = AuxiliaryLyricsAligner.align(primary, secondary),
                 primaryLineCount = primaryLines.size,
                 secondaryLineCount = secondaryLines.size,
-                primaryCharacterCount = primaryLines.sumOf { TextNormalizer.compact(it.value.text).length },
-                secondaryCharacterCount = secondaryLines.sumOf { TextNormalizer.compact(it.value.text).length },
+                primaryCharacterCount = primaryLines.sumOf { PerformanceAwareTextMatcher.signature(it.value.text).length },
+                secondaryCharacterCount = secondaryLines.sumOf { PerformanceAwareTextMatcher.signature(it.value.text).length },
             )
         }
 
@@ -86,10 +86,11 @@ internal object CrossSourceLyricsAligner {
         }
         return CrossSourceAlignment(
             groups = groups.reversed(),
+            auxiliaryGroups = AuxiliaryLyricsAligner.align(primary, secondary),
             primaryLineCount = primaryLines.size,
             secondaryLineCount = secondaryLines.size,
-            primaryCharacterCount = primaryLines.sumOf { TextNormalizer.compact(it.value.text).length },
-            secondaryCharacterCount = secondaryLines.sumOf { TextNormalizer.compact(it.value.text).length },
+            primaryCharacterCount = primaryLines.sumOf { PerformanceAwareTextMatcher.signature(it.value.text).length },
+            secondaryCharacterCount = secondaryLines.sumOf { PerformanceAwareTextMatcher.signature(it.value.text).length },
         )
     }
 
@@ -105,7 +106,7 @@ internal object CrossSourceLyricsAligner {
         val secondaryText = compactGroup(secondary)
         if (primaryText.isEmpty() || secondaryText.isEmpty()) return null
 
-        val similarity = TextNormalizer.similarity(
+        val similarity = PerformanceAwareTextMatcher.similarity(
             primary.joinToString(" ") { it.value.text },
             secondary.joinToString(" ") { it.value.text },
         )
@@ -194,12 +195,12 @@ internal object CrossSourceLyricsAligner {
 
     private fun uniqueTimedLines(lines: List<IndexedValue<LyricLine>>): Map<String, IndexedValue<LyricLine>> =
         lines.filter { it.value.startMs != null }
-            .groupBy { TextNormalizer.compact(it.value.text) }
+            .groupBy { PerformanceAwareTextMatcher.signature(it.value.text) }
             .filter { (text, matches) -> text.length >= MIN_ANCHOR_CHARACTERS && matches.size == 1 }
             .mapValues { it.value.single() }
 
     private fun compactGroup(lines: List<IndexedValue<LyricLine>>): String =
-        lines.joinToString("") { TextNormalizer.compact(it.value.text) }
+        lines.joinToString("") { PerformanceAwareTextMatcher.signature(it.value.text) }
 
     private data class ScoredGroup(
         val alignmentGroup: CrossSourceAlignmentGroup,
@@ -212,7 +213,7 @@ internal object CrossSourceLyricsAligner {
         val group: CrossSourceAlignmentGroup? = null,
     )
 
-    private const val MAX_GROUP_LINES = 3
+    private const val MAX_GROUP_LINES = 8
     private const val MIN_ANCHOR_CHARACTERS = 4
     private const val MAX_GROUP_GAP_MS = 10_000L
     private const val MIN_GROUP_TEXT_SIMILARITY = 0.90
@@ -263,6 +264,7 @@ internal data class CrossSourceAlignmentGroup(
 
 internal data class CrossSourceAlignment(
     val groups: List<CrossSourceAlignmentGroup>,
+    val auxiliaryGroups: List<CrossSourceAlignmentGroup> = emptyList(),
     val primaryLineCount: Int,
     val secondaryLineCount: Int,
     val primaryCharacterCount: Int,

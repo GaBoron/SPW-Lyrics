@@ -95,7 +95,7 @@ class SecondaryLyricsEnricherTest {
     }
 
     @Test
-    fun `leaves AM lines untranslated when a combined translation cannot be split`() {
+    fun `reflows a combined translation without changing AM line boundaries`() {
         val primary = LyricsDocument(
             LyricsSource.APPLE_MUSIC,
             LyricsFormat.TTML,
@@ -112,8 +112,36 @@ class SecondaryLyricsEnricherTest {
 
         val enriched = SecondaryLyricsEnricher.enrich(primary, secondary)
 
-        assertTrue(enriched.lines.all { it.translation == null })
-        assertNull(enriched.metadata[SecondaryLyricsEnricher.TRANSLATION_SOURCE_KEY])
+        assertEquals(2, enriched.lines.count { !it.translation.isNullOrBlank() })
+        assertEquals("我拥有一个苹果", enriched.lines.mapNotNull(LyricLine::translation).joinToString(""))
+        assertEquals(listOf("网易云音乐"), enriched.metadata[SecondaryLyricsEnricher.TRANSLATION_SOURCE_KEY])
+    }
+
+    @Test
+    fun `supplements background locally without shifting the main backbone`() {
+        val primary = LyricsDocument(
+            LyricsSource.APPLE_MUSIC,
+            LyricsFormat.TTML,
+            listOf(
+                LyricLine(10_000, text = "I need you"),
+                LyricLine(10_500, text = "don't leave me", background = true),
+                LyricLine(20_000, text = "Stay tonight"),
+            ),
+        )
+        val secondary = LyricsDocument(
+            LyricsSource.QQ,
+            LyricsFormat.QRC,
+            listOf(
+                LyricLine(10_100, text = "I need you", translation = "我需要你"),
+                LyricLine(10_700, text = "don't leave me", translation = "不要离开我", background = true),
+                LyricLine(20_100, text = "Stay tonight", translation = "今晚留下"),
+            ),
+        )
+
+        val enriched = SecondaryLyricsEnricher.enrich(primary, secondary)
+
+        assertEquals(listOf("我需要你", "不要离开我", "今晚留下"), enriched.lines.map(LyricLine::translation))
+        assertEquals(2, CrossSourceLyricsAligner.align(primary, secondary).groups.size)
     }
 
     private fun document(translatedLines: Int) = LyricsDocument(

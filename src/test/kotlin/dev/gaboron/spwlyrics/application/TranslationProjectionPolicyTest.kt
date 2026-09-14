@@ -44,7 +44,7 @@ class TranslationProjectionPolicyTest {
     }
 
     @Test
-    fun `does not guess how to split an indivisible translation`() {
+    fun `reflows an indivisible translation by primary line weight`() {
         val primary = document(
             LyricsSource.APPLE_MUSIC,
             line(10_000, "I have"),
@@ -55,7 +55,11 @@ class TranslationProjectionPolicyTest {
             line(10_000, "I have, I have an apple", "我拥有一个苹果"),
         )
 
-        assertTrue(project(primary, secondary).translations.isEmpty())
+        val translations = project(primary, secondary).translations
+
+        assertEquals(2, translations.size)
+        assertEquals("我拥有一个苹果", translations.values.joinToString(""))
+        assertTrue(translations.values.all(String::isNotBlank))
     }
 
     @Test

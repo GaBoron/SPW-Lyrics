@@ -105,6 +105,34 @@ class CrossSourceLyricsAlignerTest {
     }
 
     @Test
+    fun `supports long rap segmentation beyond three source lines`() {
+        val primary = document(LyricsSource.APPLE_MUSIC, line(10_000, "one two three four five"))
+        val secondary = document(
+            LyricsSource.QQ,
+            line(10_000, "one", "一"),
+            line(10_300, "two", "二"),
+            line(10_600, "three", "三"),
+            line(10_900, "four", "四"),
+            line(11_200, "five", "五"),
+        )
+
+        val group = CrossSourceLyricsAligner.align(primary, secondary).groups.single()
+
+        assertEquals(listOf(0, 1, 2, 3, 4), group.secondaryIndices)
+    }
+
+    @Test
+    fun `treats stutter and elongated singing notation as the same backbone`() {
+        val primary = document(LyricsSource.APPLE_MUSIC, line(10_000, "I-I-I-I-I feeel something"))
+        val secondary = document(LyricsSource.QQ, line(10_100, "I feel something", "我感觉到了什么"))
+
+        val alignment = CrossSourceLyricsAligner.align(primary, secondary)
+
+        assertEquals(listOf(0), alignment.groups.single().primaryIndices)
+        assertTrue(alignment.groups.single().textSimilarity >= 0.95)
+    }
+
+    @Test
     fun `does not group lines across different AM agents`() {
         val primary = document(
             LyricsSource.APPLE_MUSIC,
