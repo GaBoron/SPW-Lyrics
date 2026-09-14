@@ -6,14 +6,27 @@ import java.text.Normalizer
 /** Normalizes performance notation for matching without changing the displayed lyric text. */
 internal object PerformanceAwareTextMatcher {
     fun similarity(left: String, right: String): Double {
-        val leftVariants = variants(left)
-        val rightVariants = variants(right)
-        return leftVariants.maxOf { leftVariant ->
-            rightVariants.maxOf { rightVariant -> TextNormalizer.similarity(leftVariant, rightVariant) }
-        }
+        return similarity(prepare(left), prepare(right))
     }
 
-    fun signature(value: String): String = TextNormalizer.compact(variants(value).first())
+    fun prepare(value: String): PreparedText {
+        val preparedVariants = variants(value).map(TextNormalizer::prepare)
+        return PreparedText(preparedVariants, preparedVariants.first().compact)
+    }
+
+    fun similarity(left: PreparedText, right: PreparedText): Double =
+        left.variants.maxOf { leftVariant ->
+            right.variants.maxOf { rightVariant -> TextNormalizer.similarity(leftVariant, rightVariant) }
+        }
+
+    fun couldReachSimilarity(left: PreparedText, right: PreparedText, minimum: Double): Boolean =
+        left.variants.any { leftVariant ->
+            right.variants.any { rightVariant ->
+                TextNormalizer.couldReachSimilarity(leftVariant, rightVariant, minimum)
+            }
+        }
+
+    fun signature(value: String): String = prepare(value).signature
 
     fun effectiveWeight(value: String): Int = tokens(variants(value).first()).sumOf { token ->
         if (token.any(::isCjk)) token.codePointCount(0, token.length) else 1
@@ -58,4 +71,9 @@ internal object PerformanceAwareTextMatcher {
 
     private val ZERO_WIDTH = Regex("[\\u200B-\\u200D\\u2060\\uFEFF]")
     private val STUTTERED_CHARACTER = Regex("(?iu)([\\p{L}\\p{N}])(?:[-‐‑‒–—]\\1){2,}")
+
+    class PreparedText internal constructor(
+        internal val variants: List<TextNormalizer.PreparedText>,
+        val signature: String,
+    )
 }

@@ -39,28 +39,57 @@ object TextNormalizer {
     fun similarity(left: String?, right: String?): Double {
         if (left.isNullOrBlank() && right.isNullOrBlank()) return 1.0
         if (left.isNullOrBlank() || right.isNullOrBlank()) return 0.0
-        val a = normalize(left)
-        val b = normalize(right)
-        if (a == b) return 1.0
-        val compactA = a.replace(" ", "")
-        val compactB = b.replace(" ", "")
-        if (compactA == compactB) return 1.0
+        return similarity(prepare(left), prepare(right))
+    }
 
-        val edit = 1.0 - levenshtein(compactA, compactB).toDouble() / max(compactA.length, compactB.length)
-        val tokenDice = dice(a.split(' ').filter(String::isNotBlank), b.split(' ').filter(String::isNotBlank))
-        val contains = if (compactA.contains(compactB) || compactB.contains(compactA)) {
-            val short = minOf(compactA.length, compactB.length).toDouble()
-            0.78 + 0.22 * short / max(compactA.length, compactB.length)
+    fun prepare(value: String): PreparedText {
+        val normalized = normalize(value)
+        return PreparedText(
+            normalized = normalized,
+            compact = normalized.replace(" ", ""),
+            tokens = normalized.split(' ').filter(String::isNotBlank).toSet(),
+        )
+    }
+
+    fun similarity(left: PreparedText, right: PreparedText): Double {
+        if (left.normalized == right.normalized || left.compact == right.compact) return 1.0
+
+        val edit = 1.0 - levenshtein(left.compact, right.compact).toDouble() /
+            max(left.compact.length, right.compact.length)
+        val tokenDice = dice(left.tokens, right.tokens)
+        val contains = if (left.compact.contains(right.compact) || right.compact.contains(left.compact)) {
+            val short = minOf(left.compact.length, right.compact.length).toDouble()
+            0.78 + 0.22 * short / max(left.compact.length, right.compact.length)
         } else {
             0.0
         }
         return maxOf(contains, edit * 0.75 + tokenDice * 0.25).coerceIn(0.0, 1.0)
     }
 
-    private fun dice(left: List<String>, right: List<String>): Double {
+    /** Uses the edit-distance length bound to reject impossible matches without allocating its DP matrix. */
+    fun couldReachSimilarity(left: PreparedText, right: PreparedText, minimum: Double): Boolean {
+        if (left.normalized == right.normalized || left.compact == right.compact) return true
+        val lengthBound = minOf(left.compact.length, right.compact.length).toDouble() /
+            max(left.compact.length, right.compact.length)
+        val tokenDice = dice(left.tokens, right.tokens)
+        val contains = if (left.compact.contains(right.compact) || right.compact.contains(left.compact)) {
+            0.78 + 0.22 * lengthBound
+        } else {
+            0.0
+        }
+        return maxOf(contains, lengthBound * 0.75 + tokenDice * 0.25) >= minimum
+    }
+
+    class PreparedText internal constructor(
+        val normalized: String,
+        val compact: String,
+        val tokens: Set<String>,
+    )
+
+    private fun dice(left: Set<String>, right: Set<String>): Double {
         if (left.isEmpty() || right.isEmpty()) return 0.0
-        val intersection = left.toSet().intersect(right.toSet()).size
-        return 2.0 * intersection / (left.toSet().size + right.toSet().size)
+        val intersection = left.intersect(right).size
+        return 2.0 * intersection / (left.size + right.size)
     }
 
     private fun levenshtein(left: String, right: String): Int {

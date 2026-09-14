@@ -24,6 +24,8 @@ internal object CrossSourceLyricsAligner {
         }
 
         val timeOffsetMs = estimateTimeOffset(primaryLines, secondaryLines)
+        val primaryGroups = prepareGroups(primaryLines)
+        val secondaryGroups = prepareGroups(secondaryLines)
         val totals = Array(primaryLines.size + 1) {
             DoubleArray(secondaryLines.size + 1) { NEGATIVE_INFINITY }
         }
@@ -61,8 +63,8 @@ internal object CrossSourceLyricsAligner {
                 }
                 for (primaryCount in 1..minOf(MAX_GROUP_LINES, primaryLines.size - primaryIndex)) {
                     for (secondaryCount in 1..minOf(MAX_GROUP_LINES, secondaryLines.size - secondaryIndex)) {
-                        val primaryGroup = primaryLines.subList(primaryIndex, primaryIndex + primaryCount)
-                        val secondaryGroup = secondaryLines.subList(secondaryIndex, secondaryIndex + secondaryCount)
+                        val primaryGroup = primaryGroups[primaryIndex][primaryCount - 1]
+                        val secondaryGroup = secondaryGroups[secondaryIndex][secondaryCount - 1]
                         val group = scoreGroup(primaryGroup, secondaryGroup, timeOffsetMs) ?: continue
                         update(
                             primaryIndex + primaryCount,
@@ -95,45 +97,48 @@ internal object CrossSourceLyricsAligner {
     }
 
     private fun scoreGroup(
-        primary: List<IndexedValue<LyricLine>>,
-        secondary: List<IndexedValue<LyricLine>>,
+        primary: PreparedGroup,
+        secondary: PreparedGroup,
         timeOffsetMs: Long,
     ): ScoredGroup? {
-        if (!groupBoundariesAreCompatible(primary.map(IndexedValue<LyricLine>::value))) return null
-        if (!groupBoundariesAreCompatible(secondary.map(IndexedValue<LyricLine>::value))) return null
-
-        val primaryText = compactGroup(primary)
-        val secondaryText = compactGroup(secondary)
+        if (!primary.compatibleBoundaries || !secondary.compatibleBoundaries) return null
+        val primaryText = primary.preparedText.signature
+        val secondaryText = secondary.preparedText.signature
         if (primaryText.isEmpty() || secondaryText.isEmpty()) return null
 
-        val similarity = PerformanceAwareTextMatcher.similarity(
-            primary.joinToString(" ") { it.value.text },
-            secondary.joinToString(" ") { it.value.text },
-        )
         val lengthBalance = minOf(primaryText.length, secondaryText.length).toDouble() /
             maxOf(primaryText.length, secondaryText.length)
-        val timingScore = timingScore(primary, secondary, timeOffsetMs)
         val exact = primaryText == secondaryText
-        val isGrouped = primary.size > 1 || secondary.size > 1
-        val accepted = when {
-            exact -> true
-            isGrouped && similarity >= MIN_GROUP_TEXT_SIMILARITY && lengthBalance >= MIN_GROUP_LENGTH_BALANCE -> true
-            similarity >= STRONG_TEXT_SIMILARITY && lengthBalance >= MIN_STRONG_LENGTH_BALANCE -> true
-            similarity >= TIMED_TEXT_SIMILARITY && lengthBalance >= MIN_TIMED_LENGTH_BALANCE &&
-                timingScore >= MIN_SUPPORTING_TIME_SCORE -> true
-            else -> false
+        val timingScore = timingScore(primary.lines, secondary.lines, timeOffsetMs)
+        val isGrouped = primary.lines.size > 1 || secondary.lines.size > 1
+        val minimumSimilarity = when {
+            exact -> 0.0
+            lengthBalance >= MIN_TIMED_LENGTH_BALANCE && timingScore >= MIN_SUPPORTING_TIME_SCORE ->
+                TIMED_TEXT_SIMILARITY
+            lengthBalance >= MIN_STRONG_LENGTH_BALANCE -> STRONG_TEXT_SIMILARITY
+            isGrouped && lengthBalance >= MIN_GROUP_LENGTH_BALANCE -> MIN_GROUP_TEXT_SIMILARITY
+            else -> return null
         }
-        if (!accepted) return null
+        val couldReachMinimum = exact || PerformanceAwareTextMatcher.couldReachSimilarity(
+                primary.preparedText,
+                secondary.preparedText,
+                minimumSimilarity,
+            )
+        if (!couldReachMinimum) return null
+        val similarity = if (exact) 1.0 else {
+            PerformanceAwareTextMatcher.similarity(primary.preparedText, secondary.preparedText)
+        }
+        if (similarity < minimumSimilarity) return null
 
-        val groupPenalty = GROUP_SIZE_PENALTY * (primary.size + secondary.size - 2)
+        val groupPenalty = GROUP_SIZE_PENALTY * (primary.lines.size + secondary.lines.size - 2)
         val confidence = (similarity * TEXT_WEIGHT + timingScore * TIME_WEIGHT - groupPenalty)
             .coerceIn(0.0, 1.0)
         val matchedCharacters = (minOf(primaryText.length, secondaryText.length) * similarity).roundToInt()
         val group = CrossSourceAlignmentGroup(
-            primaryIndices = primary.map(IndexedValue<LyricLine>::index),
-            secondaryIndices = secondary.map(IndexedValue<LyricLine>::index),
-            primaryLines = primary.map(IndexedValue<LyricLine>::value),
-            secondaryLines = secondary.map(IndexedValue<LyricLine>::value),
+            primaryIndices = primary.lines.map(IndexedValue<LyricLine>::index),
+            secondaryIndices = secondary.lines.map(IndexedValue<LyricLine>::index),
+            primaryLines = primary.lines.map(IndexedValue<LyricLine>::value),
+            secondaryLines = secondary.lines.map(IndexedValue<LyricLine>::value),
             textSimilarity = similarity,
             timingScore = timingScore,
             confidence = confidence,
@@ -142,6 +147,18 @@ internal object CrossSourceLyricsAligner {
         val pathScore = MATCH_REWARD + similarity * TEXT_PATH_WEIGHT + timingScore * TIME_PATH_WEIGHT - groupPenalty
         return ScoredGroup(group, pathScore)
     }
+
+    private fun prepareGroups(lines: List<IndexedValue<LyricLine>>): List<List<PreparedGroup>> =
+        lines.indices.map { start ->
+            (1..minOf(MAX_GROUP_LINES, lines.size - start)).map { count ->
+                val group = lines.subList(start, start + count)
+                PreparedGroup(
+                    lines = group,
+                    preparedText = PerformanceAwareTextMatcher.prepare(group.joinToString(" ") { it.value.text }),
+                    compatibleBoundaries = groupBoundariesAreCompatible(group.map(IndexedValue<LyricLine>::value)),
+                )
+            }
+        }
 
     private fun groupBoundariesAreCompatible(lines: List<LyricLine>): Boolean {
         if (lines.size <= 1) return true
@@ -199,9 +216,6 @@ internal object CrossSourceLyricsAligner {
             .filter { (text, matches) -> text.length >= MIN_ANCHOR_CHARACTERS && matches.size == 1 }
             .mapValues { it.value.single() }
 
-    private fun compactGroup(lines: List<IndexedValue<LyricLine>>): String =
-        lines.joinToString("") { PerformanceAwareTextMatcher.signature(it.value.text) }
-
     private data class ScoredGroup(
         val alignmentGroup: CrossSourceAlignmentGroup,
         val pathScore: Double,
@@ -211,6 +225,12 @@ internal object CrossSourceLyricsAligner {
         val primaryCount: Int,
         val secondaryCount: Int,
         val group: CrossSourceAlignmentGroup? = null,
+    )
+
+    private data class PreparedGroup(
+        val lines: List<IndexedValue<LyricLine>>,
+        val preparedText: PerformanceAwareTextMatcher.PreparedText,
+        val compatibleBoundaries: Boolean,
     )
 
     private const val MAX_GROUP_LINES = 8
