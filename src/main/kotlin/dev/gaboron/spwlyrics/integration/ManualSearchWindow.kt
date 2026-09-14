@@ -65,6 +65,7 @@ object ManualSearchWindow {
         val apply = JButton("应用所选歌词").apply { isEnabled = false }
         val local = JButton("切回本地歌词")
         val automatic = JButton("恢复自动匹配")
+        val untranslated = JButton("取消补充翻译")
         val close = JButton("关闭")
 
         fun selected(): CandidateScore? {
@@ -131,13 +132,17 @@ object ManualSearchWindow {
             val success = PluginRuntime.useAutomatic()
             status.text = if (success) "已清除手动锁定，正在重新自动匹配" else "当前没有正在播放的歌曲"
         }
+        untranslated.addActionListener {
+            val success = PluginRuntime.disableTranslation()
+            status.text = if (success) "已取消插件自动补充的翻译；来源自带翻译保持不变" else "当前歌词没有可取消的补充翻译"
+        }
         close.addActionListener { dialog.dispose() }
 
         val controls = JPanel(FlowLayout(FlowLayout.LEADING)).apply {
             add(JLabel("关键词")); add(keywords); add(JLabel("来源")); add(sources); add(search)
         }
         val actions = JPanel(FlowLayout(FlowLayout.TRAILING)).apply {
-            add(status); add(automatic); add(local); add(apply); add(close)
+            add(status); add(untranslated); add(automatic); add(local); add(apply); add(close)
         }
         dialog.contentPane.add(controls, BorderLayout.NORTH)
         dialog.contentPane.add(

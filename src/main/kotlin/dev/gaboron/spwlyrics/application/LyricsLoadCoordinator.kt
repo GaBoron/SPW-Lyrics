@@ -1,5 +1,6 @@
 package dev.gaboron.spwlyrics.application
 
+import dev.gaboron.spwlyrics.codec.SpwLyricsEncoder
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.TrackQuery
 import dev.gaboron.spwlyrics.storage.LyricsCache
@@ -95,12 +96,35 @@ class LyricsLoadCoordinator(
         return true
     }
 
+    fun disableSupplementalTranslation(): Boolean {
+        val query = current.get() ?: return false
+        val cached = cache.getLyrics(query) ?: return false
+        if (!SupplementalTranslationFallback.isAvailable(cached.document)) return false
+        val override = cache.getOverride(query)
+        if (override?.local == true) return false
+        cache.putOverride(
+            query,
+            (override ?: ManualOverride(local = false)).copy(suppressSupplementalTranslation = true),
+        )
+        val document = SupplementalTranslationFallback.apply(cached.document)
+        cache.putLyrics(query, cached.copy(document = document, encoded = SpwLyricsEncoder.encode(document)))
+        notifiedFailures.remove(query.key)
+        refreshOrNotify(query)
+        return true
+    }
+
     private fun resolveAndRefresh(query: TrackQuery, manual: LyricsCandidate?, deadlineNanos: Long) {
-        val resolved = if (manual == null) resolver.resolveAutomatic(query, deadlineNanos) else resolver.fetchManual(manual)
+        val fetched = if (manual == null) resolver.resolveAutomatic(query, deadlineNanos) else resolver.fetchManual(manual)
         if (manual == null && automaticWasSuperseded(query)) return
-        if (resolved == null || System.nanoTime() >= deadlineNanos) {
+        if (fetched == null || System.nanoTime() >= deadlineNanos) {
             if (manual == null) recordAutomaticFailure(query)
             return
+        }
+        val resolved = if (cache.getOverride(query)?.suppressSupplementalTranslation == true) {
+            val document = SupplementalTranslationFallback.apply(fetched.document)
+            fetched.copy(document = document, encoded = SpwLyricsEncoder.encode(document))
+        } else {
+            fetched
         }
         cache.putLyrics(query, resolver.toCache(resolved))
         notifiedFailures.remove(query.key)

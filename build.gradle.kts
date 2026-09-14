@@ -31,16 +31,6 @@ dependencies {
 
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     implementation("com.github.houbb:opencc4j:1.14.0")
-
-    testImplementation(kotlin("test-junit5"))
-    testImplementation("com.github.Moriafly:spw-workshop-api:0.1.0-dev20") {
-        isTransitive = false
-    }
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.12.2")
-}
-
-tasks.test {
-    useJUnitPlatform()
 }
 
 val pluginClass = "dev.gaboron.spwlyrics.integration.SpwLyricsPlugin"

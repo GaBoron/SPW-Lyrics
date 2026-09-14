@@ -12,12 +12,16 @@ internal object SecondaryLyricsEnricher {
         if (projection.translations.isEmpty() && projection.romanizations.isEmpty()) return primary
         var addedTranslations = false
         var addedRomanizations = false
+        val supplementedTranslationLines = mutableListOf<Int>()
         val lines = primary.lines.mapIndexed { index, line ->
             val translation = line.translation?.takeIf(String::isNotBlank)
                 ?: projection.translations[index]
             val romanization = line.romanization?.takeIf(String::isNotBlank)
                 ?: projection.romanizations[index]
-            if (line.translation.isNullOrBlank() && translation != null) addedTranslations = true
+            if (line.translation.isNullOrBlank() && translation != null) {
+                addedTranslations = true
+                supplementedTranslationLines += index
+            }
             if (line.romanization.isNullOrBlank() && romanization != null) addedRomanizations = true
             line.copy(translation = translation, romanization = romanization)
         }
@@ -27,6 +31,9 @@ internal object SecondaryLyricsEnricher {
         if (addedTranslations) {
             metadata[TRANSLATION_SOURCE_KEY] =
                 (metadata[TRANSLATION_SOURCE_KEY].orEmpty() + secondary.source.displayName).distinct()
+            metadata[SUPPLEMENTED_TRANSLATION_LINES_KEY] =
+                (metadata[SUPPLEMENTED_TRANSLATION_LINES_KEY].orEmpty() + supplementedTranslationLines.map(Int::toString))
+                    .distinct()
         }
         if (addedRomanizations) {
             metadata[ROMANIZATION_SOURCE_KEY] =
@@ -43,6 +50,7 @@ internal object SecondaryLyricsEnricher {
     }
 
     const val TRANSLATION_SOURCE_KEY = "translationSource"
+    const val SUPPLEMENTED_TRANSLATION_LINES_KEY = "supplementedTranslationLines"
     const val ROMANIZATION_SOURCE_KEY = "romanizationSource"
     private const val MIN_TRANSLATION_COVERAGE_TENTHS = 8
 }

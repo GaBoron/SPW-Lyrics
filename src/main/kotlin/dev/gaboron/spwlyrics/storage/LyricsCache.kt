@@ -22,7 +22,7 @@ data class CachedLyrics(
     val document: LyricsDocument,
     val encoded: String,
     val savedAtEpochMs: Long,
-    val modelVersion: Int = CACHE_MODEL_VERSION,
+    val modelVersion: Int = LYRICS_CACHE_MODEL_VERSION,
     val encoderVersion: Int = SpwLyricsEncoder.VERSION,
 )
 
@@ -31,10 +31,12 @@ data class ManualOverride(
     val local: Boolean,
     val source: LyricsSource? = null,
     val candidate: LyricsCandidate? = null,
-    val modelVersion: Int = CACHE_MODEL_VERSION,
+    val suppressSupplementalTranslation: Boolean = false,
+    val modelVersion: Int = MANUAL_OVERRIDE_MODEL_VERSION,
 )
 
-const val CACHE_MODEL_VERSION = 2
+const val LYRICS_CACHE_MODEL_VERSION = 3
+const val MANUAL_OVERRIDE_MODEL_VERSION = 2
 
 interface LyricsCache {
     fun getLyrics(query: TrackQuery): CachedLyrics?
@@ -84,7 +86,7 @@ class FileLyricsCache(
     @Synchronized
     override fun getOverride(query: TrackQuery): ManualOverride? = read(layout.override(query))
         ?.let { runCatching { json.decodeFromString<ManualOverride>(it) }.getOrNull() }
-        ?.takeIf { it.modelVersion == CACHE_MODEL_VERSION }
+        ?.takeIf { it.modelVersion == MANUAL_OVERRIDE_MODEL_VERSION }
 
     @Synchronized
     override fun putOverride(query: TrackQuery, override: ManualOverride) {
@@ -99,7 +101,7 @@ class FileLyricsCache(
     }
 
     private fun validLyrics(value: CachedLyrics): Boolean =
-        value.modelVersion == CACHE_MODEL_VERSION && value.encoderVersion == SpwLyricsEncoder.VERSION &&
+        value.modelVersion == LYRICS_CACHE_MODEL_VERSION && value.encoderVersion == SpwLyricsEncoder.VERSION &&
             !expired(value.savedAtEpochMs, successTtl)
 
     private fun expired(epochMs: Long, ttl: Duration): Boolean =
