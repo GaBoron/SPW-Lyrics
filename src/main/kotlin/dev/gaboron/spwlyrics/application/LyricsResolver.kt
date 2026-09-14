@@ -34,15 +34,25 @@ class LyricsResolver(
     private val providerTasks = ProviderTaskPool()
     private val translationSources = TranslationSourceResolver(this.providers, providerTasks)
 
-    fun resolveAutomatic(query: TrackQuery, deadlineNanos: Long = Long.MAX_VALUE): ResolvedLyrics? {
+    fun resolveAutomatic(query: TrackQuery, deadlineNanos: Long = Long.MAX_VALUE): ResolvedLyrics? =
+        resolveAutomatic(query, deadlineNanos, LyricsQuality.PLAIN)
+
+    fun resolveKaraokeTimed(query: TrackQuery, deadlineNanos: Long): ResolvedLyrics? =
+        resolveAutomatic(query, deadlineNanos, LyricsQuality.WORD_SYNCED)
+
+    private fun resolveAutomatic(
+        query: TrackQuery,
+        deadlineNanos: Long,
+        minimumQuality: LyricsQuality,
+    ): ResolvedLyrics? {
         val selected = orderedSources.filter { it != LyricsSource.LOCAL }.mapNotNull(providers::get)
         val completed = providerTasks.collect(
-            tasks = selected.map { provider -> { resolveProvider(provider, query, deadlineNanos) } },
+            tasks = selected.map { provider -> { resolveProvider(provider, query, deadlineNanos, minimumQuality) } },
             deadlineNanos = deadlineNanos,
         ) { results, pending ->
-            val bestWord = results.filter { it.value.document.quality == LyricsQuality.WORD_SYNCED }
+            val bestCharacter = results.filter { it.value.document.quality == LyricsQuality.CHARACTER_SYNCED }
                 .minByOrNull(IndexedValue<FetchedLyrics>::index)
-            bestWord != null && pending.none { it < bestWord.index }
+            bestCharacter != null && pending.none { it < bestCharacter.index }
         }
         val winner = completed.map(IndexedValue<FetchedLyrics>::value).minWithOrNull(
             compareByDescending<FetchedLyrics> { it.document.quality.rank }
@@ -122,10 +132,13 @@ class LyricsResolver(
         provider: LyricsProvider,
         query: TrackQuery,
         deadlineNanos: Long,
+        minimumQuality: LyricsQuality,
     ): FetchedLyrics? {
         val winner = findWinner(provider, query, deadlineNanos) ?: return null
         if (System.nanoTime() >= deadlineNanos) return null
-        val document = fetchDocument(provider, winner) ?: return null
+        val document = fetchDocument(provider, winner)
+            ?.takeIf { it.quality.rank >= minimumQuality.rank }
+            ?: return null
         return FetchedLyrics(winner, document)
     }
 

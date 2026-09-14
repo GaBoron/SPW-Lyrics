@@ -3,11 +3,12 @@ package dev.gaboron.spwlyrics.application
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
-/** Prevents repeated cache callbacks from starting the same failed background lookup in a tight loop. */
-internal class TranslationAttemptGate(
-    private val retryIntervalNanos: Long = TimeUnit.SECONDS.toNanos(DEFAULT_RETRY_INTERVAL_SECONDS),
+/** Prevents repeated playback callbacks from starting the same background operation in a tight loop. */
+internal class BackgroundAttemptGate(
+    retryIntervalSeconds: Long,
     private val nanoTime: () -> Long = System::nanoTime,
 ) {
+    private val retryIntervalNanos = TimeUnit.SECONDS.toNanos(retryIntervalSeconds)
     private val lastAttempts = ConcurrentHashMap<String, Long>()
 
     fun allow(key: String, force: Boolean): Boolean {
@@ -26,9 +27,5 @@ internal class TranslationAttemptGate(
 
     fun clear(key: String) {
         lastAttempts.remove(key)
-    }
-
-    private companion object {
-        const val DEFAULT_RETRY_INTERVAL_SECONDS = 30L
     }
 }

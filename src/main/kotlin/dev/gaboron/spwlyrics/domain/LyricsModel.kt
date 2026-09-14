@@ -16,6 +16,7 @@ enum class LyricsQuality(val rank: Int) {
     PLAIN(0),
     LINE_SYNCED(1),
     WORD_SYNCED(2),
+    CHARACTER_SYNCED(3),
 }
 
 @Serializable
@@ -47,21 +48,5 @@ data class LyricsDocument(
     val metadata: Map<String, List<String>> = emptyMap(),
 ) {
     val quality: LyricsQuality
-        get() {
-            val nonEmpty = lines.filter { it.text.isNotBlank() }
-            if (nonEmpty.isEmpty()) return LyricsQuality.PLAIN
-            val timed = nonEmpty.filter { it.startMs != null }
-            if (timed.isEmpty()) return LyricsQuality.PLAIN
-
-            val wordTimed = timed.count { line ->
-                line.words.isNotEmpty() &&
-                    line.words.all { it.startMs <= it.endMs } &&
-                    line.words.zipWithNext().all { (left, right) ->
-                        left.startMs <= right.startMs && left.endMs <= right.endMs
-                    }
-            }
-            return if (wordTimed.toDouble() / timed.size >= 0.8) {
-                LyricsQuality.WORD_SYNCED
-            } else LyricsQuality.LINE_SYNCED
-        }
+        get() = LyricsGranularityClassifier.classify(lines, metadata)
 }

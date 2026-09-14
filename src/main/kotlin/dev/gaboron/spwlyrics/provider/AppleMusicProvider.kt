@@ -5,6 +5,7 @@ import dev.gaboron.spwlyrics.codec.LyricsScriptConverter
 import dev.gaboron.spwlyrics.domain.CandidateEvidence
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsDocument
+import dev.gaboron.spwlyrics.domain.LyricsGranularityClassifier
 import dev.gaboron.spwlyrics.domain.LyricsQuality
 import dev.gaboron.spwlyrics.domain.LyricsSource
 import dev.gaboron.spwlyrics.domain.TrackQuery
@@ -61,19 +62,28 @@ class AppleMusicProvider(private val http: ProviderHttp) : LyricsProvider {
                 album = result.string("album_name").orEmpty(),
                 durationMs = result.long("duration")?.times(1_000),
                 qualityHint = when (timingType.lowercase()) {
-                    "word", "syllable" -> LyricsQuality.WORD_SYNCED
+                    "syllable" -> LyricsQuality.CHARACTER_SYNCED
+                    "word" -> LyricsQuality.WORD_SYNCED
                     "line" -> LyricsQuality.LINE_SYNCED
                     else -> null
                 },
                 externalIds = result.string("isrc")?.let { mapOf("isrc" to it) }.orEmpty(),
-                context = mapOf("url" to lyricsUrl),
+                context = mapOf("url" to lyricsUrl, "timingType" to timingType),
             )
         }.take(limit)
     }
 
     override fun fetch(candidate: LyricsCandidate): LyricsDocument? = runCatching {
         val url = candidate.context["url"]?.takeIf(::isTrustedLyricsUrl) ?: return@runCatching null
-        LyricsScriptConverter.toSimplifiedChinese(TtmlCodec().parse(http.get(url), source))
+        val document = LyricsScriptConverter.toSimplifiedChinese(TtmlCodec().parse(http.get(url), source))
+        val granularity = when (candidate.context["timingType"]?.lowercase()) {
+            "syllable" -> LyricsGranularityClassifier.CHARACTER_METADATA_VALUE
+            "word" -> LyricsGranularityClassifier.WORD_METADATA_VALUE
+            else -> null
+        }
+        if (granularity == null) document else document.copy(
+            metadata = document.metadata + (LyricsGranularityClassifier.TIMING_GRANULARITY_KEY to listOf(granularity)),
+        )
     }.getOrNull()?.takeIf { it.lines.isNotEmpty() }
 
     private fun automaticSearchRequests(query: TrackQuery): List<SearchRequest> {

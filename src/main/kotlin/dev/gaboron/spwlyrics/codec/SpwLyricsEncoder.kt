@@ -34,7 +34,7 @@ object SpwLyricsEncoder {
                 .forEach { line ->
                     val originalStart = line.startMs?.coerceAtLeast(0) ?: return@forEach
                     val start = displayStart(originalStart, line.effectiveEndMs(), occupiedStarts)
-                    val main = if (document.quality == LyricsQuality.WORD_SYNCED && line.words.isNotEmpty()) {
+                    val main = if (document.quality.rank >= LyricsQuality.WORD_SYNCED.rank && line.words.isNotEmpty()) {
                         encodeWords(line, start)
                     } else {
                         timestamp(start) + line.text + line.effectiveEndMs()?.takeIf { it > start }?.let(::timestamp).orEmpty()
