@@ -4,12 +4,14 @@ import dev.gaboron.spwlyrics.codec.SpwLyricsEncoder
 import dev.gaboron.spwlyrics.domain.CandidateScore
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsDocument
+import dev.gaboron.spwlyrics.domain.LyricsQuality
 import dev.gaboron.spwlyrics.domain.LyricsSource
 import dev.gaboron.spwlyrics.domain.MatchEngine
 import dev.gaboron.spwlyrics.domain.TrackQuery
 import dev.gaboron.spwlyrics.provider.LyricsProvider
 import dev.gaboron.spwlyrics.storage.CachedLyrics
 import java.time.Clock
+import java.util.concurrent.TimeUnit
 
 data class ResolvedLyrics(
     val candidate: LyricsCandidate,
@@ -17,30 +19,35 @@ data class ResolvedLyrics(
     val encoded: String,
 )
 
+internal data class FetchedLyrics(
+    val candidate: LyricsCandidate,
+    val document: LyricsDocument,
+)
+
 class LyricsResolver(
     providers: List<LyricsProvider>,
     private val clock: Clock = Clock.systemUTC(),
-) {
+) : AutoCloseable {
     private val providers = providers.associateBy(LyricsProvider::source)
     private val orderedSources = LyricsSource.entries.sortedBy(LyricsSource::priority)
     private val manualCandidateInspector = ManualCandidateInspector()
+    private val providerTasks = ProviderTaskPool()
 
     fun resolveAutomatic(query: TrackQuery, deadlineNanos: Long = Long.MAX_VALUE): ResolvedLyrics? {
-        val selection = AutomaticLyricsSelection()
-        val fetchedBySource = linkedMapOf<LyricsSource, LyricsDocument>()
-        for (source in orderedSources) {
-            if (System.nanoTime() >= deadlineNanos) break
-            if (source == LyricsSource.LOCAL) break
-            val provider = providers[source] ?: continue
-            val winner = findWinner(provider, query, deadlineNanos) ?: continue
-            if (System.nanoTime() >= deadlineNanos) break
-            val document = fetchDocument(provider, winner) ?: continue
-            fetchedBySource[source] = document
-            selection.consider(FetchedLyrics(winner, document))?.let { fetched ->
-                return finalize(fetched, query, deadlineNanos, fetchedBySource)
-            }
+        val selected = orderedSources.filter { it != LyricsSource.LOCAL }.mapNotNull(providers::get)
+        val completed = providerTasks.collect(
+            tasks = selected.map { provider -> { resolveProvider(provider, query, deadlineNanos) } },
+            deadlineNanos = deadlineNanos,
+        ) { results, pending ->
+            val bestWord = results.filter { it.value.document.quality == LyricsQuality.WORD_SYNCED }
+                .minByOrNull(IndexedValue<FetchedLyrics>::index)
+            bestWord != null && pending.none { it < bestWord.index }
         }
-        return selection.fallback()?.let { finalize(it, query, deadlineNanos, fetchedBySource) }
+        val winner = completed.map(IndexedValue<FetchedLyrics>::value).minWithOrNull(
+            compareByDescending<FetchedLyrics> { it.document.quality.rank }
+                .thenBy { it.candidate.source.priority },
+        ) ?: return null
+        return encode(winner)
     }
 
     fun searchManual(query: TrackQuery, keywords: String, source: LyricsSource?): List<CandidateScore> {
@@ -49,8 +56,14 @@ class LyricsResolver(
         } else {
             listOfNotNull(providers[source])
         }
-        val requests = selected.flatMap { provider ->
-            searchManual(provider, query, keywords).map { ManualCandidateRequest(provider, it) }
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(MANUAL_SEARCH_TIMEOUT_MILLIS)
+        val searched = providerTasks.collect(
+            selected.map { provider -> { searchManual(provider, query, keywords) } },
+            deadline,
+        )
+        val requests = searched.flatMap { result ->
+            val provider = selected[result.index]
+            result.value.map { ManualCandidateRequest(provider, it) }
         }
         return manualCandidateInspector.inspect(requests)
             .map { MatchEngine.score(query, it) }
@@ -70,7 +83,19 @@ class LyricsResolver(
             externalIds = candidate.externalIds,
         )
         val document = manualCandidateInspector.cached(candidate) ?: fetchDocument(provider, candidate) ?: return@let null
-        finalize(FetchedLyrics(candidate, document), query)
+        encode(FetchedLyrics(candidate, document))
+    }
+
+    fun enrichTranslation(
+        resolved: ResolvedLyrics,
+        query: TrackQuery,
+        deadlineNanos: Long,
+    ): ResolvedLyrics {
+        if (resolved.candidate.source !in PRIMARY_WORD_SOURCES) return resolved
+        val document = enrichFromOtherSources(resolved.document, resolved.candidate, query, deadlineNanos)
+        if (document == resolved.document) return resolved
+        val encoded = SpwLyricsEncoder.encode(document).takeIf(String::isNotBlank) ?: return resolved
+        return resolved.copy(document = document, encoded = encoded)
     }
 
     fun toCache(resolved: ResolvedLyrics): CachedLyrics = CachedLyrics(
@@ -85,19 +110,19 @@ class LyricsResolver(
     private fun searchManual(provider: LyricsProvider, query: TrackQuery, keywords: String): List<LyricsCandidate> =
         runCatching { provider.searchManual(query, keywords, MANUAL_RESULTS_PER_SOURCE) }.getOrDefault(emptyList())
 
-    private fun finalize(
-        fetched: FetchedLyrics,
+    private fun encode(fetched: FetchedLyrics): ResolvedLyrics? =
+        SpwLyricsEncoder.encode(fetched.document).takeIf(String::isNotBlank)
+            ?.let { ResolvedLyrics(fetched.candidate, fetched.document, it) }
+
+    private fun resolveProvider(
+        provider: LyricsProvider,
         query: TrackQuery,
-        deadlineNanos: Long = Long.MAX_VALUE,
-        fetchedBySource: Map<LyricsSource, LyricsDocument> = emptyMap(),
-    ): ResolvedLyrics? {
-        val document = if (fetched.candidate.source in PRIMARY_WORD_SOURCES) {
-            enrichFromOtherSources(fetched.document, fetched.candidate, query, deadlineNanos, fetchedBySource)
-        } else {
-            fetched.document
-        }
-        val encoded = SpwLyricsEncoder.encode(document).takeIf(String::isNotBlank) ?: return null
-        return ResolvedLyrics(fetched.candidate, document, encoded)
+        deadlineNanos: Long,
+    ): FetchedLyrics? {
+        val winner = findWinner(provider, query, deadlineNanos) ?: return null
+        if (System.nanoTime() >= deadlineNanos) return null
+        val document = fetchDocument(provider, winner) ?: return null
+        return FetchedLyrics(winner, document)
     }
 
     private fun enrichFromOtherSources(
@@ -105,30 +130,29 @@ class LyricsResolver(
         primaryCandidate: LyricsCandidate,
         query: TrackQuery,
         deadlineNanos: Long,
-        fetchedBySource: Map<LyricsSource, LyricsDocument>,
     ): LyricsDocument {
         if (!SecondaryLyricsEnricher.needsTranslation(primary)) return primary
         var enriched = primary
         val lookupQueries = TranslationLookupPlan.queries(query, primaryCandidate)
-        for (source in TRANSLATION_SOURCES) {
-            if (System.nanoTime() >= deadlineNanos) break
-            val provider = providers[source] ?: continue
-            val next = fetchedBySource[source]
-                ?.let { SecondaryLyricsEnricher.enrich(enriched, it).takeIf { result -> result != enriched } }
-                ?: findTranslationEnrichment(provider, lookupQueries, enriched, deadlineNanos)
-                ?: continue
-            enriched = next
+        val selected = TRANSLATION_SOURCES.mapNotNull(providers::get)
+        val matches = providerTasks.collect(
+            selected.map { provider -> { findTranslationSource(provider, lookupQueries, primary, deadlineNanos) } },
+            deadlineNanos,
+        )
+        for (result in matches) {
+            val match = result.value
+            enriched = SecondaryLyricsEnricher.enrich(enriched, match.document, match.alignment)
             if (!SecondaryLyricsEnricher.needsTranslation(enriched)) break
         }
         return enriched
     }
 
-    private fun findTranslationEnrichment(
+    private fun findTranslationSource(
         provider: LyricsProvider,
         lookupQueries: List<TrackQuery>,
         primary: LyricsDocument,
         deadlineNanos: Long,
-    ): LyricsDocument? {
+    ): TranslationSourceMatch? {
         val candidates = linkedMapOf<String, LyricsCandidate>()
         val attemptedDownloads = mutableSetOf<String>()
         val downloaded = mutableMapOf<String, LyricsDocument>()
@@ -139,11 +163,12 @@ class LyricsResolver(
             return fetchDocument(provider, candidate)?.also { downloaded[candidate.remoteId] = it }
         }
 
-        fun enrich(candidate: LyricsCandidate, requireRecordingEvidence: Boolean): LyricsDocument? {
+        fun match(candidate: LyricsCandidate, requireRecordingEvidence: Boolean): TranslationSourceMatch? {
             val secondary = fetchOnce(candidate) ?: return null
             val alignment = CrossSourceLyricsAligner.align(primary, secondary)
             if (requireRecordingEvidence && !alignment.provesSameRecording) return null
-            return SecondaryLyricsEnricher.enrich(primary, secondary, alignment).takeIf { it != primary }
+            if (SecondaryLyricsEnricher.enrich(primary, secondary, alignment) == primary) return null
+            return TranslationSourceMatch(secondary, alignment)
         }
 
         for (lookupQuery in lookupQueries) {
@@ -155,7 +180,7 @@ class LyricsResolver(
                     candidates.values.toList(),
                     TranslationMatchPolicy::accepts,
                 ).winner?.candidate
-                if (winner != null) enrich(winner, requireRecordingEvidence = false)?.let { return it }
+                if (winner != null) match(winner, requireRecordingEvidence = false)?.let { return it }
             }
         }
 
@@ -166,9 +191,13 @@ class LyricsResolver(
             .take(MAX_TRANSLATION_CANDIDATES_TO_VERIFY)
         for (candidate in verifiable) {
             if (System.nanoTime() >= deadlineNanos) return null
-            enrich(candidate.candidate, requireRecordingEvidence = true)?.let { return it }
+            match(candidate.candidate, requireRecordingEvidence = true)?.let { return it }
         }
         return null
+    }
+
+    override fun close() {
+        providerTasks.close()
     }
 
     private fun fetchDocument(provider: LyricsProvider, candidate: LyricsCandidate): LyricsDocument? =
@@ -194,7 +223,13 @@ class LyricsResolver(
         val PRIMARY_WORD_SOURCES = setOf(LyricsSource.AMLL, LyricsSource.APPLE_MUSIC)
         val TRANSLATION_SOURCES = listOf(LyricsSource.QQ, LyricsSource.KUGOU, LyricsSource.NETEASE)
         const val MANUAL_RESULTS_PER_SOURCE = 8
+        const val MANUAL_SEARCH_TIMEOUT_MILLIS = 6_000L
         const val TRANSLATION_SEARCH_QUERIES_PER_METADATA = 3
         const val MAX_TRANSLATION_CANDIDATES_TO_VERIFY = 2
     }
 }
+
+private data class TranslationSourceMatch(
+    val document: LyricsDocument,
+    val alignment: CrossSourceAlignment,
+)

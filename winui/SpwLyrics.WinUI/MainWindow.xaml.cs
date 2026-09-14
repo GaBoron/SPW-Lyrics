@@ -24,6 +24,8 @@ public sealed partial class MainWindow : Window
         StartupDiagnostics.Stage("MainWindow.SetIcon.complete");
         AppWindow.Resize(new SizeInt32(1180, 760));
         StartupDiagnostics.Stage("MainWindow.Resize.complete");
+        WindowPlacementStore.Restore(AppWindow);
+        Closed += (_, _) => WindowPlacementStore.Save(AppWindow);
 
         // Navigate the root frame to the main page on startup.
         StartupDiagnostics.Stage($"MainWindow.Navigate.complete={RootFrame.Navigate(typeof(MainPage))}");

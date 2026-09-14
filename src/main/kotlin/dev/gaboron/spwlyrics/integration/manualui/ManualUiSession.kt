@@ -52,7 +52,7 @@ class ManualUiSession(
                 title = query.title,
                 artists = query.artists.joinToString(" / "),
                 album = query.album,
-                suggestedKeywords = query.searchQueries().firstOrNull().orEmpty(),
+                suggestedKeywords = query.title,
             ),
             sources = sources(),
         )

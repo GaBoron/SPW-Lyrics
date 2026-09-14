@@ -36,10 +36,14 @@ class AppleMusicProvider(private val http: ProviderHttp) : LyricsProvider {
     }
 
     override fun searchManual(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> {
-        return manualSearchRequests(query, keywords, limit)
-            .flatMap { request -> runCatching { search(request, limit) }.getOrDefault(emptyList()) }
-            .distinctBy(LyricsCandidate::remoteId)
-            .take(limit.coerceAtMost(MAX_MANUAL_RESULTS))
+        val results = linkedMapOf<String, LyricsCandidate>()
+        for (request in manualSearchRequests(query, keywords, limit).take(MAX_MANUAL_REQUESTS)) {
+            if (Thread.currentThread().isInterrupted) break
+            runCatching { search(request, limit) }.getOrDefault(emptyList())
+                .forEach { candidate -> results.putIfAbsent(candidate.remoteId, candidate) }
+            if (results.size >= limit.coerceAtMost(MAX_MANUAL_RESULTS)) break
+        }
+        return results.values.take(limit.coerceAtMost(MAX_MANUAL_RESULTS))
     }
 
     private fun search(request: SearchRequest, limit: Int): List<LyricsCandidate> {
@@ -130,6 +134,7 @@ class AppleMusicProvider(private val http: ProviderHttp) : LyricsProvider {
         private const val MAX_AUTOMATIC_CATALOG_RESULTS = 4
         private const val MAX_CATALOG_RESULTS = 6
         private const val MAX_MANUAL_RESULTS = 8
+        private const val MAX_MANUAL_REQUESTS = 4
         private const val MAX_MANUAL_PARTS = 8
     }
 

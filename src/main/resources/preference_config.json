@@ -22,6 +22,13 @@
         },
         {
           "type": "button",
+          "title": "打开手动搜索",
+          "summary": "无需快捷键，直接打开当前歌曲的手动搜索窗口",
+          "arrow_type": "none",
+          "on_click": "dev.gaboron.spwlyrics.integration.SpwLyricsActions.openManualSearch"
+        },
+        {
+          "type": "button",
           "title": "查看本地缓存文件夹",
           "summary": "在文件资源管理器中打开已缓存的歌词",
           "arrow_type": "none",

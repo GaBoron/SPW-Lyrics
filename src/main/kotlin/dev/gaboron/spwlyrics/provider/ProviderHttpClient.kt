@@ -16,7 +16,7 @@ interface ProviderHttp {
 
 class ProviderHttpClient(
     connectTimeout: Duration = Duration.ofSeconds(2),
-    private val requestTimeout: Duration = Duration.ofSeconds(3),
+    private val requestTimeout: Duration = Duration.ofSeconds(5),
 ) : ProviderHttp {
     private val connectTimeoutMs = connectTimeout.toTimeoutMillis()
     private val readTimeoutMs = requestTimeout.toTimeoutMillis()
@@ -58,6 +58,7 @@ class ProviderHttpClient(
         body: ByteArray?,
         headers: Map<String, String>,
     ): String {
+        if (Thread.currentThread().isInterrupted) throw InterruptedException("Provider request cancelled")
         val connection = URI.create(url).toURL().openConnection() as HttpURLConnection
         try {
             connection.requestMethod = method

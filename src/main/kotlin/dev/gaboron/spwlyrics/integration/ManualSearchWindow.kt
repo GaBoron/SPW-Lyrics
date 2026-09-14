@@ -45,10 +45,11 @@ object ManualSearchWindow {
         activeDialog = dialog
         dialog.addWindowListener(object : WindowAdapter() {
             override fun windowClosed(event: WindowEvent) {
+                ManualWindowPlacement.save(dialog)
                 if (activeDialog === dialog) activeDialog = null
             }
         })
-        val keywords = JTextField(query.searchQueries().firstOrNull().orEmpty(), 42)
+        val keywords = JTextField(query.title, 42)
         val sources = JComboBox(sourceChoices.map { it?.displayName ?: "全部在线来源" }.toTypedArray())
         val search = JButton("搜索")
         val status = JLabel("可修改关键词并选择来源")
@@ -153,7 +154,8 @@ object ManualSearchWindow {
         )
         dialog.contentPane.add(actions, BorderLayout.SOUTH)
         dialog.minimumSize = Dimension(920, 620)
-        dialog.setLocationRelativeTo(null)
+        dialog.size = Dimension(920, 620)
+        if (!ManualWindowPlacement.restore(dialog)) dialog.setLocationRelativeTo(null)
         runSearch()
         dialog.isVisible = true
     }

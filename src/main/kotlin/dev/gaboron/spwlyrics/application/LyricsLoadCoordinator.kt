@@ -46,13 +46,13 @@ class LyricsLoadCoordinator(
             return it.encoded
         }
         inFlight.computeIfAbsent(query.key) {
-            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(AUTOMATIC_RESOLUTION_TIMEOUT_SECONDS)
-            CompletableFuture.runAsync({ resolveAndRefresh(query, override?.candidate, deadline) }, executor)
-                .orTimeout(AUTOMATIC_RESOLUTION_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-                .whenComplete { _, error ->
-                    if (error != null && override?.candidate == null) recordAutomaticFailure(query)
-                    inFlight.remove(query.key)
-                }
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(MAIN_RESOLUTION_TIMEOUT_SECONDS)
+            val future = CompletableFuture.runAsync({ resolveAndRefresh(query, override?.candidate, deadline) }, executor)
+            future.whenComplete { _, error ->
+                if (error != null && override?.candidate == null) recordAutomaticFailure(query)
+                inFlight.remove(query.key, future)
+            }
+            future
         }
         return null
     }
@@ -69,6 +69,7 @@ class LyricsLoadCoordinator(
         cache.putLyrics(query, resolver.toCache(resolved))
         notifiedFailures.remove(query.key)
         refreshOrNotify(query)
+        startTranslationEnrichment(query, resolved)
         return true
     }
 
@@ -85,9 +86,8 @@ class LyricsLoadCoordinator(
         cache.removeOverride(query)
         cache.removeLyrics(query)
         notifiedFailures.remove(query.key)
-        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(AUTOMATIC_RESOLUTION_TIMEOUT_SECONDS)
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(MAIN_RESOLUTION_TIMEOUT_SECONDS)
         val future = CompletableFuture.runAsync({ resolveAndRefresh(query, null, deadline) }, executor)
-            .orTimeout(AUTOMATIC_RESOLUTION_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         inFlight[query.key] = future
         future.whenComplete { _, error ->
             if (error != null) recordAutomaticFailure(query)
@@ -116,19 +116,39 @@ class LyricsLoadCoordinator(
     private fun resolveAndRefresh(query: TrackQuery, manual: LyricsCandidate?, deadlineNanos: Long) {
         val fetched = if (manual == null) resolver.resolveAutomatic(query, deadlineNanos) else resolver.fetchManual(manual)
         if (manual == null && automaticWasSuperseded(query)) return
-        if (fetched == null || System.nanoTime() >= deadlineNanos) {
+        if (fetched == null) {
             if (manual == null) recordAutomaticFailure(query)
             return
         }
-        val resolved = if (cache.getOverride(query)?.suppressSupplementalTranslation == true) {
-            val document = SupplementalTranslationFallback.apply(fetched.document)
-            fetched.copy(document = document, encoded = SpwLyricsEncoder.encode(document))
-        } else {
-            fetched
-        }
+        val resolved = applyTranslationPreference(query, fetched)
         cache.putLyrics(query, resolver.toCache(resolved))
         notifiedFailures.remove(query.key)
         if (current.get()?.key == query.key) refreshOrNotify(query)
+        enrichAndRefresh(query, resolved, manual == null)
+    }
+
+    private fun startTranslationEnrichment(query: TrackQuery, resolved: ResolvedLyrics) {
+        inFlight.remove(query.key)?.cancel(true)
+        val future = CompletableFuture.runAsync({ enrichAndRefresh(query, resolved, automatic = false) }, executor)
+        inFlight[query.key] = future
+        future.whenComplete { _, _ -> inFlight.remove(query.key, future) }
+    }
+
+    private fun enrichAndRefresh(query: TrackQuery, resolved: ResolvedLyrics, automatic: Boolean) {
+        if (automatic && automaticWasSuperseded(query)) return
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TRANSLATION_RESOLUTION_TIMEOUT_SECONDS)
+        val enriched = applyTranslationPreference(query, resolver.enrichTranslation(resolved, query, deadline))
+        if (enriched == resolved || automatic && automaticWasSuperseded(query)) return
+        cache.putLyrics(query, resolver.toCache(enriched))
+        if (current.get()?.key == query.key) refreshOrNotify(query)
+    }
+
+    private fun applyTranslationPreference(query: TrackQuery, resolved: ResolvedLyrics): ResolvedLyrics {
+        if (cache.getOverride(query)?.suppressSupplementalTranslation != true) return resolved
+        val document = SupplementalTranslationFallback.apply(resolved.document)
+        return if (document == resolved.document) resolved else {
+            resolved.copy(document = document, encoded = SpwLyricsEncoder.encode(document))
+        }
     }
 
     private fun recordAutomaticFailure(query: TrackQuery) {
@@ -141,7 +161,7 @@ class LyricsLoadCoordinator(
 
     private fun notifyAutomaticFailure(query: TrackQuery) {
         if (current.get()?.key == query.key && notifiedFailures.add(query.key)) {
-            notify("自动加载歌词失败；请确保设置中的“通过快捷键开启”已打开，然后在 SPW 前台按 Ctrl+Shift+M 手动匹配。")
+            notify("自动加载歌词失败；可在插件设置中打开手动搜索，或启用快捷键后在 SPW 前台按 Ctrl+Shift+M。")
         }
     }
 
@@ -154,9 +174,11 @@ class LyricsLoadCoordinator(
         current.set(null)
         inFlight.values.forEach { it.cancel(true) }
         executor.shutdownNow()
+        resolver.close()
     }
 
     private companion object {
-        const val AUTOMATIC_RESOLUTION_TIMEOUT_SECONDS = 15L
+        const val MAIN_RESOLUTION_TIMEOUT_SECONDS = 10L
+        const val TRANSLATION_RESOLUTION_TIMEOUT_SECONDS = 10L
     }
 }
