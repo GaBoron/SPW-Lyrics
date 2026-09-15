@@ -27,6 +27,7 @@ class LyricsLoadCoordinator(
         Thread(task, "spw-lyrics-worker").apply { isDaemon = true }
     },
 ) : AutoCloseable {
+    private val refreshRetrier = LyricsRefreshRetrier(refreshBridge, notify)
     private val current = AtomicReference<TrackQuery?>()
     private val inFlight = ConcurrentHashMap<String, CompletableFuture<*>>()
     private val activeAutomaticLoads = ConcurrentHashMap<String, Any>()
@@ -309,8 +310,7 @@ class LyricsLoadCoordinator(
     }
 
     private fun refreshOrNotify(query: TrackQuery) {
-        if (current.get()?.key != query.key) return
-        if (!refreshBridge.reloadCurrentLyrics()) notify("歌词已缓存；当前 SPW 版本无法自动刷新，请重新选曲。")
+        refreshRetrier.refresh { current.get()?.key == query.key }
     }
 
     override fun close() {

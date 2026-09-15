@@ -76,8 +76,7 @@ class ManualUiSession(
                 album = candidate.album,
                 duration = candidate.durationMs?.let { "%d:%02d".format(it / 60_000, it / 1_000 % 60) }.orEmpty(),
                 quality = when (candidate.qualityHint) {
-                    LyricsQuality.CHARACTER_SYNCED -> "逐字"
-                    LyricsQuality.WORD_SYNCED -> "逐词"
+                    LyricsQuality.KARAOKE_SYNCED -> "逐字"
                     LyricsQuality.LINE_SYNCED -> "逐行"
                     LyricsQuality.PLAIN -> "普通"
                     null -> "未知"

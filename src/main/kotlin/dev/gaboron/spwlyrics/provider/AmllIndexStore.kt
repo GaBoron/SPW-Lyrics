@@ -159,7 +159,7 @@ private data class AmllRecord(
         title = title,
         artists = artists,
         album = album,
-        qualityHint = LyricsQuality.WORD_SYNCED,
+        qualityHint = LyricsQuality.KARAOKE_SYNCED,
         externalIds = ids.mapValues { it.value.firstOrNull().orEmpty() },
         context = mapOf("url" to "${AmllProvider.RAW_BASE}/$id.ttml"),
     )

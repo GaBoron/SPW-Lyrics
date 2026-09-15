@@ -43,9 +43,6 @@ class LyricsResolver(
     fun resolveAutomaticFully(query: TrackQuery): ResolvedLyrics? =
         resolveAutomatic(query, System.nanoTime(), LyricsQuality.PLAIN) {}
 
-    fun resolveKaraokeTimed(query: TrackQuery, deadlineNanos: Long): ResolvedLyrics? =
-        resolveAutomatic(query, deadlineNanos, LyricsQuality.WORD_SYNCED) {}
-
     private fun resolveAutomatic(
         query: TrackQuery,
         snapshotDeadlineNanos: Long,
@@ -57,7 +54,7 @@ class LyricsResolver(
             tasks = selected.map { provider -> { resolveProvider(provider, query, Long.MAX_VALUE, minimumQuality) } },
             snapshotDeadlineNanos = snapshotDeadlineNanos,
             snapshotWhen = { results, pending -> hasHighestAvailableSource(results, pending) },
-            stopWhen = { results, pending -> hasUnbeatableCharacterResult(results, pending) },
+            stopWhen = { results, pending -> hasUnbeatableKaraokeResult(results, pending) },
         ) { snapshot ->
             selectAndEncode(snapshot)?.let(onSnapshot)
         }
@@ -143,13 +140,13 @@ class LyricsResolver(
     private fun selectAndEncode(completed: List<IndexedValue<FetchedLyrics>>): ResolvedLyrics? =
         LyricsSelectionPolicy.select(completed.map(IndexedValue<FetchedLyrics>::value))?.let(::encode)
 
-    private fun hasUnbeatableCharacterResult(
+    private fun hasUnbeatableKaraokeResult(
         completed: List<IndexedValue<FetchedLyrics>>,
         pending: Set<Int>,
     ): Boolean {
-        val bestCharacter = completed.filter { it.value.document.quality == LyricsQuality.CHARACTER_SYNCED }
+        val bestKaraoke = completed.filter { it.value.document.quality == LyricsQuality.KARAOKE_SYNCED }
             .minByOrNull(IndexedValue<FetchedLyrics>::index)
-        return bestCharacter != null && pending.none { it < bestCharacter.index }
+        return bestKaraoke != null && pending.none { it < bestKaraoke.index }
     }
 
     private fun hasHighestAvailableSource(

@@ -185,8 +185,7 @@ private class CandidateTableModel : AbstractTableModel() {
             4 -> candidate.durationMs?.let { "%d:%02d".format(it / 60_000, it / 1_000 % 60) }.orEmpty()
             5 -> candidate.qualityHint?.let {
                 when (it) {
-                    dev.gaboron.spwlyrics.domain.LyricsQuality.CHARACTER_SYNCED -> "逐字"
-                    dev.gaboron.spwlyrics.domain.LyricsQuality.WORD_SYNCED -> "逐词"
+                    dev.gaboron.spwlyrics.domain.LyricsQuality.KARAOKE_SYNCED -> "逐字"
                     dev.gaboron.spwlyrics.domain.LyricsQuality.LINE_SYNCED -> "逐行"
                     dev.gaboron.spwlyrics.domain.LyricsQuality.PLAIN -> "普通"
                 }

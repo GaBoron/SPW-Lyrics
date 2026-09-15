@@ -24,7 +24,7 @@ class KugouMusicProvider(private val http: ProviderHttp) : LyricsProvider {
                 artists = TrackQuery.splitArtists(song.string("SingerName").orEmpty()),
                 album = song.string("AlbumName").orEmpty(),
                 durationMs = song.long("Duration")?.times(1_000),
-                qualityHint = LyricsQuality.WORD_SYNCED,
+                qualityHint = LyricsQuality.KARAOKE_SYNCED,
                 context = mapOf("hash" to hash),
             )
         }

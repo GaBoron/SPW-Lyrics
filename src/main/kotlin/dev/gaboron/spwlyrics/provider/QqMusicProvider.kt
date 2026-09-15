@@ -28,7 +28,7 @@ class QqMusicProvider(private val http: ProviderHttp) : LyricsProvider {
                 artists = singers,
                 album = song.obj("album")?.string("name").orEmpty(),
                 durationMs = song.long("interval")?.times(1_000),
-                qualityHint = LyricsQuality.WORD_SYNCED,
+                qualityHint = LyricsQuality.KARAOKE_SYNCED,
                 context = mapOf("musicId" to (song.long("id")?.toString().orEmpty())),
             )
         }

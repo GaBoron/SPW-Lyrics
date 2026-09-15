@@ -39,7 +39,7 @@ class NeteaseMusicProvider(private val http: ProviderHttp) : LyricsProvider {
                 artists = (song.array("artists") ?: song.array("ar")).orEmpty().mapNotNull { it.asObject()?.string("name") },
                 album = (song.obj("album") ?: song.obj("al"))?.string("name").orEmpty(),
                 durationMs = song.long("duration") ?: song.long("dt"),
-                qualityHint = LyricsQuality.WORD_SYNCED,
+                qualityHint = LyricsQuality.KARAOKE_SYNCED,
             )
         }
     }

@@ -15,8 +15,7 @@ enum class LyricsFormat {
 enum class LyricsQuality(val rank: Int) {
     PLAIN(0),
     LINE_SYNCED(1),
-    WORD_SYNCED(2),
-    CHARACTER_SYNCED(3),
+    KARAOKE_SYNCED(2),
 }
 
 @Serializable
@@ -48,5 +47,5 @@ data class LyricsDocument(
     val metadata: Map<String, List<String>> = emptyMap(),
 ) {
     val quality: LyricsQuality
-        get() = LyricsGranularityClassifier.classify(lines, metadata)
+        get() = LyricsGranularityClassifier.classify(lines)
 }
