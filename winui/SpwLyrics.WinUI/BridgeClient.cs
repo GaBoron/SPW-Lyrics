@@ -11,24 +11,28 @@ public sealed class BridgeClient
     private readonly int _port;
     private readonly string _token;
 
-    private BridgeClient(int port, string token)
+    private BridgeClient(int port, string token, string initialMode)
     {
         _port = port;
         _token = token;
+        InitialMode = initialMode;
     }
 
     public bool IsConfigured => _port is > 0 and <= 65535 && !string.IsNullOrWhiteSpace(_token);
+    public string InitialMode { get; }
 
     public static BridgeClient FromCommandLine(string[] args)
     {
         var port = 0;
         var token = "";
+        var mode = "manual";
         for (var index = 0; index + 1 < args.Length; index++)
         {
             if (args[index] == "--port") int.TryParse(args[++index], out port);
             else if (args[index] == "--token") token = args[++index];
+            else if (args[index] == "--mode") mode = args[++index] == "batch" ? "batch" : "manual";
         }
-        return new BridgeClient(port, token);
+        return new BridgeClient(port, token, mode);
     }
 
     public async Task<ManualUiResponse> SendAsync(
@@ -36,6 +40,7 @@ public sealed class BridgeClient
         string? keywords = null,
         string? source = null,
         string? candidateKey = null,
+        bool includeCached = false,
         CancellationToken cancellationToken = default)
     {
         if (!IsConfigured) return new ManualUiResponse { Message = "此窗口必须由 SPW Lyrics 插件启动。" };
@@ -51,6 +56,7 @@ public sealed class BridgeClient
             Keywords = keywords,
             Source = source,
             CandidateKey = candidateKey,
+            IncludeCached = includeCached,
         };
         await writer.WriteLineAsync(JsonSerializer.Serialize(request, JsonOptions).AsMemory(), cancellationToken);
         var line = await reader.ReadLineAsync(cancellationToken).AsTask()

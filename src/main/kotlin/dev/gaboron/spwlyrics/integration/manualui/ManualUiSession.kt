@@ -8,7 +8,7 @@ import dev.gaboron.spwlyrics.domain.LyricsSource
 import dev.gaboron.spwlyrics.domain.TrackQuery
 import java.util.concurrent.ConcurrentHashMap
 
-class ManualUiSession(
+internal class ManualUiSession(
     private val currentQuery: () -> TrackQuery?,
     private val search: (String, LyricsSource?) -> List<CandidateScore>,
     private val preview: (LyricsCandidate) -> ResolvedLyrics?,
@@ -16,10 +16,14 @@ class ManualUiSession(
     private val useLocal: () -> Boolean,
     private val useAutomatic: () -> Boolean,
     private val disableTranslation: () -> Boolean,
+    batchProcessor: dev.gaboron.spwlyrics.application.LyricsBatchProcessor,
 ) {
     private val candidates = ConcurrentHashMap<String, LyricsCandidate>()
+    private val batch = BatchUiSession(batchProcessor)
 
     fun handle(request: ManualUiRequest): ManualUiResponse = when (request.action) {
+        "batch_state", "batch_start", "batch_pause", "batch_resume", "batch_cancel", "batch_retry" ->
+            batch.handle(request)
         "state" -> state()
         "search" -> search(request)
         "preview" -> candidate(request)?.let(::previewResponse)

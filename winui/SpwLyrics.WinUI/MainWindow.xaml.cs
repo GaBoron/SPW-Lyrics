@@ -8,13 +8,13 @@ using Windows.Graphics;
 namespace SpwLyrics_WinUI;
 
 /// <summary>
-/// The application window. This hosts a Frame that displays pages. Add your
-/// UI and logic to MainPage.xaml / MainPage.xaml.cs instead of here so you
-/// can use Page features such as navigation events and the Loaded lifecycle.
+/// Hosts the companion's manual-search and library batch-processing pages.
 /// </summary>
 public sealed partial class MainWindow : Window
 {
-    public MainWindow()
+    private bool _changingPage;
+
+    public MainWindow(string? initialMode)
     {
         StartupDiagnostics.Stage("MainWindow.InitializeComponent.begin");
         InitializeComponent();
@@ -27,12 +27,32 @@ public sealed partial class MainWindow : Window
         WindowPlacementStore.Restore(AppWindow);
         Closed += (_, _) => WindowPlacementStore.Save(AppWindow);
 
-        // Navigate the root frame to the main page on startup.
-        StartupDiagnostics.Stage($"MainWindow.Navigate.complete={RootFrame.Navigate(typeof(MainPage))}");
+        Navigate(initialMode);
+        StartupDiagnostics.Stage("MainWindow.Navigate.complete");
     }
 
-    public void ActivateForInput()
+    private void Navigation_SelectionChanged(Microsoft.UI.Xaml.Controls.NavigationView sender, Microsoft.UI.Xaml.Controls.NavigationViewSelectionChangedEventArgs args)
     {
+        if (args.SelectedItemContainer?.Tag is string mode) Navigate(mode);
+    }
+
+    private void Navigate(string? mode)
+    {
+        if (_changingPage) return;
+        _changingPage = true;
+        var batch = mode == "batch";
+        var pageType = batch ? typeof(BatchPage) : typeof(MainPage);
+        try
+        {
+            Navigation.SelectedItem = batch ? BatchItem : ManualItem;
+            if (RootFrame.CurrentSourcePageType != pageType) RootFrame.Navigate(pageType);
+        }
+        finally { _changingPage = false; }
+    }
+
+    public void ActivateForInput(string? mode = null)
+    {
+        if (!string.IsNullOrWhiteSpace(mode)) Navigate(mode);
         if (AppWindow.Presenter is OverlappedPresenter presenter && presenter.State == OverlappedPresenterState.Minimized)
         {
             presenter.Restore(activateWindow: true);

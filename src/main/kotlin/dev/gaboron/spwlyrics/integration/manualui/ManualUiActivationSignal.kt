@@ -5,12 +5,12 @@ import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
 
 internal class ManualUiActivationSignal {
-    private val pending = ArrayBlockingQueue<Unit>(1)
+    private val pending = ArrayBlockingQueue<String>(1)
 
-    fun request() {
-        pending.offer(Unit)
+    fun request(mode: String) {
+        pending.poll()
+        pending.offer(mode)
     }
 
-    fun await(timeout: Duration): Boolean =
-        pending.poll(timeout.toMillis(), TimeUnit.MILLISECONDS) != null
+    fun await(timeout: Duration): String? = pending.poll(timeout.toMillis(), TimeUnit.MILLISECONDS)
 }

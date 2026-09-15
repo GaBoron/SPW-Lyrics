@@ -9,6 +9,7 @@ public sealed class ManualUiRequest
     public string? Keywords { get; init; }
     public string? Source { get; init; }
     public string? CandidateKey { get; init; }
+    public bool IncludeCached { get; init; }
 }
 
 public sealed class ManualUiResponse
@@ -16,10 +17,12 @@ public sealed class ManualUiResponse
     public bool Ok { get; init; }
     public string Message { get; init; } = "";
     public bool Activate { get; init; }
+    public string? Mode { get; init; }
     public ManualUiTrack? Track { get; init; }
     public List<ManualUiSource> Sources { get; init; } = [];
     public List<ManualUiCandidate> Candidates { get; init; } = [];
     public List<ManualUiPreviewLine> Preview { get; init; } = [];
+    public BatchUiSnapshot? Batch { get; init; }
 }
 
 public sealed class ManualUiTrack
@@ -54,4 +57,29 @@ public sealed class ManualUiPreviewLine
     public string Main { get; init; } = "";
     public string? Secondary { get; init; }
     [JsonIgnore] public bool HasSecondary => !string.IsNullOrWhiteSpace(Secondary);
+}
+
+public sealed class BatchUiSnapshot
+{
+    public string State { get; init; } = "idle";
+    public string StateLabel { get; init; } = "准备就绪";
+    public int Total { get; init; }
+    public int Processed { get; init; }
+    public int Completed { get; init; }
+    public int Failed { get; init; }
+    public int Cached { get; init; }
+    public List<BatchUiItem> Items { get; init; } = [];
+}
+
+public sealed class BatchUiItem
+{
+    public string Key { get; init; } = "";
+    public string Title { get; init; } = "";
+    public string Artists { get; init; } = "";
+    public string Album { get; init; } = "";
+    public string State { get; init; } = "waiting";
+    public string StateLabel { get; init; } = "等待处理";
+    public string Source { get; init; } = "";
+    public string Quality { get; init; } = "";
+    public string Message { get; init; } = "";
 }

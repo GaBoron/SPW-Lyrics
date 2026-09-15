@@ -6,10 +6,10 @@ internal sealed class BridgeActivationListener : IDisposable
 {
     private readonly BridgeClient _bridge;
     private readonly DispatcherQueue _dispatcher;
-    private readonly Action _activate;
+    private readonly Action<string?> _activate;
     private readonly CancellationTokenSource _cancellation = new();
 
-    public BridgeActivationListener(BridgeClient bridge, DispatcherQueue dispatcher, Action activate)
+    public BridgeActivationListener(BridgeClient bridge, DispatcherQueue dispatcher, Action<string?> activate)
     {
         _bridge = bridge;
         _dispatcher = dispatcher;
@@ -25,7 +25,7 @@ internal sealed class BridgeActivationListener : IDisposable
             try
             {
                 var response = await _bridge.SendAsync("wait_activation", cancellationToken: cancellationToken);
-                if (response.Activate) _dispatcher.TryEnqueue(() => _activate());
+                if (response.Activate) _dispatcher.TryEnqueue(() => _activate(response.Mode));
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {

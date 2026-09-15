@@ -31,6 +31,7 @@ dependencies {
 
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     implementation("com.github.houbb:opencc4j:1.14.0")
+    implementation("org.xerial:sqlite-jdbc:3.50.3.0")
 }
 
 val pluginClass = "dev.gaboron.spwlyrics.integration.SpwLyricsPlugin"

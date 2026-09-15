@@ -6,6 +6,7 @@ import com.xuncorp.spw.workshop.api.WorkshopApi
 import dev.gaboron.spwlyrics.application.AutomaticReplacementPolicy
 import dev.gaboron.spwlyrics.application.LyricsLoadPhase
 import dev.gaboron.spwlyrics.application.LyricsLoadCoordinator
+import dev.gaboron.spwlyrics.application.LyricsBatchProcessor
 import dev.gaboron.spwlyrics.application.LyricsResolver
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsSource
@@ -18,6 +19,7 @@ import dev.gaboron.spwlyrics.provider.NeteaseMusicProvider
 import dev.gaboron.spwlyrics.provider.ProviderHttpClient
 import dev.gaboron.spwlyrics.provider.QqMusicProvider
 import dev.gaboron.spwlyrics.storage.FileLyricsCache
+import dev.gaboron.spwlyrics.storage.SpwLibraryCatalog
 import dev.gaboron.spwlyrics.integration.manualui.ManualUiBridge
 import dev.gaboron.spwlyrics.integration.manualui.ManualUiSession
 import dev.gaboron.spwlyrics.integration.shortcut.ManualSearchShortcutController
@@ -27,6 +29,7 @@ import kotlin.io.path.Path
 
 object PluginRuntime {
     @Volatile private var coordinator: LyricsLoadCoordinator? = null
+    @Volatile private var batchProcessor: LyricsBatchProcessor? = null
     @Volatile private var settings: PluginSettings? = null
     @Volatile private var manualUiBridge: ManualUiBridge? = null
     @Volatile private var manualSearchShortcut: ManualSearchShortcutController? = null
@@ -56,12 +59,21 @@ object PluginRuntime {
             NeteaseMusicProvider(http),
             LocalLyricsProvider(),
         )
+        val resolver = LyricsResolver(providers)
         coordinator = LyricsLoadCoordinator(
             cache = cache,
-            resolver = LyricsResolver(providers),
+            resolver = resolver,
             refreshBridge = ReflectiveLyricsRefreshBridge(),
             notify = ::toastWarning,
         )
+        val roamingData = System.getenv("APPDATA")?.takeIf(String::isNotBlank)
+            ?.let(::Path) ?: Path(System.getProperty("user.home")).resolve("AppData").resolve("Roaming")
+        val batch = LyricsBatchProcessor(
+            catalog = SpwLibraryCatalog(roamingData.resolve("Salt Player for Windows").resolve("spw.db")),
+            cache = cache,
+            resolver = resolver,
+        )
+        batchProcessor = batch
         manualUiBridge = ManualUiBridge(
             pluginRoot = Path(pluginPath),
             session = ManualUiSession(
@@ -72,6 +84,7 @@ object PluginRuntime {
                 useLocal = ::useLocal,
                 useAutomatic = ::useAutomatic,
                 disableTranslation = ::disableTranslation,
+                batchProcessor = batch,
             ),
         )
         val shortcutController = ManualSearchShortcutController(
@@ -102,7 +115,12 @@ object PluginRuntime {
     @Synchronized
     fun openManualSearch() {
         val bridge = manualUiBridge ?: return
-        if (!bridge.open()) ManualSearchWindow.open()
+        if (!bridge.open("manual")) ManualSearchWindow.open()
+    }
+    @Synchronized
+    fun openBatchProcessing() {
+        val bridge = manualUiBridge ?: return
+        if (!bridge.open("batch")) toastWarning("批量处理窗口未能启动，请重新安装插件后再试。")
     }
     fun openCacheFolder() {
         if (cacheFolderOpener?.open() != true) toastWarning("无法打开 SPW Lyrics 本地缓存文件夹。")
@@ -117,6 +135,8 @@ object PluginRuntime {
         cacheFolderOpener = null
         settings?.close()
         settings = null
+        batchProcessor?.close()
+        batchProcessor = null
         coordinator?.close()
         coordinator = null
     }

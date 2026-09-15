@@ -44,9 +44,9 @@ public partial class App : Application
         try
         {
             Bridge = BridgeClient.FromCommandLine(Environment.GetCommandLineArgs());
-            var window = new MainWindow();
+            var window = new MainWindow(Bridge.InitialMode);
             _window = window;
-            window.ActivateForInput();
+            window.ActivateForInput(Bridge.InitialMode);
             _activationListener = new BridgeActivationListener(Bridge, window.DispatcherQueue, window.ActivateForInput);
             window.Closed += (_, _) =>
             {

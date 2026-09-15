@@ -13,7 +13,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlinx.serialization.json.Json
 
-class ManualUiBridge(
+internal class ManualUiBridge(
     pluginRoot: Path,
     private val session: ManualUiSession,
 ) : AutoCloseable {
@@ -37,10 +37,11 @@ class ManualUiBridge(
     }
 
     @Synchronized
-    fun open(): Boolean {
+    fun open(mode: String = "manual"): Boolean {
         if (!Files.isRegularFile(executable)) return false
+        val requestedMode = if (mode == "batch") "batch" else "manual"
         if (process?.isAlive == true) {
-            activation.request()
+            activation.request(requestedMode)
             return true
         }
         val launched = runCatching {
@@ -48,6 +49,7 @@ class ManualUiBridge(
                 executable.toString(),
                 "--port", server.localPort.toString(),
                 "--token", token,
+                "--mode", requestedMode,
             ).directory(executable.parent.toFile()).redirectErrorStream(true).start()
         }.getOrNull() ?: return false
         process = launched
@@ -77,10 +79,9 @@ class ManualUiBridge(
             when {
                 request == null -> ManualUiResponse(false, "请求格式无效。")
                 !constantTimeEquals(request.token, token) -> ManualUiResponse(false, "连接认证失败。")
-                request.action == "wait_activation" -> ManualUiResponse(
-                    ok = true,
-                    activate = activation.await(ACTIVATION_WAIT),
-                )
+                request.action == "wait_activation" -> activation.await(ACTIVATION_WAIT).let { mode ->
+                    ManualUiResponse(ok = true, activate = mode != null, mode = mode)
+                }
                 else -> runCatching { session.handle(request) }
                     .getOrElse { ManualUiResponse(false, it.message ?: "操作失败。") }
             }

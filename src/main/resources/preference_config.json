@@ -29,6 +29,13 @@
         },
         {
           "type": "button",
+          "title": "批量处理音乐库",
+          "summary": "提前搜索并缓存音乐库歌词，首次播放时无需逐首等待",
+          "arrow_type": "none",
+          "on_click": "dev.gaboron.spwlyrics.integration.SpwLyricsActions.openBatchProcessing"
+        },
+        {
+          "type": "button",
           "title": "查看本地缓存文件夹",
           "summary": "在文件资源管理器中打开已缓存的歌词",
           "arrow_type": "none",
