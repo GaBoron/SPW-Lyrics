@@ -51,6 +51,7 @@ internal class ProviderTaskPool(
     fun <T> collectProgressively(
         tasks: List<() -> T?>,
         snapshotDeadlineNanos: Long,
+        snapshotWhen: (completed: List<IndexedValue<T>>, pendingIndices: Set<Int>) -> Boolean = { _, _ -> false },
         stopWhen: (completed: List<IndexedValue<T>>, pendingIndices: Set<Int>) -> Boolean = { _, _ -> false },
         onSnapshot: (List<IndexedValue<T>>) -> Unit,
     ): List<IndexedValue<T>> {
@@ -66,6 +67,7 @@ internal class ProviderTaskPool(
         }
         val completed = mutableListOf<IndexedValue<T>>()
         val pending = tasks.indices.toMutableSet()
+        var snapshotPublished = false
         try {
             while (pending.isNotEmpty()) {
                 val remaining = remainingNanos(snapshotDeadlineNanos)
@@ -74,9 +76,13 @@ internal class ProviderTaskPool(
                 val outcome = future.get()
                 pending -= outcome.index
                 outcome.value?.let { completed += IndexedValue(outcome.index, it) }
+                if (!snapshotPublished && snapshotWhen(completed, pending)) {
+                    onSnapshot(completed.sortedBy(IndexedValue<T>::index))
+                    snapshotPublished = true
+                }
                 if (stopWhen(completed, pending)) break
             }
-            onSnapshot(completed.sortedBy(IndexedValue<T>::index))
+            if (!snapshotPublished) onSnapshot(completed.sortedBy(IndexedValue<T>::index))
             while (pending.isNotEmpty() && !stopWhen(completed, pending)) {
                 val outcome = completion.take().get()
                 pending -= outcome.index

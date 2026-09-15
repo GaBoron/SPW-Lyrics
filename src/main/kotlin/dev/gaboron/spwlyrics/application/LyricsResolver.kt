@@ -56,6 +56,7 @@ class LyricsResolver(
         val completed = providerTasks.collectProgressively(
             tasks = selected.map { provider -> { resolveProvider(provider, query, Long.MAX_VALUE, minimumQuality) } },
             snapshotDeadlineNanos = snapshotDeadlineNanos,
+            snapshotWhen = { results, pending -> hasHighestAvailableSource(results, pending) },
             stopWhen = { results, pending -> hasUnbeatableCharacterResult(results, pending) },
         ) { snapshot ->
             selectAndEncode(snapshot)?.let(onSnapshot)
@@ -149,6 +150,14 @@ class LyricsResolver(
         val bestCharacter = completed.filter { it.value.document.quality == LyricsQuality.CHARACTER_SYNCED }
             .minByOrNull(IndexedValue<FetchedLyrics>::index)
         return bestCharacter != null && pending.none { it < bestCharacter.index }
+    }
+
+    private fun hasHighestAvailableSource(
+        completed: List<IndexedValue<FetchedLyrics>>,
+        pending: Set<Int>,
+    ): Boolean {
+        val bestSource = completed.minByOrNull(IndexedValue<FetchedLyrics>::index) ?: return false
+        return pending.none { it < bestSource.index }
     }
 
     private fun resolveProvider(

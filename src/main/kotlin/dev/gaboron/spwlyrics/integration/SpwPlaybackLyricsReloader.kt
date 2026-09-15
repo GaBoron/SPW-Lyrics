@@ -3,8 +3,11 @@ package dev.gaboron.spwlyrics.integration
 import com.xuncorp.spw.workshop.api.WorkshopApi
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED
 
 internal class SpwPlaybackLyricsReloader(
     private val roots: () -> List<Any> = {
@@ -45,7 +48,11 @@ internal class SpwPlaybackLyricsReloader(
     private fun invokeCurrent(prepared: PreparedInvocation): Boolean {
         val player = prepared.service.findZeroArgumentResult(PLAYER) ?: return false
         val mediaItem = player.findZeroArgumentResult(MEDIA_ITEM) ?: return false
-        return runCatching { prepared.method.invoke(null, prepared.service, mediaItem, Completion) }.isSuccess
+        val completion = RefreshCompletion()
+        val returned = runCatching {
+            prepared.method.invoke(null, prepared.service, mediaItem, completion)
+        }.getOrElse { return false }
+        return returned !== COROUTINE_SUSPENDED || completion.await()
     }
 
     private fun Any.findZeroArgumentResult(returnTypeName: String): Any? = allMethods(javaClass)
@@ -62,9 +69,17 @@ internal class SpwPlaybackLyricsReloader(
 
     private data class PreparedInvocation(val service: Any, val method: Method)
 
-    private object Completion : Continuation<Any?> {
+    private class RefreshCompletion : Continuation<Any?> {
+        private val completed = CountDownLatch(1)
+        @Volatile private var succeeded = false
+
         override val context = EmptyCoroutineContext
-        override fun resumeWith(result: Result<Any?>) = Unit
+        override fun resumeWith(result: Result<Any?>) {
+            succeeded = result.isSuccess
+            completed.countDown()
+        }
+
+        fun await(): Boolean = completed.await(REFRESH_COMPLETION_TIMEOUT_SECONDS, TimeUnit.SECONDS) && succeeded
     }
 
     companion object {
@@ -73,5 +88,6 @@ internal class SpwPlaybackLyricsReloader(
         private const val PLAYER = "com.xuncorp.pisces.PiscesPlayer"
         private const val MEDIA_ITEM = "com.xuncorp.pisces.PiscesMediaItem"
         private const val ACCESS_UPDATE_LYRICS = "access\$updateLyrics"
+        private const val REFRESH_COMPLETION_TIMEOUT_SECONDS = 5L
     }
 }

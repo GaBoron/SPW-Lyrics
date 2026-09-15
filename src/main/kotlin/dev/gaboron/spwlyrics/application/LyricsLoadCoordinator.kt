@@ -29,6 +29,7 @@ class LyricsLoadCoordinator(
 ) : AutoCloseable {
     private val current = AtomicReference<TrackQuery?>()
     private val inFlight = ConcurrentHashMap<String, CompletableFuture<*>>()
+    private val activeAutomaticLoads = ConcurrentHashMap<String, Any>()
     private val qualityUpgradeInFlight = ConcurrentHashMap<String, CompletableFuture<*>>()
     private val translationInFlight = ConcurrentHashMap<String, CompletableFuture<*>>()
     private val qualityUpgradeAttempts = BackgroundAttemptGate(QUALITY_UPGRADE_RETRY_SECONDS)
@@ -49,18 +50,23 @@ class LyricsLoadCoordinator(
         if (override?.candidate == null && !automaticLoadAllowed) return null
         cache.getLyrics(query)?.let { cached ->
             notifiedFailures.remove(query.key)
-            startBackgroundEnhancements(
-                query,
-                resolvedFromCache(query, cached),
-                automatic = override?.candidate == null,
-            )
+            if (!activeAutomaticLoads.contains(query.key)) {
+                startBackgroundEnhancements(
+                    query,
+                    resolvedFromCache(query, cached),
+                    automatic = override?.candidate == null,
+                )
+            }
             return cached.encoded
         }
         inFlight.computeIfAbsent(query.key) {
+            val automaticToken = Any()
+            if (override?.candidate == null) activeAutomaticLoads[query.key] = automaticToken
             val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(INITIAL_RESOLUTION_SECONDS)
             val future = CompletableFuture.runAsync({ resolveAndRefresh(query, override?.candidate, deadline) }, executor)
             future.whenComplete { _, error ->
-                if (error != null && override?.candidate == null) recordAutomaticFailure(query)
+                if (error != null && !future.isCancelled && override?.candidate == null) recordAutomaticFailure(query)
+                activeAutomaticLoads.remove(query.key, automaticToken)
                 inFlight.remove(query.key, future)
             }
             future
@@ -77,8 +83,8 @@ class LyricsLoadCoordinator(
         val query = current.get() ?: return false
         qualityUpgradeInFlight.remove(query.key)?.cancel(true)
         val resolved = resolver.fetchManual(candidate) ?: return false
-        inFlight.remove(query.key)?.cancel(true)
         cache.putOverride(query, ManualOverride(local = false, source = candidate.source, candidate = candidate))
+        inFlight.remove(query.key)?.cancel(true)
         cache.putLyrics(query, resolver.toCache(resolved))
         notifiedFailures.remove(query.key)
         refreshOrNotify(query)
@@ -88,10 +94,11 @@ class LyricsLoadCoordinator(
 
     fun useLocal(): Boolean {
         val query = current.get() ?: return false
+        cache.putOverride(query, ManualOverride(local = true))
         inFlight.remove(query.key)?.cancel(true)
         qualityUpgradeInFlight.remove(query.key)?.cancel(true)
         translationInFlight.remove(query.key)?.cancel(true)
-        cache.putOverride(query, ManualOverride(local = true))
+        notifiedFailures.remove(query.key)
         refreshOrNotify(query)
         return true
     }
@@ -107,10 +114,13 @@ class LyricsLoadCoordinator(
         cache.removeLyrics(query)
         notifiedFailures.remove(query.key)
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(INITIAL_RESOLUTION_SECONDS)
+        val automaticToken = Any()
+        activeAutomaticLoads[query.key] = automaticToken
         val future = CompletableFuture.runAsync({ resolveAndRefresh(query, null, deadline) }, executor)
         inFlight[query.key] = future
         future.whenComplete { _, error ->
-            if (error != null) recordAutomaticFailure(query)
+            if (error != null && !future.isCancelled) recordAutomaticFailure(query)
+            activeAutomaticLoads.remove(query.key, automaticToken)
             inFlight.remove(query.key, future)
         }
         return true
@@ -157,8 +167,9 @@ class LyricsLoadCoordinator(
             applyAutomaticResult(query, interim)
             if (!automaticWasSuperseded(query)) {
                 interimBase = interim
-                interimEnriched = enrichTranslationFullyUnlessSuppressed(query, interim)
-                applyAutomaticResult(query, interimEnriched!!)
+                val enriched = enrichTranslationFullyUnlessSuppressed(query, interim)
+                interimEnriched = enriched
+                applyAutomaticResult(query, enriched)
             }
         }
         if (final == null) {
@@ -176,7 +187,10 @@ class LyricsLoadCoordinator(
         val resolved = applyTranslationPreference(query, result)
         val cached = cache.getLyrics(query)
         if (cached != null && !LyricsSelectionPolicy.canReplace(cached.document, resolved.document)) return
-        if (cached?.encoded == resolved.encoded) return
+        if (cached?.encoded == resolved.encoded) {
+            if (cached.document != resolved.document) cache.putLyrics(query, resolver.toCache(resolved))
+            return
+        }
         cache.putLyrics(query, resolver.toCache(resolved))
         notifiedFailures.remove(query.key)
         if (current.get()?.key == query.key) refreshOrNotify(query)
@@ -301,6 +315,7 @@ class LyricsLoadCoordinator(
 
     override fun close() {
         current.set(null)
+        activeAutomaticLoads.clear()
         inFlight.values.forEach { it.cancel(true) }
         qualityUpgradeInFlight.values.forEach { it.cancel(true) }
         translationInFlight.values.forEach { it.cancel(true) }
