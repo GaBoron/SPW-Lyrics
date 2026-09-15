@@ -45,12 +45,10 @@ internal object SecondaryLyricsEnricher {
     fun needsTranslation(document: LyricsDocument): Boolean {
         val primary = document.lines.filter { !it.background && it.text.isNotBlank() }
         if (primary.isEmpty()) return false
-        val translated = primary.count { !it.translation.isNullOrBlank() }
-        return translated * 10 < primary.size * MIN_TRANSLATION_COVERAGE_TENTHS
+        return primary.none { !it.translation.isNullOrBlank() }
     }
 
     const val TRANSLATION_SOURCE_KEY = "translationSource"
     const val SUPPLEMENTED_TRANSLATION_LINES_KEY = "supplementedTranslationLines"
     const val ROMANIZATION_SOURCE_KEY = "romanizationSource"
-    private const val MIN_TRANSLATION_COVERAGE_TENTHS = 8
 }
