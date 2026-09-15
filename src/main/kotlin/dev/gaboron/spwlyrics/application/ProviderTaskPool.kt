@@ -47,6 +47,47 @@ internal class ProviderTaskPool(
         return completed.sortedBy(IndexedValue<T>::index)
     }
 
+    /** Publishes a deadline snapshot without cancelling unfinished work, then waits for every task. */
+    fun <T> collectProgressively(
+        tasks: List<() -> T?>,
+        snapshotDeadlineNanos: Long,
+        stopWhen: (completed: List<IndexedValue<T>>, pendingIndices: Set<Int>) -> Boolean = { _, _ -> false },
+        onSnapshot: (List<IndexedValue<T>>) -> Unit,
+    ): List<IndexedValue<T>> {
+        if (tasks.isEmpty()) {
+            onSnapshot(emptyList())
+            return emptyList()
+        }
+        val completion = ExecutorCompletionService<TaskOutcome<T>>(executor)
+        val futures = tasks.mapIndexed { index, task ->
+            completion.submit {
+                TaskOutcome(index, runCatching { task() }.getOrNull())
+            }
+        }
+        val completed = mutableListOf<IndexedValue<T>>()
+        val pending = tasks.indices.toMutableSet()
+        try {
+            while (pending.isNotEmpty()) {
+                val remaining = remainingNanos(snapshotDeadlineNanos)
+                if (remaining <= 0L) break
+                val future = completion.poll(remaining, TimeUnit.NANOSECONDS) ?: break
+                val outcome = future.get()
+                pending -= outcome.index
+                outcome.value?.let { completed += IndexedValue(outcome.index, it) }
+                if (stopWhen(completed, pending)) break
+            }
+            onSnapshot(completed.sortedBy(IndexedValue<T>::index))
+            while (pending.isNotEmpty() && !stopWhen(completed, pending)) {
+                val outcome = completion.take().get()
+                pending -= outcome.index
+                outcome.value?.let { completed += IndexedValue(outcome.index, it) }
+            }
+        } finally {
+            futures.filterNot { it.isDone }.forEach { it.cancel(true) }
+        }
+        return completed.sortedBy(IndexedValue<T>::index)
+    }
+
     override fun close() {
         executor.shutdownNow()
     }

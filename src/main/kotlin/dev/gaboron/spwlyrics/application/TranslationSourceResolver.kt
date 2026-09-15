@@ -21,12 +21,7 @@ internal class TranslationSourceResolver(
         query: TrackQuery,
         deadlineNanos: Long,
     ): TranslationSourceMatch? {
-        val lookupsByQuery = TranslationLookupPlan.queries(query, primaryCandidate).map { lookupQuery ->
-            prioritizedKeywords(lookupQuery).map { keywords -> TranslationLookup(lookupQuery, keywords) }
-        }
-        val orderedLookups = (0 until (lookupsByQuery.maxOfOrNull(List<TranslationLookup>::size) ?: 0))
-            .flatMap { index -> lookupsByQuery.mapNotNull { it.getOrNull(index) } }
-        val attempts = orderedLookups.distinctBy { it.key }
+        val attempts = orderedLookups(query, primaryCandidate)
             .flatMap { lookup -> providers.map { provider -> TranslationAttempt(provider, lookup) } }
         return providerTasks.collect(
             tasks = attempts.map { attempt ->
@@ -35,6 +30,35 @@ internal class TranslationSourceResolver(
             deadlineNanos = deadlineNanos,
             stopWhen = { completed, _ -> completed.isNotEmpty() },
         ).firstOrNull()?.value
+    }
+
+    /** Lets every translation provider finish, then honors provider priority for the final result. */
+    fun findAll(
+        primary: LyricsDocument,
+        primaryCandidate: LyricsCandidate,
+        query: TrackQuery,
+    ): TranslationSourceMatch? {
+        val lookups = orderedLookups(query, primaryCandidate)
+        return providerTasks.collect(
+            tasks = providers.map { provider ->
+                {
+                    lookups.firstNotNullOfOrNull { lookup ->
+                        findFromAttempt(TranslationAttempt(provider, lookup), primary, Long.MAX_VALUE)
+                    }
+                }
+            },
+            deadlineNanos = Long.MAX_VALUE,
+        ).map(IndexedValue<TranslationSourceMatch>::value)
+            .minByOrNull { it.document.source.priority }
+    }
+
+    private fun orderedLookups(query: TrackQuery, primaryCandidate: LyricsCandidate): List<TranslationLookup> {
+        val lookupsByQuery = TranslationLookupPlan.queries(query, primaryCandidate).map { lookupQuery ->
+            prioritizedKeywords(lookupQuery).map { keywords -> TranslationLookup(lookupQuery, keywords) }
+        }
+        return (0 until (lookupsByQuery.maxOfOrNull(List<TranslationLookup>::size) ?: 0))
+            .flatMap { index -> lookupsByQuery.mapNotNull { it.getOrNull(index) } }
+            .distinctBy(TranslationLookup::key)
     }
 
     private fun findFromAttempt(

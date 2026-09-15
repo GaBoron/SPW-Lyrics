@@ -34,31 +34,33 @@ class LyricsResolver(
     private val providerTasks = ProviderTaskPool()
     private val translationSources = TranslationSourceResolver(this.providers, providerTasks)
 
-    fun resolveAutomatic(query: TrackQuery, deadlineNanos: Long = Long.MAX_VALUE): ResolvedLyrics? =
-        resolveAutomatic(query, deadlineNanos, LyricsQuality.PLAIN)
+    fun resolveAutomaticProgressively(
+        query: TrackQuery,
+        snapshotDeadlineNanos: Long,
+        onSnapshot: (ResolvedLyrics) -> Unit,
+    ): ResolvedLyrics? = resolveAutomatic(query, snapshotDeadlineNanos, LyricsQuality.PLAIN, onSnapshot)
+
+    fun resolveAutomaticFully(query: TrackQuery): ResolvedLyrics? =
+        resolveAutomatic(query, System.nanoTime(), LyricsQuality.PLAIN) {}
 
     fun resolveKaraokeTimed(query: TrackQuery, deadlineNanos: Long): ResolvedLyrics? =
-        resolveAutomatic(query, deadlineNanos, LyricsQuality.WORD_SYNCED)
+        resolveAutomatic(query, deadlineNanos, LyricsQuality.WORD_SYNCED) {}
 
     private fun resolveAutomatic(
         query: TrackQuery,
-        deadlineNanos: Long,
+        snapshotDeadlineNanos: Long,
         minimumQuality: LyricsQuality,
+        onSnapshot: (ResolvedLyrics) -> Unit,
     ): ResolvedLyrics? {
         val selected = orderedSources.filter { it != LyricsSource.LOCAL }.mapNotNull(providers::get)
-        val completed = providerTasks.collect(
-            tasks = selected.map { provider -> { resolveProvider(provider, query, deadlineNanos, minimumQuality) } },
-            deadlineNanos = deadlineNanos,
-        ) { results, pending ->
-            val bestCharacter = results.filter { it.value.document.quality == LyricsQuality.CHARACTER_SYNCED }
-                .minByOrNull(IndexedValue<FetchedLyrics>::index)
-            bestCharacter != null && pending.none { it < bestCharacter.index }
+        val completed = providerTasks.collectProgressively(
+            tasks = selected.map { provider -> { resolveProvider(provider, query, Long.MAX_VALUE, minimumQuality) } },
+            snapshotDeadlineNanos = snapshotDeadlineNanos,
+            stopWhen = { results, pending -> hasUnbeatableCharacterResult(results, pending) },
+        ) { snapshot ->
+            selectAndEncode(snapshot)?.let(onSnapshot)
         }
-        val winner = completed.map(IndexedValue<FetchedLyrics>::value).minWithOrNull(
-            compareByDescending<FetchedLyrics> { it.document.quality.rank }
-                .thenBy { it.candidate.source.priority },
-        ) ?: return null
-        return encode(winner)
+        return selectAndEncode(completed)
     }
 
     fun searchManual(query: TrackQuery, keywords: String, source: LyricsSource?): List<CandidateScore> {
@@ -109,6 +111,15 @@ class LyricsResolver(
         return resolved.copy(document = document, encoded = encoded)
     }
 
+    fun enrichTranslationFully(resolved: ResolvedLyrics, query: TrackQuery): ResolvedLyrics {
+        if (resolved.candidate.source !in PRIMARY_WORD_SOURCES) return resolved
+        if (!SecondaryLyricsEnricher.needsTranslation(resolved.document)) return resolved
+        val match = translationSources.findAll(resolved.document, resolved.candidate, query) ?: return resolved
+        val document = SecondaryLyricsEnricher.enrich(resolved.document, match.document, match.alignment)
+        val encoded = SpwLyricsEncoder.encode(document).takeIf(String::isNotBlank) ?: return resolved
+        return resolved.copy(document = document, encoded = encoded)
+    }
+
     fun needsTranslationEnrichment(resolved: ResolvedLyrics): Boolean =
         resolved.candidate.source in PRIMARY_WORD_SOURCES && SecondaryLyricsEnricher.needsTranslation(resolved.document)
 
@@ -127,6 +138,18 @@ class LyricsResolver(
     private fun encode(fetched: FetchedLyrics): ResolvedLyrics? =
         SpwLyricsEncoder.encode(fetched.document).takeIf(String::isNotBlank)
             ?.let { ResolvedLyrics(fetched.candidate, fetched.document, it) }
+
+    private fun selectAndEncode(completed: List<IndexedValue<FetchedLyrics>>): ResolvedLyrics? =
+        LyricsSelectionPolicy.select(completed.map(IndexedValue<FetchedLyrics>::value))?.let(::encode)
+
+    private fun hasUnbeatableCharacterResult(
+        completed: List<IndexedValue<FetchedLyrics>>,
+        pending: Set<Int>,
+    ): Boolean {
+        val bestCharacter = completed.filter { it.value.document.quality == LyricsQuality.CHARACTER_SYNCED }
+            .minByOrNull(IndexedValue<FetchedLyrics>::index)
+        return bestCharacter != null && pending.none { it < bestCharacter.index }
+    }
 
     private fun resolveProvider(
         provider: LyricsProvider,
