@@ -2,7 +2,6 @@ package dev.gaboron.spwlyrics.provider
 
 import dev.gaboron.spwlyrics.codec.TtmlCodec
 import dev.gaboron.spwlyrics.codec.LyricsScriptConverter
-import dev.gaboron.spwlyrics.domain.CandidateEvidence
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsDocument
 import dev.gaboron.spwlyrics.domain.LyricsQuality
@@ -22,17 +21,15 @@ class AppleMusicProvider(private val http: ProviderHttp) : LyricsProvider {
     override val source = LyricsSource.APPLE_MUSIC
     private val catalogSearch = AppleCatalogSearch(http)
 
+    /** Automatic search already performs structured full/basic fallbacks internally. */
+    override fun automaticSearchQueries(query: TrackQuery): List<String> =
+        query.searchQueries().take(1)
+
     override fun search(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> {
         automaticSearchRequests(query).firstNotNullOfOrNull { request ->
             runCatching { search(request, limit) }.getOrNull()?.takeIf(List<LyricsCandidate>::isNotEmpty)
         }?.let { return it }
-        val regionalRequests = catalogSearch.search(keywords, MAX_AUTOMATIC_CATALOG_RESULTS).map { track ->
-            SearchRequest(track.title, track.artist, track.album, track.durationMs)
-        }
-        return regionalRequests.firstNotNullOfOrNull { request ->
-            runCatching { search(request, limit).map(::markCatalogResolved) }
-                .getOrNull()?.takeIf(List<LyricsCandidate>::isNotEmpty)
-        }.orEmpty()
+        return emptyList()
     }
 
     override fun searchManual(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> {
@@ -119,10 +116,6 @@ class AppleMusicProvider(private val http: ProviderHttp) : LyricsProvider {
             .entries.joinToString("&") { (key, value) -> "$key=${ProviderHttpClient.encode(value)}" }
     }
 
-    private fun markCatalogResolved(candidate: LyricsCandidate): LyricsCandidate = candidate.copy(
-        context = candidate.context + (CandidateEvidence.CATALOG_RESOLVED to "true"),
-    )
-
     private fun isTrustedLyricsUrl(url: String): Boolean = runCatching {
         val uri = URI.create(url)
         uri.scheme.equals("https", ignoreCase = true) && uri.host.equals(STORAGE_HOST, ignoreCase = true)
@@ -131,7 +124,6 @@ class AppleMusicProvider(private val http: ProviderHttp) : LyricsProvider {
     companion object {
         const val SEARCH_URL = "https://lyrics-api.binimum.org/"
         const val STORAGE_HOST = "lyrics-storage.binimum.org"
-        private const val MAX_AUTOMATIC_CATALOG_RESULTS = 4
         private const val MAX_CATALOG_RESULTS = 6
         private const val MAX_MANUAL_RESULTS = 8
         private const val MAX_MANUAL_REQUESTS = 4

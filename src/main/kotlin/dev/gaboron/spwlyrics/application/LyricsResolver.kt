@@ -43,7 +43,17 @@ class LyricsResolver(
     fun resolveAutomaticFully(
         query: TrackQuery,
         onProgress: (LyricsResolutionProgress) -> Unit = {},
-    ): ResolvedLyrics? = resolveAutomatic(query, System.nanoTime(), LyricsQuality.PLAIN, {}, onProgress)
+    ): ResolvedLyrics? {
+        val now = System.nanoTime()
+        return resolveAutomatic(
+            query = query,
+            snapshotDeadlineNanos = now,
+            minimumQuality = LyricsQuality.PLAIN,
+            onSnapshot = {},
+            onProgress = onProgress,
+            completionDeadlineNanos = now + TimeUnit.MILLISECONDS.toNanos(FULL_SEARCH_TIMEOUT_MILLIS),
+        )
+    }
 
     private fun resolveAutomatic(
         query: TrackQuery,
@@ -51,20 +61,33 @@ class LyricsResolver(
         minimumQuality: LyricsQuality,
         onSnapshot: (ResolvedLyrics) -> Unit,
         onProgress: (LyricsResolutionProgress) -> Unit = {},
+        completionDeadlineNanos: Long = Long.MAX_VALUE,
     ): ResolvedLyrics? {
         val selected = orderedSources.filter { it != LyricsSource.LOCAL }.mapNotNull(providers::get)
         onProgress(LyricsResolutionProgress(LyricsResolutionStage.SEARCHING, 0.04, "开始并行搜索 ${selected.size} 个歌词来源"))
         val completed = providerTasks.collectProgressively(
-            tasks = selected.map { provider -> { resolveProvider(provider, query, Long.MAX_VALUE, minimumQuality) } },
+            tasks = selected.map { provider ->
+                {
+                    resolveProvider(
+                        provider,
+                        query,
+                        System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(PROVIDER_SEARCH_BUDGET_MILLIS),
+                        minimumQuality,
+                    )
+                }
+            },
             snapshotDeadlineNanos = snapshotDeadlineNanos,
+            completionDeadlineNanos = completionDeadlineNanos,
             snapshotWhen = { results, pending -> hasHighestAvailableSource(results, pending) },
             stopWhen = { results, pending -> hasUnbeatableKaraokeResult(results, pending) },
             onProgress = { results, pending ->
                 val finished = selected.size - pending.size
+                val pendingNames = pending.joinToString("、") { selected[it].source.displayName }
+                val waiting = pendingNames.takeIf(String::isNotBlank)?.let { "；等待：$it" }.orEmpty()
                 val best = LyricsSelectionPolicy.select(results.map(IndexedValue<FetchedLyrics>::value))
                 val detail = best?.let {
-                    "已检查 $finished/${selected.size} 个来源，当前最佳：${it.candidate.source.displayName}"
-                } ?: "已检查 $finished/${selected.size} 个来源，继续搜索可靠歌词"
+                    "已检查 $finished/${selected.size} 个来源，当前最佳：${it.candidate.source.displayName}$waiting"
+                } ?: "已检查 $finished/${selected.size} 个来源$waiting"
                 onProgress(
                     LyricsResolutionProgress(
                         LyricsResolutionStage.SEARCHING,
@@ -242,7 +265,7 @@ class LyricsResolver(
         accepts: (CandidateScore) -> Boolean = PreferredSourceMatchPolicy::accepts,
     ): LyricsCandidate? {
         val candidates = linkedMapOf<String, LyricsCandidate>()
-        for (keywords in query.searchQueries()) {
+        for (keywords in provider.automaticSearchQueries(query)) {
             if (System.nanoTime() >= deadlineNanos) break
             search(provider, query, keywords).forEach { candidates.putIfAbsent(it.remoteId, it) }
             MatchEngine.decide(query, candidates.values.toList(), accepts)
@@ -255,5 +278,7 @@ class LyricsResolver(
         val PRIMARY_WORD_SOURCES = setOf(LyricsSource.AMLL, LyricsSource.APPLE_MUSIC)
         const val MANUAL_RESULTS_PER_SOURCE = 8
         const val MANUAL_SEARCH_TIMEOUT_MILLIS = 6_000L
+        const val PROVIDER_SEARCH_BUDGET_MILLIS = 12_000L
+        const val FULL_SEARCH_TIMEOUT_MILLIS = 20_000L
     }
 }

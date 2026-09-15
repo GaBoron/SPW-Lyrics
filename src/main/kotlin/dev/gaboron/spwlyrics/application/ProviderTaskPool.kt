@@ -53,6 +53,7 @@ internal class ProviderTaskPool(
     fun <T> collectProgressively(
         tasks: List<() -> T?>,
         snapshotDeadlineNanos: Long,
+        completionDeadlineNanos: Long = Long.MAX_VALUE,
         snapshotWhen: (completed: List<IndexedValue<T>>, pendingIndices: Set<Int>) -> Boolean = { _, _ -> false },
         stopWhen: (completed: List<IndexedValue<T>>, pendingIndices: Set<Int>) -> Boolean = { _, _ -> false },
         onProgress: (completed: List<IndexedValue<T>>, pendingIndices: Set<Int>) -> Unit = { _, _ -> },
@@ -88,7 +89,14 @@ internal class ProviderTaskPool(
             }
             if (!snapshotPublished) onSnapshot(completed.sortedBy(IndexedValue<T>::index))
             while (pending.isNotEmpty() && !stopWhen(completed, pending)) {
-                val outcome = completion.take().get()
+                val remaining = remainingNanos(completionDeadlineNanos)
+                if (remaining <= 0L) break
+                val future = if (completionDeadlineNanos == Long.MAX_VALUE) {
+                    completion.take()
+                } else {
+                    completion.poll(remaining, TimeUnit.NANOSECONDS) ?: break
+                }
+                val outcome = future.get()
                 pending -= outcome.index
                 outcome.value?.let { completed += IndexedValue(outcome.index, it) }
                 onProgress(completed.sortedBy(IndexedValue<T>::index), pending.toSet())
@@ -109,7 +117,7 @@ internal class ProviderTaskPool(
     private data class TaskOutcome<T>(val index: Int, val value: T?)
 
     private companion object {
-        const val DEFAULT_PARALLELISM = 10
+        const val DEFAULT_PARALLELISM = 15
         val THREAD_NUMBER = AtomicInteger()
     }
 }

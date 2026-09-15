@@ -7,6 +7,7 @@ import dev.gaboron.spwlyrics.domain.TrackQuery
 
 interface LyricsProvider {
     val source: LyricsSource
+    fun automaticSearchQueries(query: TrackQuery): List<String> = query.searchQueries()
     fun search(query: TrackQuery, keywords: String, limit: Int = 20): List<LyricsCandidate>
     fun searchManual(query: TrackQuery, keywords: String, limit: Int = 20): List<LyricsCandidate> =
         search(query, keywords, limit)
