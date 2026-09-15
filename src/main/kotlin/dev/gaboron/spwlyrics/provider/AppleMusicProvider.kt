@@ -1,77 +1,82 @@
 package dev.gaboron.spwlyrics.provider
 
-import dev.gaboron.spwlyrics.codec.TtmlCodec
+import dev.gaboron.spwlyrics.codec.LyricsPlusJsonCodec
 import dev.gaboron.spwlyrics.codec.LyricsScriptConverter
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsDocument
-import dev.gaboron.spwlyrics.domain.LyricsQuality
 import dev.gaboron.spwlyrics.domain.LyricsSource
 import dev.gaboron.spwlyrics.domain.TrackQuery
-import java.net.URI
-import kotlinx.serialization.json.JsonObject
 
-/**
- * Searches the public BiniLyrics Apple Music TTML cache.
- *
- * Apple does not expose lyrics bodies through its public catalog API without a
- * MusicKit user token. Keeping the cache integration here avoids embedding or
- * collecting Apple account credentials in the plugin.
- */
+/** Searches Apple Music lyrics through the Apple-only LyricsPlus route. */
 class AppleMusicProvider(private val http: ProviderHttp) : LyricsProvider {
     override val source = LyricsSource.APPLE_MUSIC
     private val catalogSearch = AppleCatalogSearch(http)
+    private val codec = LyricsPlusJsonCodec()
+    private val documents = object : LinkedHashMap<String, LyricsDocument>(CACHE_SIZE, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, LyricsDocument>?): Boolean =
+            size > CACHE_SIZE
+    }
 
     /** Automatic search already performs structured full/basic fallbacks internally. */
-    override fun automaticSearchQueries(query: TrackQuery): List<String> =
-        query.searchQueries().take(1)
+    override fun automaticSearchQueries(query: TrackQuery): List<String> = query.searchQueries().take(1)
 
-    override fun search(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> {
+    override fun search(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> =
         automaticSearchRequests(query).firstNotNullOfOrNull { request ->
-            runCatching { search(request, limit) }.getOrNull()?.takeIf(List<LyricsCandidate>::isNotEmpty)
-        }?.let { return it }
-        return emptyList()
-    }
+            runCatching { search(request) }.getOrNull()?.let(::listOf)
+        }.orEmpty().take(limit)
 
     override fun searchManual(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> {
         val results = linkedMapOf<String, LyricsCandidate>()
         for (request in manualSearchRequests(query, keywords, limit).take(MAX_MANUAL_REQUESTS)) {
             if (Thread.currentThread().isInterrupted) break
-            runCatching { search(request, limit) }.getOrDefault(emptyList())
-                .forEach { candidate -> results.putIfAbsent(candidate.remoteId, candidate) }
+            runCatching { search(request) }.getOrNull()?.let { results.putIfAbsent(it.remoteId, it) }
             if (results.size >= limit.coerceAtMost(MAX_MANUAL_RESULTS)) break
         }
         return results.values.take(limit.coerceAtMost(MAX_MANUAL_RESULTS))
     }
 
-    private fun search(request: SearchRequest, limit: Int): List<LyricsCandidate> {
-        val root = providerJson.parseToJsonElement(http.get(searchUrl(request))) as JsonObject
-        return root.array("results").orEmpty().mapNotNull { element ->
-            val result = element.asObject() ?: return@mapNotNull null
-            val lyricsUrl = result.string("lyricsUrl")?.takeIf(::isTrustedLyricsUrl) ?: return@mapNotNull null
-            val id = result.string("id") ?: result.string("isrc") ?: return@mapNotNull null
-            val timingType = result.string("timing_type").orEmpty()
-            LyricsCandidate(
-                source = source,
-                remoteId = id,
-                title = result.string("track_name").orEmpty(),
-                artists = result.string("artist_name")?.let(TrackQuery::splitArtists).orEmpty(),
-                album = result.string("album_name").orEmpty(),
-                durationMs = result.long("duration")?.times(1_000),
-                qualityHint = when (timingType.lowercase()) {
-                    "syllable", "word" -> LyricsQuality.KARAOKE_SYNCED
-                    "line" -> LyricsQuality.LINE_SYNCED
-                    else -> null
-                },
-                externalIds = result.string("isrc")?.let { mapOf("isrc" to it) }.orEmpty(),
-                context = mapOf("url" to lyricsUrl),
-            )
-        }.take(limit)
+    private fun search(request: SearchRequest): LyricsCandidate? {
+        val payload = codec.decode(http.get(searchUrl(request)), source)
+        if (!payload.upstreamSource.orEmpty().contains("apple", ignoreCase = true)) return null
+        val document = LyricsScriptConverter.toSimplifiedChinese(payload.document)
+        if (document.lines.isEmpty()) return null
+        val title = payload.title.orEmpty().ifBlank { request.track }
+        val artist = payload.artist.orEmpty().ifBlank { request.artist }
+        val album = payload.album.orEmpty().ifBlank { request.album }
+        val remoteId = payload.isrc?.takeIf(String::isNotBlank)
+            ?: "lyricsplus:${title.lowercase()}|${artist.lowercase()}|${request.durationMs ?: 0}"
+        synchronized(documents) { documents[remoteId] = document }
+        return LyricsCandidate(
+            source = source,
+            remoteId = remoteId,
+            title = title,
+            artists = TrackQuery.splitArtists(artist),
+            album = album,
+            durationMs = request.durationMs,
+            qualityHint = document.quality,
+            externalIds = payload.isrc?.let { mapOf("isrc" to it) }.orEmpty(),
+            context = mapOf(
+                "track" to request.track,
+                "artist" to request.artist,
+                "album" to request.album,
+                "durationMs" to request.durationMs?.toString().orEmpty(),
+            ),
+        )
     }
 
-    override fun fetch(candidate: LyricsCandidate): LyricsDocument? = runCatching {
-        val url = candidate.context["url"]?.takeIf(::isTrustedLyricsUrl) ?: return@runCatching null
-        LyricsScriptConverter.toSimplifiedChinese(TtmlCodec().parse(http.get(url), source))
-    }.getOrNull()?.takeIf { it.lines.isNotEmpty() }
+    override fun fetch(candidate: LyricsCandidate): LyricsDocument? {
+        synchronized(documents) { documents[candidate.remoteId] }?.let { return it }
+        val request = SearchRequest(
+            track = candidate.context["track"].orEmpty().ifBlank { candidate.title },
+            artist = candidate.context["artist"].orEmpty().ifBlank { candidate.artists.joinToString(", ") },
+            album = candidate.context["album"].orEmpty().ifBlank { candidate.album },
+            durationMs = candidate.context["durationMs"]?.toLongOrNull() ?: candidate.durationMs,
+        )
+        return runCatching {
+            search(request)
+            synchronized(documents) { documents[candidate.remoteId] }
+        }.getOrNull()
+    }
 
     private fun automaticSearchRequests(query: TrackQuery): List<SearchRequest> {
         val artist = query.artists.joinToString(", ")
@@ -106,24 +111,20 @@ class AppleMusicProvider(private val http: ProviderHttp) : LyricsProvider {
 
     private fun searchUrl(request: SearchRequest): String {
         val values = linkedMapOf(
-            "track" to request.track,
+            "title" to request.track,
             "artist" to request.artist,
             "album" to request.album,
+            "source" to "apple",
         )
         request.durationMs?.let { values["duration"] = ((it + 500) / 1_000).toString() }
-        return "$SEARCH_URL?" + values
-            .filterValues(String::isNotBlank)
-            .entries.joinToString("&") { (key, value) -> "$key=${ProviderHttpClient.encode(value)}" }
+        return "$SEARCH_URL?" + values.filterValues(String::isNotBlank).entries.joinToString("&") { (key, value) ->
+            "$key=${ProviderHttpClient.encode(value)}"
+        }
     }
 
-    private fun isTrustedLyricsUrl(url: String): Boolean = runCatching {
-        val uri = URI.create(url)
-        uri.scheme.equals("https", ignoreCase = true) && uri.host.equals(STORAGE_HOST, ignoreCase = true)
-    }.getOrDefault(false)
-
     companion object {
-        const val SEARCH_URL = "https://lyrics-api.binimum.org/"
-        const val STORAGE_HOST = "lyrics-storage.binimum.org"
+        const val SEARCH_URL = "https://lyricsplus.binimum.org/v2/lyrics/get"
+        private const val CACHE_SIZE = 64
         private const val MAX_CATALOG_RESULTS = 6
         private const val MAX_MANUAL_RESULTS = 8
         private const val MAX_MANUAL_REQUESTS = 4
