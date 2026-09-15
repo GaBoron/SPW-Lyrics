@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "dev.gaboron.spwlyrics"
-version = "0.3.0"
+version = "0.4.0"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21
