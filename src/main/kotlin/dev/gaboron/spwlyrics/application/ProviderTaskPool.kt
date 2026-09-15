@@ -17,6 +17,7 @@ internal class ProviderTaskPool(
         tasks: List<() -> T?>,
         deadlineNanos: Long,
         stopWhen: (completed: List<IndexedValue<T>>, pendingIndices: Set<Int>) -> Boolean = { _, _ -> false },
+        onProgress: (completed: List<IndexedValue<T>>, pendingIndices: Set<Int>) -> Unit = { _, _ -> },
     ): List<IndexedValue<T>> {
         if (tasks.isEmpty()) return emptyList()
         val completion = ExecutorCompletionService<TaskOutcome<T>>(executor)
@@ -39,6 +40,7 @@ internal class ProviderTaskPool(
                 val outcome = runCatching { future.get() }.getOrNull() ?: continue
                 pending -= outcome.index
                 outcome.value?.let { completed += IndexedValue(outcome.index, it) }
+                onProgress(completed.sortedBy(IndexedValue<T>::index), pending.toSet())
                 if (stopWhen(completed, pending)) break
             }
         } finally {
@@ -53,6 +55,7 @@ internal class ProviderTaskPool(
         snapshotDeadlineNanos: Long,
         snapshotWhen: (completed: List<IndexedValue<T>>, pendingIndices: Set<Int>) -> Boolean = { _, _ -> false },
         stopWhen: (completed: List<IndexedValue<T>>, pendingIndices: Set<Int>) -> Boolean = { _, _ -> false },
+        onProgress: (completed: List<IndexedValue<T>>, pendingIndices: Set<Int>) -> Unit = { _, _ -> },
         onSnapshot: (List<IndexedValue<T>>) -> Unit,
     ): List<IndexedValue<T>> {
         if (tasks.isEmpty()) {
@@ -76,6 +79,7 @@ internal class ProviderTaskPool(
                 val outcome = future.get()
                 pending -= outcome.index
                 outcome.value?.let { completed += IndexedValue(outcome.index, it) }
+                onProgress(completed.sortedBy(IndexedValue<T>::index), pending.toSet())
                 if (!snapshotPublished && snapshotWhen(completed, pending)) {
                     onSnapshot(completed.sortedBy(IndexedValue<T>::index))
                     snapshotPublished = true
@@ -87,6 +91,7 @@ internal class ProviderTaskPool(
                 val outcome = completion.take().get()
                 pending -= outcome.index
                 outcome.value?.let { completed += IndexedValue(outcome.index, it) }
+                onProgress(completed.sortedBy(IndexedValue<T>::index), pending.toSet())
             }
         } finally {
             futures.filterNot { it.isDone }.forEach { it.cancel(true) }

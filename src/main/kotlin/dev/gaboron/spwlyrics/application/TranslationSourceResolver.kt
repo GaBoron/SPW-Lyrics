@@ -37,6 +37,7 @@ internal class TranslationSourceResolver(
         primary: LyricsDocument,
         primaryCandidate: LyricsCandidate,
         query: TrackQuery,
+        onProgress: (finished: Int, total: Int, source: LyricsSource?) -> Unit = { _, _, _ -> },
     ): TranslationSourceMatch? {
         val lookups = orderedLookups(query, primaryCandidate)
         return providerTasks.collect(
@@ -48,6 +49,14 @@ internal class TranslationSourceResolver(
                 }
             },
             deadlineNanos = Long.MAX_VALUE,
+            onProgress = { completed, pending ->
+                onProgress(
+                    providers.size - pending.size,
+                    providers.size,
+                    completed.map(IndexedValue<TranslationSourceMatch>::value)
+                        .minByOrNull { it.document.source.priority }?.document?.source,
+                )
+            },
         ).map(IndexedValue<TranslationSourceMatch>::value)
             .minByOrNull { it.document.source.priority }
     }

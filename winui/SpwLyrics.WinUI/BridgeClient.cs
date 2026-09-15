@@ -41,6 +41,7 @@ public sealed class BridgeClient
         string? source = null,
         string? candidateKey = null,
         bool includeCached = false,
+        IReadOnlyCollection<string>? selectedKeys = null,
         CancellationToken cancellationToken = default)
     {
         if (!IsConfigured) return new ManualUiResponse { Message = "此窗口必须由 SPW Lyrics 插件启动。" };
@@ -57,6 +58,7 @@ public sealed class BridgeClient
             Source = source,
             CandidateKey = candidateKey,
             IncludeCached = includeCached,
+            SelectedKeys = selectedKeys?.ToList(),
         };
         await writer.WriteLineAsync(JsonSerializer.Serialize(request, JsonOptions).AsMemory(), cancellationToken);
         var line = await reader.ReadLineAsync(cancellationToken).AsTask()

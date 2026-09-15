@@ -40,25 +40,51 @@ class LyricsResolver(
         onSnapshot: (ResolvedLyrics) -> Unit,
     ): ResolvedLyrics? = resolveAutomatic(query, snapshotDeadlineNanos, LyricsQuality.PLAIN, onSnapshot)
 
-    fun resolveAutomaticFully(query: TrackQuery): ResolvedLyrics? =
-        resolveAutomatic(query, System.nanoTime(), LyricsQuality.PLAIN) {}
+    fun resolveAutomaticFully(
+        query: TrackQuery,
+        onProgress: (LyricsResolutionProgress) -> Unit = {},
+    ): ResolvedLyrics? = resolveAutomatic(query, System.nanoTime(), LyricsQuality.PLAIN, {}, onProgress)
 
     private fun resolveAutomatic(
         query: TrackQuery,
         snapshotDeadlineNanos: Long,
         minimumQuality: LyricsQuality,
         onSnapshot: (ResolvedLyrics) -> Unit,
+        onProgress: (LyricsResolutionProgress) -> Unit = {},
     ): ResolvedLyrics? {
         val selected = orderedSources.filter { it != LyricsSource.LOCAL }.mapNotNull(providers::get)
+        onProgress(LyricsResolutionProgress(LyricsResolutionStage.SEARCHING, 0.04, "开始并行搜索 ${selected.size} 个歌词来源"))
         val completed = providerTasks.collectProgressively(
             tasks = selected.map { provider -> { resolveProvider(provider, query, Long.MAX_VALUE, minimumQuality) } },
             snapshotDeadlineNanos = snapshotDeadlineNanos,
             snapshotWhen = { results, pending -> hasHighestAvailableSource(results, pending) },
             stopWhen = { results, pending -> hasUnbeatableKaraokeResult(results, pending) },
+            onProgress = { results, pending ->
+                val finished = selected.size - pending.size
+                val best = LyricsSelectionPolicy.select(results.map(IndexedValue<FetchedLyrics>::value))
+                val detail = best?.let {
+                    "已检查 $finished/${selected.size} 个来源，当前最佳：${it.candidate.source.displayName}"
+                } ?: "已检查 $finished/${selected.size} 个来源，继续搜索可靠歌词"
+                onProgress(
+                    LyricsResolutionProgress(
+                        LyricsResolutionStage.SEARCHING,
+                        0.04 + 0.66 * finished / selected.size.coerceAtLeast(1),
+                        detail,
+                    ),
+                )
+            },
         ) { snapshot ->
             selectAndEncode(snapshot)?.let(onSnapshot)
         }
-        return selectAndEncode(completed)
+        val resolved = selectAndEncode(completed)
+        onProgress(
+            LyricsResolutionProgress(
+                LyricsResolutionStage.SELECTING,
+                0.76,
+                resolved?.let { "已选定 ${it.document.source.displayName}，正在检查翻译" } ?: "没有找到可靠歌词",
+            ),
+        )
+        return resolved
     }
 
     fun searchManual(query: TrackQuery, keywords: String, source: LyricsSource?): List<CandidateScore> {
@@ -109,10 +135,30 @@ class LyricsResolver(
         return resolved.copy(document = document, encoded = encoded)
     }
 
-    fun enrichTranslationFully(resolved: ResolvedLyrics, query: TrackQuery): ResolvedLyrics {
-        if (resolved.candidate.source !in PRIMARY_WORD_SOURCES) return resolved
-        if (!SecondaryLyricsEnricher.needsTranslation(resolved.document)) return resolved
-        val match = translationSources.findAll(resolved.document, resolved.candidate, query) ?: return resolved
+    fun enrichTranslationFully(
+        resolved: ResolvedLyrics,
+        query: TrackQuery,
+        onProgress: (LyricsResolutionProgress) -> Unit = {},
+    ): ResolvedLyrics {
+        if (resolved.candidate.source !in PRIMARY_WORD_SOURCES) {
+            onProgress(LyricsResolutionProgress(LyricsResolutionStage.TRANSLATING, 0.93, "当前来源无需跨源补充翻译"))
+            return resolved
+        }
+        if (!SecondaryLyricsEnricher.needsTranslation(resolved.document)) {
+            onProgress(LyricsResolutionProgress(LyricsResolutionStage.TRANSLATING, 0.93, "歌词已自带翻译，无需补充"))
+            return resolved
+        }
+        onProgress(LyricsResolutionProgress(LyricsResolutionStage.TRANSLATING, 0.79, "主歌词缺少翻译，开始查询翻译来源"))
+        val match = translationSources.findAll(resolved.document, resolved.candidate, query) { finished, total, source ->
+            onProgress(
+                LyricsResolutionProgress(
+                    LyricsResolutionStage.TRANSLATING,
+                    0.79 + 0.14 * finished / total.coerceAtLeast(1),
+                    source?.let { "已检查 $finished/$total 个翻译来源，已找到 ${it.displayName} 翻译" }
+                        ?: "已检查 $finished/$total 个翻译来源",
+                ),
+            )
+        } ?: return resolved
         val document = SecondaryLyricsEnricher.enrich(resolved.document, match.document, match.alignment)
         val encoded = SpwLyricsEncoder.encode(document).takeIf(String::isNotBlank) ?: return resolved
         return resolved.copy(document = document, encoded = encoded)

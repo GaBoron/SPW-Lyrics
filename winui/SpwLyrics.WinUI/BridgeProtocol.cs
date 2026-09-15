@@ -10,6 +10,7 @@ public sealed class ManualUiRequest
     public string? Source { get; init; }
     public string? CandidateKey { get; init; }
     public bool IncludeCached { get; init; }
+    public List<string>? SelectedKeys { get; init; }
 }
 
 public sealed class ManualUiResponse
@@ -64,6 +65,8 @@ public sealed class BatchUiSnapshot
     public string State { get; init; } = "idle";
     public string StateLabel { get; init; } = "准备就绪";
     public int Total { get; init; }
+    public int Selected { get; init; }
+    public double Progress { get; init; }
     public int Processed { get; init; }
     public int Completed { get; init; }
     public int Failed { get; init; }
@@ -79,6 +82,9 @@ public sealed class BatchUiItem
     public string Album { get; init; } = "";
     public string State { get; init; } = "waiting";
     public string StateLabel { get; init; } = "等待处理";
+    public bool Selected { get; init; } = true;
+    public double Progress { get; init; }
+    public string Stage { get; init; } = "等待处理";
     public string Source { get; init; } = "";
     public string Quality { get; init; } = "";
     public string Message { get; init; } = "";

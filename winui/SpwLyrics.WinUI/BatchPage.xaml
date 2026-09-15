@@ -34,7 +34,7 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
             <Border Padding="14,10" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
-                <StackPanel><TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="音乐库" /><TextBlock x:Name="TotalText" FontSize="22" FontWeight="SemiBold" Text="—" /></StackPanel>
+                <StackPanel><TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="已选择 / 音乐库" /><TextBlock x:Name="TotalText" FontSize="22" FontWeight="SemiBold" Text="—" /></StackPanel>
             </Border>
             <Border Grid.Column="1" Padding="14,10" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
                 <StackPanel><TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="已处理" /><TextBlock x:Name="ProcessedText" FontSize="22" FontWeight="SemiBold" Text="—" /></StackPanel>
@@ -60,9 +60,10 @@
         </Grid>
 
         <Grid Grid.Row="3" ColumnSpacing="12">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
             <ProgressBar x:Name="OverallProgress" Height="4" VerticalAlignment="Center" />
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+            <TextBlock x:Name="OverallProgressText" Grid.Column="1" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="0%" />
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
                 <ProgressRing x:Name="ActiveRing" Width="16" Height="16" IsActive="False" />
                 <TextBlock x:Name="StateText" VerticalAlignment="Center" FontWeight="SemiBold" Text="正在读取音乐库…" />
             </StackPanel>
@@ -72,23 +73,30 @@
             <Grid>
                 <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
                 <Grid Padding="12,9" ColumnSpacing="12" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="26" /><ColumnDefinition Width="3*" /><ColumnDefinition Width="105" /><ColumnDefinition Width="2*" /></Grid.ColumnDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="36" /><ColumnDefinition Width="3*" /><ColumnDefinition Width="105" /><ColumnDefinition Width="2*" /><ColumnDefinition Width="130" /></Grid.ColumnDefinitions>
+                    <CheckBox x:Name="SelectAllCheckBox" AutomationProperties.Name="全选或取消全选歌曲" Click="SelectAllCheckBox_Click" IsThreeState="True" />
                     <TextBlock Grid.Column="1" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="歌曲" />
                     <TextBlock Grid.Column="2" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="状态" />
-                    <TextBlock Grid.Column="3" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="结果" />
+                    <TextBlock Grid.Column="3" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="当前阶段" />
+                    <TextBlock Grid.Column="4" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="结果" />
                 </Grid>
                 <ListView x:Name="TrackList" Grid.Row="1" AutomationProperties.Name="批量处理状态列表">
                     <ListView.ItemTemplate>
                         <DataTemplate x:DataType="local:BatchItemViewModel">
                             <Grid Padding="12,8" ColumnSpacing="12">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="26" /><ColumnDefinition Width="3*" /><ColumnDefinition Width="105" /><ColumnDefinition Width="2*" /></Grid.ColumnDefinitions>
-                                <FontIcon FontSize="14" Glyph="{x:Bind StatusGlyph, Mode=OneWay}" />
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="36" /><ColumnDefinition Width="3*" /><ColumnDefinition Width="105" /><ColumnDefinition Width="2*" /><ColumnDefinition Width="130" /></Grid.ColumnDefinitions>
+                                <CheckBox AutomationProperties.Name="选择此歌曲" Click="ItemSelection_Click" IsChecked="{x:Bind IsSelected, Mode=TwoWay}" IsEnabled="{x:Bind CanSelect, Mode=OneWay}" />
                                 <StackPanel Grid.Column="1" Spacing="2">
                                     <TextBlock FontWeight="SemiBold" Text="{x:Bind Title}" TextTrimming="CharacterEllipsis" />
                                     <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="{x:Bind Detail}" TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
-                                <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="{x:Bind StateLabel, Mode=OneWay}" />
-                                <TextBlock Grid.Column="3" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="{x:Bind Result, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
+                                <StackPanel Grid.Column="2" VerticalAlignment="Center" Orientation="Horizontal" Spacing="6"><FontIcon FontSize="12" Glyph="{x:Bind StatusGlyph, Mode=OneWay}" /><TextBlock Text="{x:Bind StateLabel, Mode=OneWay}" /></StackPanel>
+                                <StackPanel Grid.Column="3" VerticalAlignment="Center" Spacing="4">
+                                    <TextBlock Text="{x:Bind Stage, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
+                                    <ProgressBar Height="3" Maximum="1" Value="{x:Bind Progress, Mode=OneWay}" />
+                                    <TextBlock FontSize="11" Foreground="{ThemeResource TextFillColorTertiaryBrush}" Text="{x:Bind Message, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="4" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="{x:Bind Result, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
                             </Grid>
                         </DataTemplate>
                     </ListView.ItemTemplate>

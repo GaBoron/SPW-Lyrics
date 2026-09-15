@@ -10,6 +10,7 @@ data class ManualUiRequest(
     val source: String? = null,
     val candidateKey: String? = null,
     val includeCached: Boolean = false,
+    val selectedKeys: List<String>? = null,
 )
 
 @Serializable
@@ -56,6 +57,8 @@ data class BatchUiSnapshot(
     val state: String,
     val stateLabel: String,
     val total: Int,
+    val selected: Int,
+    val progress: Double,
     val processed: Int,
     val completed: Int,
     val failed: Int,
@@ -71,6 +74,9 @@ data class BatchUiItem(
     val album: String,
     val state: String,
     val stateLabel: String,
+    val selected: Boolean,
+    val progress: Double,
+    val stage: String,
     val source: String,
     val quality: String,
     val message: String,
