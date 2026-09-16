@@ -54,6 +54,6 @@ SPW Lyrics 是一款面向 [Salt Player for Windows（SPW）](https://github.com
 
 ## ⚠️ 兼容性
 
-当前版本为 `0.4.0`，已在 SPW `1.16.2`（Steam、Windows x64）上测试。SPW 创意工坊接口仍处于试验阶段，后续 SPW 更新可能影响插件兼容性。
+当前版本为 `0.4.0`，已在 SPW `1.18.0`（Steam、Windows x64）上测试。SPW 创意工坊接口仍处于试验阶段，后续 SPW 更新可能影响插件兼容性。
 
 本项目采用 [MIT License](LICENSE)。
