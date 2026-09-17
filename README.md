@@ -30,7 +30,7 @@ SPW Lyrics 是一款面向 [Salt Player for Windows（SPW）](https://github.com
 5. 如果插件没有立即出现，请重启一次 SPW。
 
 > [!IMPORTANT]
-> Release 中的 ZIP 已包含全部运行组件。普通用户不需要另外安装 Java、.NET 或其他运行库。
+> Release 中的 ZIP 已包含全部运行组件，普通用户不需要另外安装 Java、.NET 或其他运行库，这也是插件体积庞大的原因，**不是屎山代码**。
 
 ## 🚀 开始使用
 
