@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/GaBoron/SPW-Lyrics/releases/latest"><img src="https://img.shields.io/github/v/release/GaBoron/SPW-Lyrics?label=%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC&color=6750A4" alt="最新版本"></a>
-  <img src="https://img.shields.io/badge/SPW-1.16.2-3A7AFE" alt="已测试 SPW 版本">
+  <img src="https://img.shields.io/badge/SPW-1.19.0-3A7AFE" alt="支持的最低 SPW 版本">
   <img src="https://img.shields.io/badge/Windows-x64-0078D4" alt="Windows x64">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/GaBoron/SPW-Lyrics?color=2E8B57" alt="许可证"></a>
 </p>
