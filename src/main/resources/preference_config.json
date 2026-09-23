@@ -14,13 +14,6 @@
           "default_value": "always"
         },
         {
-          "key": "manual_search_shortcut_enabled",
-          "type": "switch",
-          "title": "通过快捷键开启",
-          "summary": "在 SPW 前台按 Ctrl+Shift+M 打开手动搜索歌词",
-          "default_value": true
-        },
-        {
           "type": "button",
           "title": "打开手动搜索",
           "summary": "无需快捷键，直接打开当前歌曲的手动搜索窗口",

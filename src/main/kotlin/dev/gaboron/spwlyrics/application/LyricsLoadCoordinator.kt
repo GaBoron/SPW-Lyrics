@@ -305,7 +305,7 @@ class LyricsLoadCoordinator(
 
     private fun notifyAutomaticFailure(query: TrackQuery) {
         if (current.get()?.key == query.key && notifiedFailures.add(query.key)) {
-            notify("自动加载歌词失败；可在插件设置中打开手动搜索，或启用快捷键后在 SPW 前台按 Ctrl+Shift+M。")
+            notify("自动加载歌词失败；可在插件设置中打开手动搜索，或使用 SPW 中配置的歌词搜索快捷键。")
         }
     }
 

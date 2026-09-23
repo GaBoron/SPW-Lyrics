@@ -2,6 +2,7 @@ package dev.gaboron.spwlyrics.integration
 
 import dev.gaboron.spwlyrics.domain.CandidateScore
 import dev.gaboron.spwlyrics.domain.LyricsSource
+import dev.gaboron.spwlyrics.domain.TrackQuery
 import java.awt.BorderLayout
 import java.awt.Dialog
 import java.awt.Dimension
@@ -29,16 +30,20 @@ object ManualSearchWindow {
     private val sourceChoices = listOf<LyricsSource?>(null) + LyricsSource.entries.filter { it != LyricsSource.LOCAL }
     @Volatile private var activeDialog: JDialog? = null
 
-    fun open() = SwingUtilities.invokeLater {
+    fun open() {
+        CompletableFuture.supplyAsync(PluginRuntime::currentQuery)
+            .thenAccept { query -> SwingUtilities.invokeLater { show(query) } }
+    }
+
+    private fun show(query: TrackQuery?) {
         activeDialog?.takeIf { it.isDisplayable }?.let {
             it.toFront()
             it.requestFocus()
-            return@invokeLater
+            return
         }
-        val query = PluginRuntime.currentQuery()
         if (query == null) {
             JOptionPane.showMessageDialog(null, "请先播放一首歌曲。", "SPW Lyrics", JOptionPane.INFORMATION_MESSAGE)
-            return@invokeLater
+            return
         }
 
         val dialog = JDialog(null as Window?, "SPW Lyrics - 手动搜索", Dialog.ModalityType.APPLICATION_MODAL)

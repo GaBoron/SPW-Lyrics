@@ -2,7 +2,6 @@ package dev.gaboron.spwlyrics.application
 
 import dev.gaboron.spwlyrics.domain.TrackQuery
 import dev.gaboron.spwlyrics.storage.LyricsCache
-import dev.gaboron.spwlyrics.storage.SpwLibraryCatalog
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -29,7 +28,7 @@ internal data class LyricsBatchSnapshot(
 
 /** Preloads reliable lyrics into the plugin cache while keeping playback refresh work separate. */
 internal class LyricsBatchProcessor(
-    private val catalog: SpwLibraryCatalog,
+    private val loadLibrary: () -> List<TrackQuery>,
     private val cache: LyricsCache,
     private val resolver: LyricsResolver,
 ) : AutoCloseable {
@@ -109,7 +108,7 @@ internal class LyricsBatchProcessor(
     }
 
     private fun prepare(includeCached: Boolean, selectedKeys: Set<String>? = null) {
-        items = catalog.load().map { query ->
+        items = loadLibrary().map { query ->
             when {
                 selectedKeys != null && query.key !in selectedKeys -> LyricsBatchItem(
                     query,
