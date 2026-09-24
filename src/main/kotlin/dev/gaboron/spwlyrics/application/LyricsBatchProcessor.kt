@@ -2,7 +2,6 @@ package dev.gaboron.spwlyrics.application
 
 import dev.gaboron.spwlyrics.domain.TrackQuery
 import dev.gaboron.spwlyrics.storage.LyricsCache
-import dev.gaboron.spwlyrics.storage.SpwLibraryCatalog
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -29,7 +28,7 @@ internal data class LyricsBatchSnapshot(
 
 /** Preloads reliable lyrics into the plugin cache while keeping playback refresh work separate. */
 internal class LyricsBatchProcessor(
-    private val catalog: SpwLibraryCatalog,
+    private val loadLibrary: () -> List<TrackQuery>,
     private val cache: LyricsCache,
     private val resolver: LyricsResolver,
 ) : AutoCloseable {
@@ -109,7 +108,7 @@ internal class LyricsBatchProcessor(
     }
 
     private fun prepare(includeCached: Boolean, selectedKeys: Set<String>? = null) {
-        items = catalog.load().map { query ->
+        items = loadLibrary().map { query ->
             when {
                 selectedKeys != null && query.key !in selectedKeys -> LyricsBatchItem(
                     query,
@@ -213,10 +212,6 @@ internal class LyricsBatchProcessor(
         return try {
             val resolved = resolver.resolveAutomaticFully(query) { progress ->
                 updateProgress(expectedGeneration, index, progress.fraction, stageLabel(progress.stage), progress.detail)
-            }?.let { found ->
-                resolver.enrichTranslationFully(found, query) { progress ->
-                    updateProgress(expectedGeneration, index, progress.fraction, stageLabel(progress.stage), progress.detail)
-                }
             }
             own.complete(resolved)
             resolved
@@ -242,7 +237,6 @@ internal class LyricsBatchProcessor(
     private fun stageLabel(stage: LyricsResolutionStage): String = when (stage) {
         LyricsResolutionStage.SEARCHING -> "搜索歌词"
         LyricsResolutionStage.SELECTING -> "选择最优歌词"
-        LyricsResolutionStage.TRANSLATING -> "补充翻译"
     }
 
     private fun recordingKey(query: TrackQuery): String = listOf(

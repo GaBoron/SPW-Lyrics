@@ -2,6 +2,7 @@ package dev.gaboron.spwlyrics.integration
 
 import dev.gaboron.spwlyrics.domain.CandidateScore
 import dev.gaboron.spwlyrics.domain.LyricsSource
+import dev.gaboron.spwlyrics.domain.TrackQuery
 import java.awt.BorderLayout
 import java.awt.Dialog
 import java.awt.Dimension
@@ -29,16 +30,20 @@ object ManualSearchWindow {
     private val sourceChoices = listOf<LyricsSource?>(null) + LyricsSource.entries.filter { it != LyricsSource.LOCAL }
     @Volatile private var activeDialog: JDialog? = null
 
-    fun open() = SwingUtilities.invokeLater {
+    fun open() {
+        CompletableFuture.supplyAsync(PluginRuntime::currentQuery)
+            .thenAccept { query -> SwingUtilities.invokeLater { show(query) } }
+    }
+
+    private fun show(query: TrackQuery?) {
         activeDialog?.takeIf { it.isDisplayable }?.let {
             it.toFront()
             it.requestFocus()
-            return@invokeLater
+            return
         }
-        val query = PluginRuntime.currentQuery()
         if (query == null) {
             JOptionPane.showMessageDialog(null, "请先播放一首歌曲。", "SPW Lyrics", JOptionPane.INFORMATION_MESSAGE)
-            return@invokeLater
+            return
         }
 
         val dialog = JDialog(null as Window?, "SPW Lyrics - 手动搜索", Dialog.ModalityType.APPLICATION_MODAL)
@@ -66,7 +71,6 @@ object ManualSearchWindow {
         val apply = JButton("应用所选歌词").apply { isEnabled = false }
         val local = JButton("切回本地歌词")
         val automatic = JButton("恢复自动匹配")
-        val untranslated = JButton("取消补充翻译")
         val close = JButton("关闭")
 
         fun selected(): CandidateScore? {
@@ -133,17 +137,13 @@ object ManualSearchWindow {
             val success = PluginRuntime.useAutomatic()
             status.text = if (success) "已清除手动锁定，正在重新自动匹配" else "当前没有正在播放的歌曲"
         }
-        untranslated.addActionListener {
-            val success = PluginRuntime.disableTranslation()
-            status.text = if (success) "已取消插件自动补充的翻译；来源自带翻译保持不变" else "当前歌词没有可取消的补充翻译"
-        }
         close.addActionListener { dialog.dispose() }
 
         val controls = JPanel(FlowLayout(FlowLayout.LEADING)).apply {
             add(JLabel("关键词")); add(keywords); add(JLabel("来源")); add(sources); add(search)
         }
         val actions = JPanel(FlowLayout(FlowLayout.TRAILING)).apply {
-            add(status); add(untranslated); add(automatic); add(local); add(apply); add(close)
+            add(status); add(automatic); add(local); add(apply); add(close)
         }
         dialog.contentPane.add(controls, BorderLayout.NORTH)
         dialog.contentPane.add(

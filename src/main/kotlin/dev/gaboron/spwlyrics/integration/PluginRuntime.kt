@@ -3,6 +3,7 @@ package dev.gaboron.spwlyrics.integration
 import com.xuncorp.spw.workshop.api.PlaybackExtensionPoint
 import com.xuncorp.spw.workshop.api.UnstableSpwWorkshopApi
 import com.xuncorp.spw.workshop.api.WorkshopApi
+import com.xuncorp.spw.workshop.api.PluginPermissionDeniedException
 import dev.gaboron.spwlyrics.application.AutomaticReplacementPolicy
 import dev.gaboron.spwlyrics.application.LyricsLoadPhase
 import dev.gaboron.spwlyrics.application.LyricsLoadCoordinator
@@ -12,17 +13,14 @@ import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsSource
 import dev.gaboron.spwlyrics.domain.TrackQuery
 import dev.gaboron.spwlyrics.provider.AmllProvider
-import dev.gaboron.spwlyrics.provider.AppleMusicProvider
 import dev.gaboron.spwlyrics.provider.KugouMusicProvider
 import dev.gaboron.spwlyrics.provider.LocalLyricsProvider
 import dev.gaboron.spwlyrics.provider.NeteaseMusicProvider
 import dev.gaboron.spwlyrics.provider.ProviderHttpClient
 import dev.gaboron.spwlyrics.provider.QqMusicProvider
 import dev.gaboron.spwlyrics.storage.FileLyricsCache
-import dev.gaboron.spwlyrics.storage.SpwLibraryCatalog
 import dev.gaboron.spwlyrics.integration.manualui.ManualUiBridge
 import dev.gaboron.spwlyrics.integration.manualui.ManualUiSession
-import dev.gaboron.spwlyrics.integration.shortcut.ManualSearchShortcutController
 import java.nio.file.Path
 import java.time.Duration
 import kotlin.io.path.Path
@@ -32,9 +30,9 @@ object PluginRuntime {
     @Volatile private var batchProcessor: LyricsBatchProcessor? = null
     @Volatile private var settings: PluginSettings? = null
     @Volatile private var manualUiBridge: ManualUiBridge? = null
-    @Volatile private var manualSearchShortcut: ManualSearchShortcutController? = null
+    @Volatile private var manualSearchShortcut: SpwManualSearchBinding? = null
     @Volatile private var cacheFolderOpener: CacheFolderOpener? = null
-    private val durationProbe: TrackDurationProbe = CachedTrackDurationProbe()
+    private val libraryTracks = SpwLibraryTrackSource()
 
     @Synchronized
     @OptIn(UnstableSpwWorkshopApi::class)
@@ -53,7 +51,6 @@ object PluginRuntime {
                 ProviderHttpClient(requestTimeout = Duration.ofSeconds(6)),
                 legacyIndexPath = root.resolve("amll").resolve("amll-index.jsonl"),
             ),
-            AppleMusicProvider(http),
             QqMusicProvider(http),
             KugouMusicProvider(http),
             NeteaseMusicProvider(http),
@@ -66,10 +63,8 @@ object PluginRuntime {
             refreshBridge = ReflectiveLyricsRefreshBridge(),
             notify = ::toastWarning,
         )
-        val roamingData = System.getenv("APPDATA")?.takeIf(String::isNotBlank)
-            ?.let(::Path) ?: Path(System.getProperty("user.home")).resolve("AppData").resolve("Roaming")
         val batch = LyricsBatchProcessor(
-            catalog = SpwLibraryCatalog(roamingData.resolve("Salt Player for Windows").resolve("spw.db")),
+            loadLibrary = libraryTracks::load,
             cache = cache,
             resolver = resolver,
         )
@@ -83,35 +78,35 @@ object PluginRuntime {
                 apply = ::applyManual,
                 useLocal = ::useLocal,
                 useAutomatic = ::useAutomatic,
-                disableTranslation = ::disableTranslation,
                 batchProcessor = batch,
             ),
         )
-        val shortcutController = ManualSearchShortcutController(
-            onPressed = ::openManualSearch,
-            onFailure = {
-                toastWarning("快捷键监听未启动，请在插件设置中关闭并重新开启“通过快捷键开启”后重试。")
-            },
-        )
-        manualSearchShortcut = shortcutController
-        val pluginSettings = PluginSettings(
-            manager = WorkshopApi.manager.createConfigManager(),
-            onManualSearchShortcutEnabledChanged = shortcutController::setEnabled,
-        )
-        settings = pluginSettings
-        shortcutController.setEnabled(pluginSettings.manualSearchShortcutEnabled())
+        settings = PluginSettings(WorkshopApi.manager.createConfigManager())
+        val shortcut = SpwManualSearchBinding(::openManualSearch)
+        manualSearchShortcut = shortcut
+        runCatching { shortcut.register() }.onFailure {
+            toastWarning("无法注册歌词搜索快捷键，请检查 SPW 的快捷键权限和冲突设置。")
+        }.onSuccess { granted ->
+            if (!granted) toastWarning("歌词搜索快捷键未启用：请在 SPW 的插件权限中授予快捷键权限。")
+        }
     }
 
     fun beforeLoad(mediaItem: PlaybackExtensionPoint.MediaItem): String? = load(mediaItem, LyricsLoadPhase.BEFORE_LOCAL)
     fun afterLocalLyricsMissing(mediaItem: PlaybackExtensionPoint.MediaItem): String? =
         load(mediaItem, LyricsLoadPhase.AFTER_LOCAL_MISSING)
-    fun currentQuery(): TrackQuery? = coordinator?.currentQuery()
+    fun currentQuery(): TrackQuery? = runCatching { libraryTracks.current() }.getOrElse { error ->
+        toastWarning(if (error is PluginPermissionDeniedException) {
+            "请在 SPW 的插件权限中授予曲库读取权限。"
+        } else {
+            "读取当前歌曲失败：${error.message ?: "未知错误"}"
+        })
+        null
+    }
     fun searchManual(keywords: String, source: LyricsSource?) = coordinator?.searchManual(keywords, source).orEmpty()
     fun preview(candidate: LyricsCandidate) = coordinator?.preview(candidate)
     fun applyManual(candidate: LyricsCandidate): Boolean = coordinator?.applyManual(candidate) == true
     fun useLocal(): Boolean = coordinator?.useLocal() == true
     fun useAutomatic(): Boolean = coordinator?.useAutomatic() == true
-    fun disableTranslation(): Boolean = coordinator?.disableSupplementalTranslation() == true
     @Synchronized
     fun openManualSearch() {
         val bridge = manualUiBridge ?: return
@@ -139,23 +134,15 @@ object PluginRuntime {
         batchProcessor = null
         coordinator?.close()
         coordinator = null
+        libraryTracks.clear()
     }
 
     private fun load(mediaItem: PlaybackExtensionPoint.MediaItem, phase: LyricsLoadPhase): String? =
         coordinator?.onLoad(
-            mediaItem.toQuery(),
+            libraryTracks.fromLyricsCallback(mediaItem),
             phase,
             settings?.automaticReplacementPolicy() ?: AutomaticReplacementPolicy.ALWAYS,
         )
-
-    private fun PlaybackExtensionPoint.MediaItem.toQuery() = TrackQuery(
-        title = title,
-        artists = TrackQuery.splitArtists(artist),
-        album = album,
-        albumArtists = TrackQuery.splitArtists(albumArtist),
-        path = path,
-        durationMs = durationProbe.durationMs(path),
-    )
 
     private fun toastWarning(message: String) {
         runCatching { WorkshopApi.ui.toast(message, WorkshopApi.Ui.ToastType.Warning) }
