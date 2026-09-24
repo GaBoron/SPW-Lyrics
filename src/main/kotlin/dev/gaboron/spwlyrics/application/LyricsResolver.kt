@@ -275,7 +275,7 @@ class LyricsResolver(
     }
 
     private companion object {
-        val PRIMARY_WORD_SOURCES = setOf(LyricsSource.AMLL, LyricsSource.APPLE_MUSIC)
+        val PRIMARY_WORD_SOURCES = setOf(LyricsSource.AMLL)
         const val MANUAL_RESULTS_PER_SOURCE = 8
         const val MANUAL_SEARCH_TIMEOUT_MILLIS = 6_000L
         const val PROVIDER_SEARCH_BUDGET_MILLIS = 12_000L
