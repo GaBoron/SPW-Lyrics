@@ -15,7 +15,6 @@ internal class ManualUiSession(
     private val apply: (LyricsCandidate) -> Boolean,
     private val useLocal: () -> Boolean,
     private val useAutomatic: () -> Boolean,
-    private val disableTranslation: () -> Boolean,
     batchProcessor: dev.gaboron.spwlyrics.application.LyricsBatchProcessor,
 ) {
     private val candidates = ConcurrentHashMap<String, LyricsCandidate>()
@@ -37,13 +36,6 @@ internal class ManualUiSession(
         }
         "automatic" -> useAutomatic().let { applied ->
             ManualUiResponse(applied, if (applied) "已清除手动锁定，正在重新自动匹配。" else "当前没有可切换的歌曲。")
-        }
-        "untranslated" -> disableTranslation().let { applied ->
-            ManualUiResponse(
-                applied,
-                if (applied) "已取消插件自动补充的翻译；歌词源自带翻译保持不变。"
-                else "当前歌词没有可取消的补充翻译。",
-            )
         }
         else -> ManualUiResponse(false, "未知请求。")
     }

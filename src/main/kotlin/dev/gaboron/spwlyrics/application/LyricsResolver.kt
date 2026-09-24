@@ -32,7 +32,6 @@ class LyricsResolver(
     private val orderedSources = LyricsSource.entries.sortedBy(LyricsSource::priority)
     private val manualCandidateInspector = ManualCandidateInspector()
     private val providerTasks = ProviderTaskPool()
-    private val translationSources = TranslationSourceResolver(this.providers, providerTasks)
 
     fun resolveAutomaticProgressively(
         query: TrackQuery,
@@ -146,50 +145,6 @@ class LyricsResolver(
         encode(FetchedLyrics(candidate, document))
     }
 
-    fun enrichTranslation(
-        resolved: ResolvedLyrics,
-        query: TrackQuery,
-        deadlineNanos: Long,
-    ): ResolvedLyrics {
-        if (resolved.candidate.source !in PRIMARY_WORD_SOURCES) return resolved
-        val document = enrichFromOtherSources(resolved.document, resolved.candidate, query, deadlineNanos)
-        if (document == resolved.document) return resolved
-        val encoded = SpwLyricsEncoder.encode(document).takeIf(String::isNotBlank) ?: return resolved
-        return resolved.copy(document = document, encoded = encoded)
-    }
-
-    fun enrichTranslationFully(
-        resolved: ResolvedLyrics,
-        query: TrackQuery,
-        onProgress: (LyricsResolutionProgress) -> Unit = {},
-    ): ResolvedLyrics {
-        if (resolved.candidate.source !in PRIMARY_WORD_SOURCES) {
-            onProgress(LyricsResolutionProgress(LyricsResolutionStage.TRANSLATING, 0.93, "当前来源无需跨源补充翻译"))
-            return resolved
-        }
-        if (!SecondaryLyricsEnricher.needsTranslation(resolved.document)) {
-            onProgress(LyricsResolutionProgress(LyricsResolutionStage.TRANSLATING, 0.93, "歌词已自带翻译，无需补充"))
-            return resolved
-        }
-        onProgress(LyricsResolutionProgress(LyricsResolutionStage.TRANSLATING, 0.79, "主歌词缺少翻译，开始查询翻译来源"))
-        val match = translationSources.findAll(resolved.document, resolved.candidate, query) { finished, total, source ->
-            onProgress(
-                LyricsResolutionProgress(
-                    LyricsResolutionStage.TRANSLATING,
-                    0.79 + 0.14 * finished / total.coerceAtLeast(1),
-                    source?.let { "已检查 $finished/$total 个翻译来源，已找到 ${it.displayName} 翻译" }
-                        ?: "已检查 $finished/$total 个翻译来源",
-                ),
-            )
-        } ?: return resolved
-        val document = SecondaryLyricsEnricher.enrich(resolved.document, match.document, match.alignment)
-        val encoded = SpwLyricsEncoder.encode(document).takeIf(String::isNotBlank) ?: return resolved
-        return resolved.copy(document = document, encoded = encoded)
-    }
-
-    fun needsTranslationEnrichment(resolved: ResolvedLyrics): Boolean =
-        resolved.candidate.source in PRIMARY_WORD_SOURCES && SecondaryLyricsEnricher.needsTranslation(resolved.document)
-
     fun toCache(resolved: ResolvedLyrics): CachedLyrics = CachedLyrics(
         document = resolved.document,
         encoded = resolved.encoded,
@@ -240,17 +195,6 @@ class LyricsResolver(
         return FetchedLyrics(winner, document)
     }
 
-    private fun enrichFromOtherSources(
-        primary: LyricsDocument,
-        primaryCandidate: LyricsCandidate,
-        query: TrackQuery,
-        deadlineNanos: Long,
-    ): LyricsDocument {
-        if (!SecondaryLyricsEnricher.needsTranslation(primary)) return primary
-        val match = translationSources.find(primary, primaryCandidate, query, deadlineNanos) ?: return primary
-        return SecondaryLyricsEnricher.enrich(primary, match.document, match.alignment)
-    }
-
     override fun close() {
         providerTasks.close()
     }
@@ -275,7 +219,6 @@ class LyricsResolver(
     }
 
     private companion object {
-        val PRIMARY_WORD_SOURCES = setOf(LyricsSource.AMLL)
         const val MANUAL_RESULTS_PER_SOURCE = 8
         const val MANUAL_SEARCH_TIMEOUT_MILLIS = 6_000L
         const val PROVIDER_SEARCH_BUDGET_MILLIS = 12_000L

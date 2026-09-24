@@ -31,11 +31,10 @@ data class ManualOverride(
     val local: Boolean,
     val source: LyricsSource? = null,
     val candidate: LyricsCandidate? = null,
-    val suppressSupplementalTranslation: Boolean = false,
     val modelVersion: Int = MANUAL_OVERRIDE_MODEL_VERSION,
 )
 
-const val LYRICS_CACHE_MODEL_VERSION = 4
+const val LYRICS_CACHE_MODEL_VERSION = 5
 const val MANUAL_OVERRIDE_MODEL_VERSION = 2
 
 interface LyricsCache {

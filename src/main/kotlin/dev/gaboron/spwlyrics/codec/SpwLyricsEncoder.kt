@@ -7,29 +7,18 @@ import dev.gaboron.spwlyrics.domain.LyricsQuality
 import kotlin.math.max
 
 object SpwLyricsEncoder {
-    const val VERSION = 7
+    const val VERSION = 8
 
     fun encode(document: LyricsDocument): String {
         if (document.lines.isEmpty()) return ""
-        val translationSources = document.metadata["translationSource"].orEmpty().filter(String::isNotBlank)
-        val romanizationSources = document.metadata["romanizationSource"].orEmpty().filter(String::isNotBlank)
-        val sourceLine = buildString {
-            append("歌词来源：${document.source.displayName}")
-            if (translationSources.isNotEmpty()) append("；翻译：${translationSources.joinToString("、")}")
-            if (romanizationSources.isNotEmpty()) append("；音译：${romanizationSources.joinToString("、")}")
-        }
         if (document.quality == LyricsQuality.PLAIN) {
-            return buildList {
-                add(sourceLine)
-                addAll(document.lines.map(LyricLine::text).filter(String::isNotBlank))
+            return document.lines.flatMap { line ->
+                listOfNotNull(line.text.takeIf(String::isNotBlank), line.translation?.takeIf(String::isNotBlank))
             }.joinToString("\n")
         }
 
-        val firstLyricStart = document.lines.mapNotNull(LyricLine::startMs).minOrNull()?.coerceAtLeast(0)
-        val sourceEnd = firstLyricStart?.let { if (it > 0) it else 1L }
-        val occupiedStarts = mutableSetOf(0L)
+        val occupiedStarts = mutableSetOf<Long>()
         return buildList {
-            add(timestamp(0) + sourceLine + sourceEnd?.let(::timestamp).orEmpty())
             document.lines.sortedWith(compareBy<LyricLine> { it.startMs ?: Long.MAX_VALUE }.thenBy { it.background })
                 .forEach { line ->
                     val originalStart = line.startMs?.coerceAtLeast(0) ?: return@forEach

@@ -212,10 +212,6 @@ internal class LyricsBatchProcessor(
         return try {
             val resolved = resolver.resolveAutomaticFully(query) { progress ->
                 updateProgress(expectedGeneration, index, progress.fraction, stageLabel(progress.stage), progress.detail)
-            }?.let { found ->
-                resolver.enrichTranslationFully(found, query) { progress ->
-                    updateProgress(expectedGeneration, index, progress.fraction, stageLabel(progress.stage), progress.detail)
-                }
             }
             own.complete(resolved)
             resolved
@@ -241,7 +237,6 @@ internal class LyricsBatchProcessor(
     private fun stageLabel(stage: LyricsResolutionStage): String = when (stage) {
         LyricsResolutionStage.SEARCHING -> "搜索歌词"
         LyricsResolutionStage.SELECTING -> "选择最优歌词"
-        LyricsResolutionStage.TRANSLATING -> "补充翻译"
     }
 
     private fun recordingKey(query: TrackQuery): String = listOf(

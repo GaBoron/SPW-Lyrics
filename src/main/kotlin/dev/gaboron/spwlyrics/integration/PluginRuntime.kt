@@ -78,7 +78,6 @@ object PluginRuntime {
                 apply = ::applyManual,
                 useLocal = ::useLocal,
                 useAutomatic = ::useAutomatic,
-                disableTranslation = ::disableTranslation,
                 batchProcessor = batch,
             ),
         )
@@ -108,7 +107,6 @@ object PluginRuntime {
     fun applyManual(candidate: LyricsCandidate): Boolean = coordinator?.applyManual(candidate) == true
     fun useLocal(): Boolean = coordinator?.useLocal() == true
     fun useAutomatic(): Boolean = coordinator?.useAutomatic() == true
-    fun disableTranslation(): Boolean = coordinator?.disableSupplementalTranslation() == true
     @Synchronized
     fun openManualSearch() {
         val bridge = manualUiBridge ?: return

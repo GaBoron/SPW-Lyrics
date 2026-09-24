@@ -1,8 +1,6 @@
 package dev.gaboron.spwlyrics.application
 
-import dev.gaboron.spwlyrics.codec.SpwLyricsEncoder
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
-import dev.gaboron.spwlyrics.domain.LyricsDocument
 import dev.gaboron.spwlyrics.domain.TrackQuery
 import dev.gaboron.spwlyrics.storage.CachedLyrics
 import dev.gaboron.spwlyrics.storage.LyricsCache
@@ -32,9 +30,7 @@ class LyricsLoadCoordinator(
     private val inFlight = ConcurrentHashMap<String, CompletableFuture<*>>()
     private val activeAutomaticLoads = ConcurrentHashMap<String, Any>()
     private val qualityUpgradeInFlight = ConcurrentHashMap<String, CompletableFuture<*>>()
-    private val translationInFlight = ConcurrentHashMap<String, CompletableFuture<*>>()
     private val qualityUpgradeAttempts = BackgroundAttemptGate(QUALITY_UPGRADE_RETRY_SECONDS)
-    private val translationAttempts = BackgroundAttemptGate(TRANSLATION_RETRY_SECONDS)
     private val notifiedFailures = ConcurrentHashMap.newKeySet<String>()
 
     fun currentQuery(): TrackQuery? = current.get()
@@ -51,12 +47,8 @@ class LyricsLoadCoordinator(
         if (override?.candidate == null && !automaticLoadAllowed) return null
         cache.getLyrics(query)?.let { cached ->
             notifiedFailures.remove(query.key)
-            if (!activeAutomaticLoads.contains(query.key)) {
-                startBackgroundEnhancements(
-                    query,
-                    resolvedFromCache(query, cached),
-                    automatic = override?.candidate == null,
-                )
+            if (override?.candidate == null && !activeAutomaticLoads.contains(query.key)) {
+                startQualityUpgradeIfNeeded(query, resolvedFromCache(query, cached))
             }
             return cached.encoded
         }
@@ -89,7 +81,6 @@ class LyricsLoadCoordinator(
         cache.putLyrics(query, resolver.toCache(resolved))
         notifiedFailures.remove(query.key)
         refreshOrNotify(query)
-        startBackgroundEnhancements(query, resolved, automatic = false, force = true)
         return true
     }
 
@@ -98,7 +89,6 @@ class LyricsLoadCoordinator(
         cache.putOverride(query, ManualOverride(local = true))
         inFlight.remove(query.key)?.cancel(true)
         qualityUpgradeInFlight.remove(query.key)?.cancel(true)
-        translationInFlight.remove(query.key)?.cancel(true)
         notifiedFailures.remove(query.key)
         refreshOrNotify(query)
         return true
@@ -108,9 +98,7 @@ class LyricsLoadCoordinator(
         val query = current.get() ?: return false
         inFlight.remove(query.key)?.cancel(true)
         qualityUpgradeInFlight.remove(query.key)?.cancel(true)
-        translationInFlight.remove(query.key)?.cancel(true)
         qualityUpgradeAttempts.clear(query.key)
-        translationAttempts.clear(query.key)
         cache.removeOverride(query)
         cache.removeLyrics(query)
         notifiedFailures.remove(query.key)
@@ -127,24 +115,6 @@ class LyricsLoadCoordinator(
         return true
     }
 
-    fun disableSupplementalTranslation(): Boolean {
-        val query = current.get() ?: return false
-        translationInFlight.remove(query.key)?.cancel(true)
-        val cached = cache.getLyrics(query) ?: return false
-        if (!SupplementalTranslationFallback.isAvailable(cached.document)) return false
-        val override = cache.getOverride(query)
-        if (override?.local == true) return false
-        cache.putOverride(
-            query,
-            (override ?: ManualOverride(local = false)).copy(suppressSupplementalTranslation = true),
-        )
-        val document = SupplementalTranslationFallback.apply(cached.document)
-        cache.putLyrics(query, cached.copy(document = document, encoded = SpwLyricsEncoder.encode(document)))
-        notifiedFailures.remove(query.key)
-        refreshOrNotify(query)
-        return true
-    }
-
     private fun resolveAndRefresh(query: TrackQuery, manual: LyricsCandidate?, deadlineNanos: Long) {
         if (manual == null) {
             resolveAutomaticProgressively(query, deadlineNanos)
@@ -154,65 +124,39 @@ class LyricsLoadCoordinator(
         if (fetched == null) {
             return
         }
-        val resolved = applyTranslationPreference(query, fetched)
-        cache.putLyrics(query, resolver.toCache(resolved))
+        cache.putLyrics(query, resolver.toCache(fetched))
         notifiedFailures.remove(query.key)
         if (current.get()?.key == query.key) refreshOrNotify(query)
-        startBackgroundEnhancements(query, resolved, automatic = false, force = true)
     }
 
     private fun resolveAutomaticProgressively(query: TrackQuery, snapshotDeadlineNanos: Long) {
-        var interimBase: ResolvedLyrics? = null
-        var interimEnriched: ResolvedLyrics? = null
         val final = resolver.resolveAutomaticProgressively(query, snapshotDeadlineNanos) { interim ->
             applyAutomaticResult(query, interim)
-            if (!automaticWasSuperseded(query)) {
-                interimBase = interim
-                val enriched = enrichTranslationFullyUnlessSuppressed(query, interim)
-                interimEnriched = enriched
-                applyAutomaticResult(query, enriched)
-            }
         }
         if (final == null) {
             recordAutomaticFailure(query)
             return
         }
         if (automaticWasSuperseded(query)) return
-        val enriched = if (final == interimBase) interimEnriched ?: final
-        else enrichTranslationFullyUnlessSuppressed(query, final)
-        applyAutomaticResult(query, enriched)
+        applyAutomaticResult(query, final)
     }
 
     private fun applyAutomaticResult(query: TrackQuery, result: ResolvedLyrics) {
         if (automaticWasSuperseded(query)) return
-        val resolved = applyTranslationPreference(query, result)
         val cached = cache.getLyrics(query)
-        if (cached != null && !LyricsSelectionPolicy.canReplace(cached.document, resolved.document)) return
-        if (cached?.encoded == resolved.encoded) {
-            if (cached.document != resolved.document) cache.putLyrics(query, resolver.toCache(resolved))
+        if (cached != null && !LyricsSelectionPolicy.canReplace(cached.document, result.document)) return
+        if (cached?.encoded == result.encoded) {
+            if (cached.document != result.document) cache.putLyrics(query, resolver.toCache(result))
             return
         }
-        cache.putLyrics(query, resolver.toCache(resolved))
+        cache.putLyrics(query, resolver.toCache(result))
         notifiedFailures.remove(query.key)
         if (current.get()?.key == query.key) refreshOrNotify(query)
     }
 
-    private fun startBackgroundEnhancements(
-        query: TrackQuery,
-        resolved: ResolvedLyrics,
-        automatic: Boolean,
-        force: Boolean = false,
-    ) {
-        if (automatic && LyricsQualityUpgradePolicy.shouldUpgrade(resolved.document)) {
-            startQualityUpgrade(query, resolved, force)
-        } else {
-            startTranslationEnrichment(query, resolved, automatic, force)
-        }
-    }
-
-    private fun startQualityUpgrade(query: TrackQuery, resolved: ResolvedLyrics, force: Boolean) {
-        if (force) qualityUpgradeInFlight.remove(query.key)?.cancel(true)
-        if (qualityUpgradeInFlight.containsKey(query.key) || !qualityUpgradeAttempts.allow(query.key, force)) return
+    private fun startQualityUpgradeIfNeeded(query: TrackQuery, resolved: ResolvedLyrics) {
+        if (!LyricsQualityUpgradePolicy.shouldUpgrade(resolved.document)) return
+        if (qualityUpgradeInFlight.containsKey(query.key) || !qualityUpgradeAttempts.allow(query.key, force = false)) return
         val future = CompletableFuture.runAsync({ upgradeQualityAndRefresh(query, resolved) }, executor)
         val previous = qualityUpgradeInFlight.putIfAbsent(query.key, future)
         if (previous != null) {
@@ -227,54 +171,9 @@ class LyricsLoadCoordinator(
         val upgraded = resolver.resolveAutomaticFully(query)
         if (automaticWasSuperseded(query)) return
         val cached = cache.getLyrics(query) ?: return
-        if (!sameBaseLyrics(cached.document, fallback.document)) return
-        if (upgraded == null || !LyricsSelectionPolicy.canReplace(cached.document, upgraded.document)) {
-            startTranslationEnrichment(query, resolvedFromCache(query, cached), automatic = true, force = true)
-            return
-        }
-        val enriched = enrichTranslationFullyUnlessSuppressed(query, upgraded)
-        applyAutomaticResult(query, enriched)
-    }
-
-    private fun enrichTranslationFullyUnlessSuppressed(query: TrackQuery, resolved: ResolvedLyrics): ResolvedLyrics =
-        if (cache.getOverride(query)?.suppressSupplementalTranslation == true) resolved
-        else resolver.enrichTranslationFully(resolved, query)
-
-    private fun startTranslationEnrichment(
-        query: TrackQuery,
-        resolved: ResolvedLyrics,
-        automatic: Boolean,
-        force: Boolean = false,
-    ) {
-        if (!resolver.needsTranslationEnrichment(resolved)) return
-        if (cache.getOverride(query)?.suppressSupplementalTranslation == true) return
-        if (force) translationInFlight.remove(query.key)?.cancel(true)
-        if (translationInFlight.containsKey(query.key) || !translationAttempts.allow(query.key, force)) return
-        val future = CompletableFuture.runAsync({ enrichAndRefresh(query, resolved, automatic) }, executor)
-        val previous = translationInFlight.putIfAbsent(query.key, future)
-        if (previous != null) {
-            future.cancel(true)
-            return
-        }
-        future.whenComplete { _, _ -> translationInFlight.remove(query.key, future) }
-    }
-
-    private fun enrichAndRefresh(query: TrackQuery, resolved: ResolvedLyrics, automatic: Boolean) {
-        if (automatic && automaticWasSuperseded(query)) return
-        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TRANSLATION_RESOLUTION_TIMEOUT_SECONDS)
-        val enriched = applyTranslationPreference(query, resolver.enrichTranslation(resolved, query, deadline))
-        if (enriched == resolved || automatic && automaticWasSuperseded(query)) return
-        val cached = cache.getLyrics(query) ?: return
-        if (!sameBaseLyrics(cached.document, resolved.document)) return
-        cache.putLyrics(query, resolver.toCache(enriched))
-        if (current.get()?.key == query.key) refreshOrNotify(query)
-    }
-
-    private fun applyTranslationPreference(query: TrackQuery, resolved: ResolvedLyrics): ResolvedLyrics {
-        if (cache.getOverride(query)?.suppressSupplementalTranslation != true) return resolved
-        val document = SupplementalTranslationFallback.apply(resolved.document)
-        return if (document == resolved.document) resolved else {
-            resolved.copy(document = document, encoded = SpwLyricsEncoder.encode(document))
+        if (cached.document != fallback.document) return
+        if (upgraded != null && LyricsSelectionPolicy.canReplace(cached.document, upgraded.document)) {
+            applyAutomaticResult(query, upgraded)
         }
     }
 
@@ -291,9 +190,6 @@ class LyricsLoadCoordinator(
         document = cached.document,
         encoded = cached.encoded,
     )
-
-    private fun sameBaseLyrics(left: LyricsDocument, right: LyricsDocument): Boolean =
-        SupplementalTranslationFallback.apply(left) == SupplementalTranslationFallback.apply(right)
 
     private fun recordAutomaticFailure(query: TrackQuery) {
         if (automaticWasSuperseded(query)) return
@@ -318,7 +214,6 @@ class LyricsLoadCoordinator(
         activeAutomaticLoads.clear()
         inFlight.values.forEach { it.cancel(true) }
         qualityUpgradeInFlight.values.forEach { it.cancel(true) }
-        translationInFlight.values.forEach { it.cancel(true) }
         executor.shutdownNow()
         resolver.close()
     }
@@ -326,7 +221,5 @@ class LyricsLoadCoordinator(
     private companion object {
         const val INITIAL_RESOLUTION_SECONDS = 10L
         const val QUALITY_UPGRADE_RETRY_SECONDS = 60L
-        const val TRANSLATION_RESOLUTION_TIMEOUT_SECONDS = 20L
-        const val TRANSLATION_RETRY_SECONDS = 30L
     }
 }
