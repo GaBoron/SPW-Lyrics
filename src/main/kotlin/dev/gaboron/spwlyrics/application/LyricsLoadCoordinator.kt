@@ -39,10 +39,14 @@ class LyricsLoadCoordinator(
         query: TrackQuery,
         phase: LyricsLoadPhase,
         replacementPolicy: AutomaticReplacementPolicy,
+        localTtml: (() -> String?)? = null,
     ): String? {
         current.set(query)
         val override = cache.getOverride(query)
-        if (override?.local == true) return null
+        if (override?.local == true) return if (phase == LyricsLoadPhase.BEFORE_LOCAL) localTtml?.invoke() else null
+        if (override?.candidate == null && phase == LyricsLoadPhase.BEFORE_LOCAL) {
+            localTtml?.invoke()?.let { return it }
+        }
         val automaticLoadAllowed = replacementPolicy.allowsAutomaticLoad(phase)
         if (override?.candidate == null && !automaticLoadAllowed) return null
         cache.getLyrics(query)?.let { cached ->

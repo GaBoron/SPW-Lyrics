@@ -33,6 +33,7 @@ object PluginRuntime {
     @Volatile private var manualSearchShortcut: SpwManualSearchBinding? = null
     @Volatile private var cacheFolderOpener: CacheFolderOpener? = null
     private val libraryTracks = SpwLibraryTrackSource()
+    private val localTtmlLyrics = LocalTtmlLyricsLoader()
 
     @Synchronized
     @OptIn(UnstableSpwWorkshopApi::class)
@@ -91,7 +92,8 @@ object PluginRuntime {
         }
     }
 
-    fun beforeLoad(mediaItem: PlaybackExtensionPoint.MediaItem): String? = load(mediaItem, LyricsLoadPhase.BEFORE_LOCAL)
+    fun beforeLoad(mediaItem: PlaybackExtensionPoint.MediaItem): String? =
+        load(mediaItem, LyricsLoadPhase.BEFORE_LOCAL) { localTtmlLyrics.load(mediaItem.path) }
     fun afterLocalLyricsMissing(mediaItem: PlaybackExtensionPoint.MediaItem): String? =
         load(mediaItem, LyricsLoadPhase.AFTER_LOCAL_MISSING)
     fun currentQuery(): TrackQuery? = runCatching { libraryTracks.current() }.getOrElse { error ->
@@ -137,11 +139,16 @@ object PluginRuntime {
         libraryTracks.clear()
     }
 
-    private fun load(mediaItem: PlaybackExtensionPoint.MediaItem, phase: LyricsLoadPhase): String? =
+    private fun load(
+        mediaItem: PlaybackExtensionPoint.MediaItem,
+        phase: LyricsLoadPhase,
+        localTtml: (() -> String?)? = null,
+    ): String? =
         coordinator?.onLoad(
             libraryTracks.fromLyricsCallback(mediaItem),
             phase,
             settings?.automaticReplacementPolicy() ?: AutomaticReplacementPolicy.ALWAYS,
+            localTtml,
         )
 
     private fun toastWarning(message: String) {
