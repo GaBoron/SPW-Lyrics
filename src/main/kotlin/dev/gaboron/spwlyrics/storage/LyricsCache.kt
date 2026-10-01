@@ -34,7 +34,7 @@ data class ManualOverride(
     val modelVersion: Int = MANUAL_OVERRIDE_MODEL_VERSION,
 )
 
-const val LYRICS_CACHE_MODEL_VERSION = 5
+const val LYRICS_CACHE_MODEL_VERSION = 6
 const val MANUAL_OVERRIDE_MODEL_VERSION = 2
 
 interface LyricsCache {
