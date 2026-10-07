@@ -1,10 +1,12 @@
-import org.gradle.jvm.tasks.Jar
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import org.gradle.api.tasks.Exec
+import com.xuncorp.spw.workshop.gradle.PluginPermission
 
 plugins {
     kotlin("jvm") version "2.3.0"
     kotlin("plugin.serialization") version "2.3.0"
+    id("org.jetbrains.kotlin.plugin.compose") version "2.3.0"
+    id("org.jetbrains.compose") version "1.12.0"
+    id("com.xuncorp.spw.workshop") version "0.1.0-dev21"
 }
 
 group = "dev.gaboron.spwlyrics"
@@ -24,73 +26,48 @@ kotlin {
 
 dependencies {
     compileOnly(kotlin("stdlib"))
-    compileOnly("com.github.Moriafly:spw-workshop-api:0.1.0-dev20") {
+    compileOnly("com.github.Moriafly.spw-workshop-api:spw-workshop-api:0.1.0-dev21") {
         isTransitive = false
     }
     compileOnly("org.pf4j:pf4j:3.12.0")
 
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     implementation("com.github.houbb:opencc4j:1.14.0")
-    implementation("org.xerial:sqlite-jdbc:3.50.3.0")
+    implementation("net.jthink:jaudiotagger:3.0.1")
+    implementation(compose.desktop.currentOs)
 }
 
-val pluginClass = "dev.gaboron.spwlyrics.integration.SpwLyricsPlugin"
-val pluginId = "spw-lyrics"
-val pluginName = "SPW Lyrics"
-val pluginProvider = "GaBoron"
-val winUiProject = layout.projectDirectory.file("winui/SpwLyrics.WinUI/SpwLyrics.WinUI.csproj")
-val winUiPublishDirectory = layout.buildDirectory.dir("winui-publish")
-
-val publishWinUi by tasks.registering(Exec::class) {
-    group = "build"
-    description = "Publishes the unpackaged WinUI manual search companion."
-    inputs.files(fileTree("winui/SpwLyrics.WinUI") { exclude("bin/**", "obj/**", "AppPackages/**") })
-    outputs.dir(winUiPublishDirectory)
-    doFirst { delete(winUiPublishDirectory) }
-    commandLine(
-        "dotnet", "publish", winUiProject.asFile.absolutePath,
-        "-c", "Release", "-r", "win-x64", "--self-contained", "true",
-        "-p:Platform=x64", "-p:WindowsAppSDKSelfContained=true",
-        "-p:Version=${project.version}", "-p:AssemblyVersion=${project.version}.0",
-        "-p:FileVersion=${project.version}.0", "-p:InformationalVersion=${project.version}",
-        "-p:IncludeSourceRevisionInInformationalVersion=false",
-        "-o", winUiPublishDirectory.get().asFile.absolutePath,
-    )
-}
-
-tasks.named<Jar>("jar") {
-    manifest {
-        attributes(
-            "Plugin-Class" to pluginClass,
-            "Plugin-Id" to pluginId,
-            "Plugin-Name" to pluginName,
-            "Plugin-Version" to project.version.toString(),
-            "Plugin-Provider" to pluginProvider,
-            "Plugin-Description" to "为 Salt Player for Windows 自动搜索、匹配并加载多来源歌词。",
-            "Plugin-Open-Source-Url" to "https://github.com/GaBoron/SPW-Lyrics",
-            "Plugin-Has-Config" to "true",
-        )
+tasks.processResources {
+    // Load our Skiko build explicitly instead of the renderer bundled with SPW.
+    from({ zipTree(configurations.runtimeClasspath.get().single {
+        it.name.startsWith("skiko-awt-runtime-windows-x64-")
+    }) }) {
+        into("native/compose")
+        include("skiko-windows-x64.dll", "icudtl.dat")
     }
 }
 
-tasks.register<Zip>("plugin") {
-    group = "build"
-    description = "Packages the SPW workshop plugin."
-    archiveFileName.set("spw-lyrics-${project.version}.zip")
-    destinationDirectory.set(layout.buildDirectory.dir("plugin"))
-
-    into("classes") {
-        with(tasks.named<Jar>("jar").get())
+spmod {
+    PluginClass = "dev.gaboron.spwlyrics.integration.SpwLyricsPlugin"
+    PluginId = "spw-lyrics"
+    PluginName = "SPW Lyrics"
+    PluginProvider = "GaBoron"
+    PluginVersion = project.version.toString()
+    PluginDescription = "为 Salt Player for Windows 自动搜索、匹配并加载多来源歌词。"
+    PluginOpenSourceUrl = "https://github.com/GaBoron/SPW-Lyrics"
+    PluginHasConfig = true
+    PluginPermissions = listOf(PluginPermission.LIBRARY_READ, PluginPermission.KEY_BINDINGS)
+}
+tasks.named<Zip>("plugin") {
+    // Compose's JetBrains modules and AndroidX modules can have identical JAR names.
+    val libraryNames by lazy {
+        val artifacts = configurations.runtimeClasspath.get().resolvedConfiguration.resolvedArtifacts
+        val duplicates = artifacts.groupBy { it.file.name }.filterValues { it.size > 1 }.keys
+        artifacts.associate { artifact -> artifact.file.canonicalPath to
+            if (artifact.file.name in duplicates) "${artifact.moduleVersion.id.group}-${artifact.file.name}" else artifact.file.name
+        }
     }
-    into("lib") {
-        from(configurations.runtimeClasspath.map { files ->
-            files.filter {
-                it.extension == "jar" &&
-                    !it.name.startsWith("kotlin-stdlib") &&
-                    !it.name.startsWith("annotations-")
-            }
-        })
-    }
-    into("ui") { from(winUiPublishDirectory) }
-    dependsOn(tasks.named("jar"), publishWinUi)
+    eachFile { name = libraryNames[file.canonicalPath] ?: name }
+    // SPW provides these; avoid bundling an older transitive Kotlin runtime.
+    exclude("**/kotlin-stdlib-*.jar", "**/annotations-*.jar")
 }

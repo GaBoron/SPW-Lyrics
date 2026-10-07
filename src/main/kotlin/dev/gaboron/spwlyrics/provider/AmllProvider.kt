@@ -1,5 +1,6 @@
 package dev.gaboron.spwlyrics.provider
 
+import dev.gaboron.spwlyrics.codec.LyricsContentFilter
 import dev.gaboron.spwlyrics.codec.TtmlCodec
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsDocument
@@ -22,8 +23,8 @@ class AmllProvider(
 
     override fun fetch(candidate: LyricsCandidate): LyricsDocument? = runCatching {
         val url = candidate.context["url"] ?: "$RAW_BASE/${candidate.remoteId}.ttml"
-        TtmlCodec().parse(http.get(url), source)
-    }.getOrNull()?.takeIf { it.lines.isNotEmpty() }
+        LyricsContentFilter.clean(TtmlCodec().parse(http.get(url), source), candidate)
+    }.getOrNull()
 
     companion object {
         const val INDEX_URL = "https://raw.githubusercontent.com/amll-dev/amll-ttml-db/main/am-lyrics/index.jsonl"

@@ -11,7 +11,6 @@ internal object StructuredLyricsMetadata {
         if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return null
         return runCatching {
             val root = Json.parseToJsonElement(trimmed) as? JsonObject ?: return@runCatching null
-            if (root["t"] !is JsonPrimitive) return@runCatching null
             val parts = root["c"] as? JsonArray ?: return@runCatching null
             parts.mapNotNull { item ->
                 ((item as? JsonObject)?.get("tx") as? JsonPrimitive)?.content

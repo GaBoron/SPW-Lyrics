@@ -1,5 +1,6 @@
 package dev.gaboron.spwlyrics.provider
 
+import dev.gaboron.spwlyrics.codec.LyricsContentFilter
 import dev.gaboron.spwlyrics.codec.KrcCodec
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsDocument
@@ -42,7 +43,7 @@ class KugouMusicProvider(private val http: ProviderHttp) : LyricsProvider {
         val downloadUrl = "$LYRIC_DOWNLOAD?ver=1&client=pc&id=$id&accesskey=${ProviderHttpClient.encode(key)}&fmt=krc&charset=utf8"
         val downloaded = providerJson.parseToJsonElement(http.get(downloadUrl)) as JsonObject
         val content = downloaded.string("content") ?: return@runCatching null
-        KrcCodec.parse(KrcCodec.decryptBase64(content), source)
+        LyricsContentFilter.clean(KrcCodec.parse(KrcCodec.decryptBase64(content), source), candidate)
     }.getOrNull()
 
     companion object {

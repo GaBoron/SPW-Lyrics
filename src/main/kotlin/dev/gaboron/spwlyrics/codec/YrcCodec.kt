@@ -14,7 +14,7 @@ object YrcCodec : LyricCodec {
         val lines = mutableListOf<LyricLine>()
         val credits = mutableListOf<String>()
         raw.lineSequence().forEach { input ->
-            val line = linePattern.matchEntire(input.trim()) ?: return@forEach
+            val line = linePattern.matchEntire(input.trim().trimStart('\uFEFF')) ?: return@forEach
             val start = line.groupValues[1].toLong()
             val duration = line.groupValues[2].toLong()
             val body = line.groupValues[3]
