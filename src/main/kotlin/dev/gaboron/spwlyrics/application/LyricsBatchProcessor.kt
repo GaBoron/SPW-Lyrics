@@ -48,6 +48,11 @@ internal class LyricsBatchProcessor(
         snapshotLocked()
     }
 
+    fun reloadLibrary(): LyricsBatchSnapshot = synchronized(lock) {
+        if (state != LyricsBatchState.RUNNING && state != LyricsBatchState.PAUSED) prepare(includeCached = false)
+        snapshotLocked()
+    }
+
     fun start(
         includeCached: Boolean,
         selectedKeys: Set<String>? = null,
@@ -76,7 +81,8 @@ internal class LyricsBatchProcessor(
         nextIndex = AtomicInteger()
         remainingWorkers = AtomicInteger(PARALLEL_TRACKS)
         val sharedResolutions = ConcurrentHashMap<String, CompletableFuture<ResolvedLyrics?>>()
-        repeat(PARALLEL_TRACKS) { workers.execute { process(generation, sharedResolutions) } }
+        val expectedGeneration = generation
+        repeat(PARALLEL_TRACKS) { workers.execute { process(expectedGeneration, sharedResolutions) } }
         snapshotLocked()
     }
 

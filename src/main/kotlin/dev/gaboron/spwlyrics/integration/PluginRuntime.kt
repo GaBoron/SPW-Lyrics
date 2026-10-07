@@ -19,17 +19,21 @@ import dev.gaboron.spwlyrics.provider.NeteaseMusicProvider
 import dev.gaboron.spwlyrics.provider.ProviderHttpClient
 import dev.gaboron.spwlyrics.provider.QqMusicProvider
 import dev.gaboron.spwlyrics.storage.FileLyricsCache
-import dev.gaboron.spwlyrics.integration.manualui.ManualUiBridge
-import dev.gaboron.spwlyrics.integration.manualui.ManualUiSession
-import java.nio.file.Path
+import dev.gaboron.spwlyrics.integration.manualui.ManualSearchWindow
+import dev.gaboron.spwlyrics.integration.manualui.ManualSearchOperations
+import dev.gaboron.spwlyrics.integration.batchui.BatchProcessingWindow
+import dev.gaboron.spwlyrics.storage.FileLyricsDelaySettings
+import dev.gaboron.spwlyrics.storage.LyricsDelaySettings
 import java.time.Duration
 import kotlin.io.path.Path
 
 object PluginRuntime {
     @Volatile private var coordinator: LyricsLoadCoordinator? = null
     @Volatile private var batchProcessor: LyricsBatchProcessor? = null
+    @Volatile private var batchWindow: BatchProcessingWindow? = null
     @Volatile private var settings: PluginSettings? = null
-    @Volatile private var manualUiBridge: ManualUiBridge? = null
+    @Volatile private var manualWindow: ManualSearchWindow? = null
+    @Volatile private var delaySettings: LyricsDelaySettings? = null
     @Volatile private var manualSearchShortcut: SpwManualSearchBinding? = null
     @Volatile private var cacheFolderOpener: CacheFolderOpener? = null
     private val libraryTracks = SpwLibraryTrackSource()
@@ -37,13 +41,15 @@ object PluginRuntime {
 
     @Synchronized
     @OptIn(UnstableSpwWorkshopApi::class)
-    fun install(pluginPath: String) {
+    fun install() {
         if (coordinator != null) return
         val localData = System.getenv("LOCALAPPDATA")?.takeIf(String::isNotBlank)
             ?.let(::Path) ?: Path(System.getProperty("user.home"))
         val root = localData.resolve("SPW Lyrics")
         val cacheDirectory = root.resolve("cache")
         val cache = FileLyricsCache(cacheDirectory)
+        val delays = FileLyricsDelaySettings(root.resolve("歌词延迟"))
+        delaySettings = delays
         cacheFolderOpener = CacheFolderOpener(cacheDirectory)
         val http = ProviderHttpClient()
         val providers = listOf(
@@ -63,6 +69,7 @@ object PluginRuntime {
             resolver = resolver,
             refreshBridge = ReflectiveLyricsRefreshBridge(),
             notify = ::toastWarning,
+            delays = delays,
         )
         val batch = LyricsBatchProcessor(
             loadLibrary = libraryTracks::load,
@@ -70,18 +77,24 @@ object PluginRuntime {
             resolver = resolver,
         )
         batchProcessor = batch
-        manualUiBridge = ManualUiBridge(
-            pluginRoot = Path(pluginPath),
-            session = ManualUiSession(
-                currentQuery = ::currentQuery,
-                search = ::searchManual,
-                preview = ::preview,
-                apply = ::applyManual,
-                useLocal = ::useLocal,
-                useAutomatic = ::useAutomatic,
-                batchProcessor = batch,
-            ),
-        )
+        batchWindow = BatchProcessingWindow(batch, ::toastWarning) { error ->
+            if (error is PluginPermissionDeniedException) "请在 SPW 的插件权限中授予曲库读取权限后重试。"
+            else "批量处理失败：${error.message ?: "未知错误"}"
+        }
+        manualWindow = ManualSearchWindow(object : ManualSearchOperations {
+            override fun currentQuery() = PluginRuntime.currentQuery()
+            override fun search(query: TrackQuery, keywords: String, source: LyricsSource?) =
+                coordinator?.searchManual(query, keywords, source).orEmpty()
+            override fun preview(candidate: LyricsCandidate) = coordinator?.preview(candidate)
+            override fun apply(query: TrackQuery, candidate: LyricsCandidate) =
+                isCurrentTrack(query) && coordinator?.applyManual(query, candidate) == true
+            override fun useLocal(query: TrackQuery) = isCurrentTrack(query) && coordinator?.useLocal(query) == true
+            override fun useAutomatic(query: TrackQuery) = isCurrentTrack(query) && coordinator?.useAutomatic(query) == true
+            override fun delay(query: TrackQuery) = delays.get(query)
+            override fun setDelay(query: TrackQuery, delayMs: Int) =
+                isCurrentTrack(query) && coordinator?.setDelay(query, delayMs) == true
+            override fun openBatch() = openBatchProcessing()
+        }, ::toastWarning)
         settings = PluginSettings(WorkshopApi.manager.createConfigManager())
         val shortcut = SpwManualSearchBinding(::openManualSearch)
         manualSearchShortcut = shortcut
@@ -93,7 +106,9 @@ object PluginRuntime {
     }
 
     fun beforeLoad(mediaItem: PlaybackExtensionPoint.MediaItem): String? =
-        load(mediaItem, LyricsLoadPhase.BEFORE_LOCAL) { localTtmlLyrics.load(mediaItem.path) }
+        load(mediaItem, LyricsLoadPhase.BEFORE_LOCAL) { query ->
+            localTtmlLyrics.load(mediaItem.path, delaySettings?.get(query) ?: 0)
+        }
     fun afterLocalLyricsMissing(mediaItem: PlaybackExtensionPoint.MediaItem): String? =
         load(mediaItem, LyricsLoadPhase.AFTER_LOCAL_MISSING)
     fun currentQuery(): TrackQuery? = runCatching { libraryTracks.current() }.getOrElse { error ->
@@ -104,20 +119,13 @@ object PluginRuntime {
         })
         null
     }
-    fun searchManual(keywords: String, source: LyricsSource?) = coordinator?.searchManual(keywords, source).orEmpty()
-    fun preview(candidate: LyricsCandidate) = coordinator?.preview(candidate)
-    fun applyManual(candidate: LyricsCandidate): Boolean = coordinator?.applyManual(candidate) == true
-    fun useLocal(): Boolean = coordinator?.useLocal() == true
-    fun useAutomatic(): Boolean = coordinator?.useAutomatic() == true
     @Synchronized
     fun openManualSearch() {
-        val bridge = manualUiBridge ?: return
-        if (!bridge.open("manual")) ManualSearchWindow.open()
+        manualWindow?.open()
     }
     @Synchronized
     fun openBatchProcessing() {
-        val bridge = manualUiBridge ?: return
-        if (!bridge.open("batch")) toastWarning("批量处理窗口未能启动，请重新安装插件后再试。")
+        batchWindow?.open()
     }
     fun openCacheFolder() {
         if (cacheFolderOpener?.open() != true) toastWarning("无法打开 SPW Lyrics 本地缓存文件夹。")
@@ -127,11 +135,14 @@ object PluginRuntime {
     fun close() {
         manualSearchShortcut?.close()
         manualSearchShortcut = null
-        manualUiBridge?.close()
-        manualUiBridge = null
+        manualWindow?.close()
+        manualWindow = null
+        delaySettings = null
         cacheFolderOpener = null
         settings?.close()
         settings = null
+        batchWindow?.close()
+        batchWindow = null
         batchProcessor?.close()
         batchProcessor = null
         coordinator?.close()
@@ -142,14 +153,19 @@ object PluginRuntime {
     private fun load(
         mediaItem: PlaybackExtensionPoint.MediaItem,
         phase: LyricsLoadPhase,
-        localTtml: (() -> String?)? = null,
-    ): String? =
-        coordinator?.onLoad(
-            libraryTracks.fromLyricsCallback(mediaItem),
+        localTtml: ((TrackQuery) -> String?)? = null,
+    ): String? {
+        val query = libraryTracks.fromLyricsCallback(mediaItem)
+        val conversion: (() -> String?)? = localTtml?.let { action -> { action(query) } }
+        return coordinator?.onLoad(
+            query,
             phase,
             settings?.automaticReplacementPolicy() ?: AutomaticReplacementPolicy.ALWAYS,
-            localTtml,
+            conversion,
         )
+    }
+
+    private fun isCurrentTrack(query: TrackQuery): Boolean = currentQuery()?.key == query.key
 
     private fun toastWarning(message: String) {
         runCatching { WorkshopApi.ui.toast(message, WorkshopApi.Ui.ToastType.Warning) }

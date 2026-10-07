@@ -17,6 +17,7 @@ SPW Lyrics 是 [Salt Player for Windows（SPW）](https://github.com/Moriafly/SP
 - 优先选择逐字歌词，也支持逐行歌词、普通歌词、翻译、音译、对唱和背景歌词。
 - 综合歌名、歌手、专辑和歌曲时长匹配，尽量避开 Live、Remix、伴奏等错误版本。
 - 支持手动搜索、来源筛选、歌词预览、恢复自动匹配和切回 SPW 本地歌词。
+- 支持按歌曲保存歌词延迟，同时调整逐行和逐字时间。
 - 支持批量预缓存音乐库，适合首次使用或一次加入大量歌曲后处理。
 - 搜索和缓存都在后台完成，不会因为单个歌词来源失败而阻塞播放。
 
@@ -26,7 +27,7 @@ SPW Lyrics 是 [Salt Player for Windows（SPW）](https://github.com/Moriafly/SP
 
 公开版 `0.4.0` 使用 ZIP 安装包，下载后不要解压。`dev21` 分支改用 `.spmod`，基于 Workshop API `0.1.0-dev21`，需要 SPW 1.19.0；在 1.19.0 完成实际运行验证前，不建议普通用户使用该分支构建。
 
-安装包已包含插件运行所需组件，普通用户不需要另外安装 Java、.NET 或 Windows App SDK。
+安装包已包含插件依赖，手动搜索和批量窗口直接使用 SPW 的 JVM，普通用户不需要另外安装运行时。
 
 ## 使用
 

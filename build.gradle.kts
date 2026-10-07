@@ -1,10 +1,11 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import org.gradle.api.tasks.Exec
 import com.xuncorp.spw.workshop.gradle.PluginPermission
 
 plugins {
     kotlin("jvm") version "2.3.0"
     kotlin("plugin.serialization") version "2.3.0"
+    id("org.jetbrains.kotlin.plugin.compose") version "2.3.0"
+    id("org.jetbrains.compose") version "1.12.0"
     id("com.xuncorp.spw.workshop") version "0.1.0-dev21"
 }
 
@@ -33,6 +34,17 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     implementation("com.github.houbb:opencc4j:1.14.0")
     implementation("net.jthink:jaudiotagger:3.0.1")
+    implementation(compose.desktop.currentOs)
+}
+
+tasks.processResources {
+    // Load our Skiko build explicitly instead of the renderer bundled with SPW.
+    from({ zipTree(configurations.runtimeClasspath.get().single {
+        it.name.startsWith("skiko-awt-runtime-windows-x64-")
+    }) }) {
+        into("native/compose")
+        include("skiko-windows-x64.dll", "icudtl.dat")
+    }
 }
 
 spmod {
@@ -46,29 +58,16 @@ spmod {
     PluginHasConfig = true
     PluginPermissions = listOf(PluginPermission.LIBRARY_READ, PluginPermission.KEY_BINDINGS)
 }
-val winUiProject = layout.projectDirectory.file("winui/SpwLyrics.WinUI/SpwLyrics.WinUI.csproj")
-val winUiPublishDirectory = layout.buildDirectory.dir("winui-publish")
-
-val publishWinUi by tasks.registering(Exec::class) {
-    group = "build"
-    description = "Publishes the unpackaged WinUI manual search companion."
-    inputs.files(fileTree("winui/SpwLyrics.WinUI") { exclude("bin/**", "obj/**", "AppPackages/**") })
-    outputs.dir(winUiPublishDirectory)
-    doFirst { delete(winUiPublishDirectory) }
-    commandLine(
-        "dotnet", "publish", winUiProject.asFile.absolutePath,
-        "-c", "Release", "-r", "win-x64", "--self-contained", "true",
-        "-p:Platform=x64", "-p:WindowsAppSDKSelfContained=true",
-        "-p:Version=${project.version}", "-p:AssemblyVersion=${project.version}.0",
-        "-p:FileVersion=${project.version}.0", "-p:InformationalVersion=${project.version}",
-        "-p:IncludeSourceRevisionInInformationalVersion=false",
-        "-o", winUiPublishDirectory.get().asFile.absolutePath,
-    )
-}
-
 tasks.named<Zip>("plugin") {
-    into("ui") { from(winUiPublishDirectory) }
+    // Compose's JetBrains modules and AndroidX modules can have identical JAR names.
+    val libraryNames by lazy {
+        val artifacts = configurations.runtimeClasspath.get().resolvedConfiguration.resolvedArtifacts
+        val duplicates = artifacts.groupBy { it.file.name }.filterValues { it.size > 1 }.keys
+        artifacts.associate { artifact -> artifact.file.canonicalPath to
+            if (artifact.file.name in duplicates) "${artifact.moduleVersion.id.group}-${artifact.file.name}" else artifact.file.name
+        }
+    }
+    eachFile { name = libraryNames[file.canonicalPath] ?: name }
     // SPW provides these; avoid bundling an older transitive Kotlin runtime.
     exclude("**/kotlin-stdlib-*.jar", "**/annotations-*.jar")
-    dependsOn(publishWinUi)
 }

@@ -5,6 +5,8 @@ import dev.gaboron.spwlyrics.domain.TrackQuery
 import dev.gaboron.spwlyrics.storage.CachedLyrics
 import dev.gaboron.spwlyrics.storage.LyricsCache
 import dev.gaboron.spwlyrics.storage.ManualOverride
+import dev.gaboron.spwlyrics.storage.LyricsDelaySettings
+import dev.gaboron.spwlyrics.codec.SpwLyricsEncoder
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutorService
@@ -24,6 +26,7 @@ class LyricsLoadCoordinator(
     private val executor: ExecutorService = Executors.newFixedThreadPool(4) { task ->
         Thread(task, "spw-lyrics-worker").apply { isDaemon = true }
     },
+    private val delays: LyricsDelaySettings? = null,
 ) : AutoCloseable {
     private val refreshRetrier = LyricsRefreshRetrier(refreshBridge, notify)
     private val current = AtomicReference<TrackQuery?>()
@@ -54,7 +57,8 @@ class LyricsLoadCoordinator(
             if (override?.candidate == null && !activeAutomaticLoads.contains(query.key)) {
                 startQualityUpgradeIfNeeded(query, resolvedFromCache(query, cached))
             }
-            return cached.encoded
+            val delay = delays?.get(query) ?: 0
+            return if (delay == 0) cached.encoded else SpwLyricsEncoder.encode(cached.document, delay)
         }
         inFlight.computeIfAbsent(query.key) {
             val automaticToken = Any()
@@ -71,15 +75,16 @@ class LyricsLoadCoordinator(
         return null
     }
 
-    fun searchManual(keywords: String, source: dev.gaboron.spwlyrics.domain.LyricsSource?) =
-        current.get()?.let { resolver.searchManual(it, keywords, source) }.orEmpty()
+    fun searchManual(query: TrackQuery, keywords: String, source: dev.gaboron.spwlyrics.domain.LyricsSource?) =
+        resolver.searchManual(query, keywords, source)
 
     fun preview(candidate: LyricsCandidate): ResolvedLyrics? = resolver.fetchManual(candidate)
 
-    fun applyManual(candidate: LyricsCandidate): Boolean {
-        val query = current.get() ?: return false
+    fun applyManual(query: TrackQuery, candidate: LyricsCandidate): Boolean {
+        if (current.get()?.key != query.key) return false
         qualityUpgradeInFlight.remove(query.key)?.cancel(true)
         val resolved = resolver.fetchManual(candidate) ?: return false
+        if (current.get()?.key != query.key) return false
         cache.putOverride(query, ManualOverride(local = false, source = candidate.source, candidate = candidate))
         inFlight.remove(query.key)?.cancel(true)
         cache.putLyrics(query, resolver.toCache(resolved))
@@ -88,8 +93,8 @@ class LyricsLoadCoordinator(
         return true
     }
 
-    fun useLocal(): Boolean {
-        val query = current.get() ?: return false
+    fun useLocal(query: TrackQuery): Boolean {
+        if (current.get()?.key != query.key) return false
         cache.putOverride(query, ManualOverride(local = true))
         inFlight.remove(query.key)?.cancel(true)
         qualityUpgradeInFlight.remove(query.key)?.cancel(true)
@@ -98,8 +103,8 @@ class LyricsLoadCoordinator(
         return true
     }
 
-    fun useAutomatic(): Boolean {
-        val query = current.get() ?: return false
+    fun useAutomatic(query: TrackQuery): Boolean {
+        if (current.get()?.key != query.key) return false
         inFlight.remove(query.key)?.cancel(true)
         qualityUpgradeInFlight.remove(query.key)?.cancel(true)
         qualityUpgradeAttempts.clear(query.key)
@@ -116,6 +121,14 @@ class LyricsLoadCoordinator(
             activeAutomaticLoads.remove(query.key, automaticToken)
             inFlight.remove(query.key, future)
         }
+        return true
+    }
+
+    fun setDelay(query: TrackQuery, delayMs: Int): Boolean {
+        if (current.get()?.key != query.key) return false
+        val settings = delays ?: return false
+        settings.set(query, delayMs)
+        refreshOrNotify(query)
         return true
     }
 

@@ -6,11 +6,11 @@ import dev.gaboron.spwlyrics.domain.LyricsSource
 
 /** Converts only recognizable, usable TTML; null leaves SPW's local loader in charge. */
 internal class LocalTtmlConversion(private val codec: TtmlCodec = TtmlCodec()) {
-    fun convert(raw: String): String? {
+    fun convert(raw: String, delayMs: Int = 0): String? {
         if (raw.length > MAX_TTML_CHARS || !looksLikeTtml(raw)) return null
         return runCatching {
             val document = codec.parse(raw, LyricsSource.LOCAL)
-            if (document.lines.isEmpty()) null else SpwLyricsEncoder.encode(document).takeIf(String::isNotBlank)
+            if (document.lines.isEmpty()) null else SpwLyricsEncoder.encode(document, delayMs).takeIf(String::isNotBlank)
         }.getOrNull()
     }
 

@@ -9,7 +9,8 @@ import kotlin.math.max
 object SpwLyricsEncoder {
     const val VERSION = 8
 
-    fun encode(document: LyricsDocument): String {
+    fun encode(source: LyricsDocument, delayMs: Int = 0): String {
+        val document = LyricsTimingOffset.shift(source, delayMs)
         if (document.lines.isEmpty()) return ""
         if (document.quality == LyricsQuality.PLAIN) {
             return document.lines.flatMap { line ->
