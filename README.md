@@ -25,7 +25,7 @@ SPW Lyrics 是 [Salt Player for Windows（SPW）](https://github.com/Moriafly/SP
 
 从 [Releases](https://github.com/GaBoron/SPW-Lyrics/releases/latest) 下载与当前 SPW 版本对应的安装包，然后在 SPW 的“设置 → 创意工坊”中使用本地安装或导入入口安装。
 
-当前版本 `1.0.0` 需要 SPW 1.19.0。下载 `spw-lyrics-1.0.0.zip` 后直接导入，不要解压。SPW 1.18 用户请使用 [v0.4.0](https://github.com/GaBoron/SPW-Lyrics/releases/tag/v0.4.0)。
+当前版本 `1.0.0` 需要 SPW 1.19.0。下载 `spw-lyrics-1.0.0.spmod` 后直接导入，不要解压。SPW 1.18 用户请使用 [v0.4.0](https://github.com/GaBoron/SPW-Lyrics/releases/tag/v0.4.0)。
 
 安装包已包含插件依赖，手动搜索和批量窗口直接使用 SPW 的 JVM，普通用户不需要另外安装运行时。
 

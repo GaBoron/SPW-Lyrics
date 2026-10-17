@@ -61,7 +61,7 @@ spmod {
     PluginPermissions = listOf(PluginPermission.LIBRARY_READ, PluginPermission.KEY_BINDINGS)
 }
 tasks.named<Zip>("plugin") {
-    archiveFileName.set("spw-lyrics-${project.version}.zip")
+    archiveFileName.set("spw-lyrics-${project.version}.spmod")
     // Compose's JetBrains modules and AndroidX modules can have identical JAR names.
     val libraryNames by lazy {
         val artifacts = configurations.runtimeClasspath.get().resolvedConfiguration.resolvedArtifacts
