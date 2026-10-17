@@ -48,6 +48,7 @@ class TtmlCodec : LyricCodec {
             romanizations,
         )
         return merged.copy(
+            rawTtml = raw,
             lines = (merged.lines + backgrounds).sortedWith(
                 compareBy<LyricLine> { it.startMs ?: Long.MAX_VALUE }.thenBy(LyricLine::background),
             ),

@@ -16,7 +16,6 @@ import java.util.concurrent.TimeUnit
 data class ResolvedLyrics(
     val candidate: LyricsCandidate,
     val document: LyricsDocument,
-    val encoded: String,
 )
 
 internal data class FetchedLyrics(
@@ -96,9 +95,9 @@ class LyricsResolver(
                 )
             },
         ) { snapshot ->
-            selectAndEncode(snapshot)?.let(onSnapshot)
+            selectResolved(snapshot)?.let(onSnapshot)
         }
-        val resolved = selectAndEncode(completed)
+        val resolved = selectResolved(completed)
         onProgress(
             LyricsResolutionProgress(
                 LyricsResolutionStage.SELECTING,
@@ -134,20 +133,13 @@ class LyricsResolver(
     }
 
     fun fetchManual(candidate: LyricsCandidate): ResolvedLyrics? = providers[candidate.source]?.let { provider ->
-        val query = TrackQuery(
-            title = candidate.title,
-            artists = candidate.artists,
-            album = candidate.album,
-            durationMs = candidate.durationMs,
-            externalIds = candidate.externalIds,
-        )
         val document = manualCandidateInspector.cached(candidate) ?: fetchDocument(provider, candidate) ?: return@let null
-        encode(FetchedLyrics(candidate, document))
+        resolved(FetchedLyrics(candidate, document))
     }
 
     fun toCache(resolved: ResolvedLyrics): CachedLyrics = CachedLyrics(
         document = resolved.document,
-        encoded = resolved.encoded,
+        encoded = if (resolved.document.rawTtml == null) SpwLyricsEncoder.encode(resolved.document) else null,
         savedAtEpochMs = clock.millis(),
     )
 
@@ -157,12 +149,12 @@ class LyricsResolver(
     private fun searchManual(provider: LyricsProvider, query: TrackQuery, keywords: String): List<LyricsCandidate> =
         runCatching { provider.searchManual(query, keywords, MANUAL_RESULTS_PER_SOURCE) }.getOrDefault(emptyList())
 
-    private fun encode(fetched: FetchedLyrics): ResolvedLyrics? =
-        SpwLyricsEncoder.encode(fetched.document).takeIf(String::isNotBlank)
-            ?.let { ResolvedLyrics(fetched.candidate, fetched.document, it) }
+    private fun resolved(fetched: FetchedLyrics): ResolvedLyrics? =
+        fetched.document.takeIf { it.lines.any { line -> line.text.isNotBlank() } }
+            ?.let { ResolvedLyrics(fetched.candidate, it) }
 
-    private fun selectAndEncode(completed: List<IndexedValue<FetchedLyrics>>): ResolvedLyrics? =
-        LyricsSelectionPolicy.select(completed.map(IndexedValue<FetchedLyrics>::value))?.let(::encode)
+    private fun selectResolved(completed: List<IndexedValue<FetchedLyrics>>): ResolvedLyrics? =
+        LyricsSelectionPolicy.select(completed.map(IndexedValue<FetchedLyrics>::value))?.let(::resolved)
 
     private fun hasUnbeatableKaraokeResult(
         completed: List<IndexedValue<FetchedLyrics>>,

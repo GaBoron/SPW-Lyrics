@@ -1,16 +1,16 @@
 package dev.gaboron.spwlyrics.application
 
-import dev.gaboron.spwlyrics.codec.SpwLyricsEncoder
 import dev.gaboron.spwlyrics.codec.TtmlCodec
+import dev.gaboron.spwlyrics.domain.LyricsDocument
 import dev.gaboron.spwlyrics.domain.LyricsSource
 
-/** Converts only recognizable, usable TTML; null leaves SPW's local loader in charge. */
+/** Parses recognizable TTML and preserves the XML for either native delivery or SPL fallback. */
 internal class LocalTtmlConversion(private val codec: TtmlCodec = TtmlCodec()) {
-    fun convert(raw: String, delayMs: Int = 0): String? {
+    fun parse(raw: String): LyricsDocument? {
         if (raw.length > MAX_TTML_CHARS || !looksLikeTtml(raw)) return null
         return runCatching {
             val document = codec.parse(raw, LyricsSource.LOCAL)
-            if (document.lines.isEmpty()) null else SpwLyricsEncoder.encode(document, delayMs).takeIf(String::isNotBlank)
+            document.takeIf { it.lines.isNotEmpty() }
         }.getOrNull()
     }
 

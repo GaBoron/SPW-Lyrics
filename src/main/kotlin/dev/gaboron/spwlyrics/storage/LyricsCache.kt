@@ -3,6 +3,7 @@ package dev.gaboron.spwlyrics.storage
 import dev.gaboron.spwlyrics.codec.SpwLyricsEncoder
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsDocument
+import dev.gaboron.spwlyrics.domain.LyricsFormat
 import dev.gaboron.spwlyrics.domain.LyricsSource
 import dev.gaboron.spwlyrics.domain.TrackQuery
 import java.nio.charset.StandardCharsets
@@ -20,7 +21,7 @@ import kotlinx.serialization.json.Json
 @Serializable
 data class CachedLyrics(
     val document: LyricsDocument,
-    val encoded: String,
+    val encoded: String? = null,
     val savedAtEpochMs: Long,
     val modelVersion: Int = LYRICS_CACHE_MODEL_VERSION,
     val encoderVersion: Int = SpwLyricsEncoder.VERSION,
@@ -101,6 +102,7 @@ class FileLyricsCache(
 
     private fun validLyrics(value: CachedLyrics): Boolean =
         value.modelVersion == LYRICS_CACHE_MODEL_VERSION && value.encoderVersion == SpwLyricsEncoder.VERSION &&
+            (value.document.format != LyricsFormat.TTML || value.document.rawTtml != null) &&
             !expired(value.savedAtEpochMs, successTtl)
 
     private fun expired(epochMs: Long, ttl: Duration): Boolean =

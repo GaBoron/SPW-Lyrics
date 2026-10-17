@@ -13,6 +13,7 @@ data class TrackQuery(
     val path: String = "",
     val durationMs: Long? = null,
     val externalIds: Map<String, String> = emptyMap(),
+    val trackId: String = "",
 ) {
     val key: String
         get() {

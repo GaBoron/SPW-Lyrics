@@ -67,5 +67,6 @@ internal class SpwLibraryTrackSource {
         albumArtists = TrackQuery.splitArtists(albumArtist),
         path = path,
         durationMs = durationOverride?.takeIf { it > 0 },
+        trackId = id,
     )
 }

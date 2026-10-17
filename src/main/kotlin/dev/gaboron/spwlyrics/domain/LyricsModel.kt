@@ -45,6 +45,7 @@ data class LyricsDocument(
     val format: LyricsFormat,
     val lines: List<LyricLine>,
     val metadata: Map<String, List<String>> = emptyMap(),
+    val rawTtml: String? = null,
 ) {
     val quality: LyricsQuality
         get() = LyricsGranularityClassifier.classify(lines)

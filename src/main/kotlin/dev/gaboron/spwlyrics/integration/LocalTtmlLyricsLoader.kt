@@ -1,6 +1,7 @@
 package dev.gaboron.spwlyrics.integration
 
 import dev.gaboron.spwlyrics.application.LocalTtmlConversion
+import dev.gaboron.spwlyrics.domain.LyricsDocument
 import java.nio.file.Files
 import java.nio.file.Path
 import org.jaudiotagger.audio.AudioFileIO
@@ -15,17 +16,17 @@ import org.jaudiotagger.tag.id3.framebody.FrameBodyUSLT
 internal class LocalTtmlLyricsLoader(
     private val conversion: LocalTtmlConversion = LocalTtmlConversion(),
 ) {
-    fun load(audioPath: String, delayMs: Int = 0): String? = runCatching {
+    fun load(audioPath: String): LyricsDocument? = runCatching {
         val audio = Path.of(audioPath)
         if (!Files.isRegularFile(audio)) return null
         val stem = audio.fileName.toString().substringBeforeLast('.', audio.fileName.toString())
         val lrc = audio.resolveSibling("$stem.lrc")
-        if (Files.isRegularFile(lrc)) return readSidecar(lrc)?.let { conversion.convert(it, delayMs) }
+        if (Files.isRegularFile(lrc)) return readSidecar(lrc)?.let(conversion::parse)
 
         val embedded = readEmbedded(audio)
-        if (embedded != null) return conversion.convert(embedded, delayMs)
+        if (embedded != null) return conversion.parse(embedded)
 
-        readSidecar(audio.resolveSibling("$stem.ttml"))?.let { conversion.convert(it, delayMs) }
+        readSidecar(audio.resolveSibling("$stem.ttml"))?.let(conversion::parse)
     }.getOrNull()
 
     private fun readSidecar(path: Path): String? = runCatching {

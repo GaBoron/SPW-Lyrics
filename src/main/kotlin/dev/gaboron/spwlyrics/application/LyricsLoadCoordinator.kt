@@ -1,6 +1,7 @@
 package dev.gaboron.spwlyrics.application
 
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
+import dev.gaboron.spwlyrics.domain.LyricsDocument
 import dev.gaboron.spwlyrics.domain.TrackQuery
 import dev.gaboron.spwlyrics.storage.CachedLyrics
 import dev.gaboron.spwlyrics.storage.LyricsCache
@@ -27,9 +28,11 @@ class LyricsLoadCoordinator(
         Thread(task, "spw-lyrics-worker").apply { isDaemon = true }
     },
     private val delays: LyricsDelaySettings? = null,
+    private val output: LyricsOutputRouter? = null,
 ) : AutoCloseable {
     private val refreshRetrier = LyricsRefreshRetrier(refreshBridge, notify)
     private val current = AtomicReference<TrackQuery?>()
+    private val localLyrics = AtomicReference<Pair<String, LyricsDocument>?>()
     private val inFlight = ConcurrentHashMap<String, CompletableFuture<*>>()
     private val activeAutomaticLoads = ConcurrentHashMap<String, Any>()
     private val qualityUpgradeInFlight = ConcurrentHashMap<String, CompletableFuture<*>>()
@@ -42,14 +45,19 @@ class LyricsLoadCoordinator(
         query: TrackQuery,
         phase: LyricsLoadPhase,
         replacementPolicy: AutomaticReplacementPolicy,
-        localTtml: (() -> String?)? = null,
+        localTtml: (() -> LyricsDocument?)? = null,
     ): String? {
         current.set(query)
         val override = cache.getOverride(query)
-        if (override?.local == true) return if (phase == LyricsLoadPhase.BEFORE_LOCAL) localTtml?.invoke() else null
-        if (override?.candidate == null && phase == LyricsLoadPhase.BEFORE_LOCAL) {
-            localTtml?.invoke()?.let { return it }
+        if (phase == LyricsLoadPhase.BEFORE_LOCAL) {
+            val local = if (override?.candidate == null) localTtml?.invoke() else null
+            localLyrics.set(local?.let { query.key to it })
+            if (local != null) return render(query, local)
+        } else if (override?.candidate == null) {
+            // Native acceptance returns null to SPW, which may still call its after-missing hook.
+            localLyrics.get()?.takeIf { it.first == query.key }?.let { return render(query, it.second) }
         }
+        if (override?.local == true) return null
         val automaticLoadAllowed = replacementPolicy.allowsAutomaticLoad(phase)
         if (override?.candidate == null && !automaticLoadAllowed) return null
         cache.getLyrics(query)?.let { cached ->
@@ -57,8 +65,7 @@ class LyricsLoadCoordinator(
             if (override?.candidate == null && !activeAutomaticLoads.contains(query.key)) {
                 startQualityUpgradeIfNeeded(query, resolvedFromCache(query, cached))
             }
-            val delay = delays?.get(query) ?: 0
-            return if (delay == 0) cached.encoded else SpwLyricsEncoder.encode(cached.document, delay)
+            return render(query, cached.document, cached.encoded)
         }
         inFlight.computeIfAbsent(query.key) {
             val automaticToken = Any()
@@ -88,6 +95,7 @@ class LyricsLoadCoordinator(
         cache.putOverride(query, ManualOverride(local = false, source = candidate.source, candidate = candidate))
         inFlight.remove(query.key)?.cancel(true)
         cache.putLyrics(query, resolver.toCache(resolved))
+        offer(query, resolved.document)
         notifiedFailures.remove(query.key)
         refreshOrNotify(query)
         return true
@@ -99,6 +107,7 @@ class LyricsLoadCoordinator(
         inFlight.remove(query.key)?.cancel(true)
         qualityUpgradeInFlight.remove(query.key)?.cancel(true)
         notifiedFailures.remove(query.key)
+        output?.withdraw(query)
         refreshOrNotify(query)
         return true
     }
@@ -110,6 +119,7 @@ class LyricsLoadCoordinator(
         qualityUpgradeAttempts.clear(query.key)
         cache.removeOverride(query)
         cache.removeLyrics(query)
+        output?.withdraw(query)
         notifiedFailures.remove(query.key)
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(INITIAL_RESOLUTION_SECONDS)
         val automaticToken = Any()
@@ -128,6 +138,7 @@ class LyricsLoadCoordinator(
         if (current.get()?.key != query.key) return false
         val settings = delays ?: return false
         settings.set(query, delayMs)
+        output?.setDelay(query, delayMs)
         refreshOrNotify(query)
         return true
     }
@@ -143,7 +154,10 @@ class LyricsLoadCoordinator(
         }
         cache.putLyrics(query, resolver.toCache(fetched))
         notifiedFailures.remove(query.key)
-        if (current.get()?.key == query.key) refreshOrNotify(query)
+        if (current.get()?.key == query.key) {
+            offer(query, fetched.document)
+            refreshOrNotify(query)
+        }
     }
 
     private fun resolveAutomaticProgressively(query: TrackQuery, snapshotDeadlineNanos: Long) {
@@ -162,13 +176,13 @@ class LyricsLoadCoordinator(
         if (automaticWasSuperseded(query)) return
         val cached = cache.getLyrics(query)
         if (cached != null && !LyricsSelectionPolicy.canReplace(cached.document, result.document)) return
-        if (cached?.encoded == result.encoded) {
-            if (cached.document != result.document) cache.putLyrics(query, resolver.toCache(result))
-            return
-        }
+        if (cached?.document == result.document) return
         cache.putLyrics(query, resolver.toCache(result))
         notifiedFailures.remove(query.key)
-        if (current.get()?.key == query.key) refreshOrNotify(query)
+        if (current.get()?.key == query.key) {
+            offer(query, result.document)
+            refreshOrNotify(query)
+        }
     }
 
     private fun startQualityUpgradeIfNeeded(query: TrackQuery, resolved: ResolvedLyrics) {
@@ -205,7 +219,6 @@ class LyricsLoadCoordinator(
             externalIds = query.externalIds,
         ),
         document = cached.document,
-        encoded = cached.encoded,
     )
 
     private fun recordAutomaticFailure(query: TrackQuery) {
@@ -226,8 +239,20 @@ class LyricsLoadCoordinator(
         refreshRetrier.refresh { current.get()?.key == query.key }
     }
 
+    private fun render(query: TrackQuery, document: LyricsDocument, encoded: String? = null): String? {
+        val delay = delays?.get(query) ?: 0
+        if (output != null) return output.render(query, document, delay, encoded)
+        return if (delay == 0 && encoded != null) encoded else SpwLyricsEncoder.encode(document, delay)
+    }
+
+    private fun offer(query: TrackQuery, document: LyricsDocument) {
+        output?.offer(query, document, delays?.get(query) ?: 0)
+    }
+
     override fun close() {
         current.set(null)
+        localLyrics.set(null)
+        output?.close()
         activeAutomaticLoads.clear()
         inFlight.values.forEach { it.cancel(true) }
         qualityUpgradeInFlight.values.forEach { it.cancel(true) }

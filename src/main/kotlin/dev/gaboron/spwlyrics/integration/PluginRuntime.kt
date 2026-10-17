@@ -9,7 +9,9 @@ import dev.gaboron.spwlyrics.application.LyricsLoadPhase
 import dev.gaboron.spwlyrics.application.LyricsLoadCoordinator
 import dev.gaboron.spwlyrics.application.LyricsBatchProcessor
 import dev.gaboron.spwlyrics.application.LyricsResolver
+import dev.gaboron.spwlyrics.application.LyricsOutputRouter
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
+import dev.gaboron.spwlyrics.domain.LyricsDocument
 import dev.gaboron.spwlyrics.domain.LyricsSource
 import dev.gaboron.spwlyrics.domain.TrackQuery
 import dev.gaboron.spwlyrics.provider.AmllProvider
@@ -23,7 +25,6 @@ import dev.gaboron.spwlyrics.integration.manualui.ManualSearchWindow
 import dev.gaboron.spwlyrics.integration.manualui.ManualSearchOperations
 import dev.gaboron.spwlyrics.integration.batchui.BatchProcessingWindow
 import dev.gaboron.spwlyrics.storage.FileLyricsDelaySettings
-import dev.gaboron.spwlyrics.storage.LyricsDelaySettings
 import java.time.Duration
 import kotlin.io.path.Path
 
@@ -33,7 +34,6 @@ object PluginRuntime {
     @Volatile private var batchWindow: BatchProcessingWindow? = null
     @Volatile private var settings: PluginSettings? = null
     @Volatile private var manualWindow: ManualSearchWindow? = null
-    @Volatile private var delaySettings: LyricsDelaySettings? = null
     @Volatile private var manualSearchShortcut: SpwManualSearchBinding? = null
     @Volatile private var cacheFolderOpener: CacheFolderOpener? = null
     private val libraryTracks = SpwLibraryTrackSource()
@@ -49,7 +49,6 @@ object PluginRuntime {
         val cacheDirectory = root.resolve("cache")
         val cache = FileLyricsCache(cacheDirectory)
         val delays = FileLyricsDelaySettings(root.resolve("歌词延迟"))
-        delaySettings = delays
         cacheFolderOpener = CacheFolderOpener(cacheDirectory)
         val http = ProviderHttpClient()
         val providers = listOf(
@@ -64,12 +63,23 @@ object PluginRuntime {
             LocalLyricsProvider(),
         )
         val resolver = LyricsResolver(providers)
+        val refreshBridge = ReflectiveLyricsRefreshBridge()
+        val output = LyricsOutputRouter(
+            receiver = JmxTtmlReceiver(),
+            isCurrent = { query ->
+                WorkshopApi.playback.getCurrentMediaItem()?.let { item ->
+                    item.path == query.path && (query.trackId.isBlank() || item.id.isBlank() || query.trackId == item.id)
+                } == true
+            },
+            refresh = { refreshBridge.reloadCurrentLyrics() },
+        )
         coordinator = LyricsLoadCoordinator(
             cache = cache,
             resolver = resolver,
-            refreshBridge = ReflectiveLyricsRefreshBridge(),
+            refreshBridge = refreshBridge,
             notify = ::toastWarning,
             delays = delays,
+            output = output,
         )
         val batch = LyricsBatchProcessor(
             loadLibrary = libraryTracks::load,
@@ -106,8 +116,8 @@ object PluginRuntime {
     }
 
     fun beforeLoad(mediaItem: PlaybackExtensionPoint.MediaItem): String? =
-        load(mediaItem, LyricsLoadPhase.BEFORE_LOCAL) { query ->
-            localTtmlLyrics.load(mediaItem.path, delaySettings?.get(query) ?: 0)
+        load(mediaItem, LyricsLoadPhase.BEFORE_LOCAL) {
+            localTtmlLyrics.load(mediaItem.path)
         }
     fun afterLocalLyricsMissing(mediaItem: PlaybackExtensionPoint.MediaItem): String? =
         load(mediaItem, LyricsLoadPhase.AFTER_LOCAL_MISSING)
@@ -137,7 +147,6 @@ object PluginRuntime {
         manualSearchShortcut = null
         manualWindow?.close()
         manualWindow = null
-        delaySettings = null
         cacheFolderOpener = null
         settings?.close()
         settings = null
@@ -153,15 +162,14 @@ object PluginRuntime {
     private fun load(
         mediaItem: PlaybackExtensionPoint.MediaItem,
         phase: LyricsLoadPhase,
-        localTtml: ((TrackQuery) -> String?)? = null,
+        localTtml: (() -> LyricsDocument?)? = null,
     ): String? {
         val query = libraryTracks.fromLyricsCallback(mediaItem)
-        val conversion: (() -> String?)? = localTtml?.let { action -> { action(query) } }
         return coordinator?.onLoad(
             query,
             phase,
             settings?.automaticReplacementPolicy() ?: AutomaticReplacementPolicy.ALWAYS,
-            conversion,
+            localTtml,
         )
     }
 
