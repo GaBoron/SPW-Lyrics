@@ -2,31 +2,33 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import com.xuncorp.spw.workshop.gradle.PluginPermission
 
 plugins {
-    kotlin("jvm") version "2.3.0"
-    kotlin("plugin.serialization") version "2.3.0"
-    id("org.jetbrains.kotlin.plugin.compose") version "2.3.0"
-    id("org.jetbrains.compose") version "1.12.0"
-    id("com.xuncorp.spw.workshop") version "0.1.0-dev21"
+    kotlin("jvm") version "2.4.20"
+    kotlin("plugin.serialization") version "2.4.20"
+    id("org.jetbrains.kotlin.plugin.compose") version "2.4.20"
+    id("org.jetbrains.compose") version "1.12.1"
+    id("com.xuncorp.spw.workshop") version "0.1.0-dev23"
 }
 
 group = "dev.gaboron.spwlyrics"
 version = "0.4.0"
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
 }
 
 kotlin {
+    jvmToolchain(25)
+
     compilerOptions {
-        jvmTarget = JvmTarget.JVM_21
+        jvmTarget = JvmTarget.JVM_25
         freeCompilerArgs.add("-jvm-default=no-compatibility")
     }
 }
 
 dependencies {
     compileOnly(kotlin("stdlib"))
-    compileOnly("com.github.Moriafly.spw-workshop-api:spw-workshop-api:0.1.0-dev21") {
+    compileOnly("com.github.Moriafly.spw-workshop-api:spw-workshop-api:0.1.0-dev23") {
         isTransitive = false
     }
     compileOnly("org.pf4j:pf4j:3.12.0")
