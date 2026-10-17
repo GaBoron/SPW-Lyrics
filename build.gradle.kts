@@ -10,7 +10,7 @@ plugins {
 }
 
 group = "dev.gaboron.spwlyrics"
-version = "0.4.0"
+version = "1.0.0"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_25
@@ -61,6 +61,7 @@ spmod {
     PluginPermissions = listOf(PluginPermission.LIBRARY_READ, PluginPermission.KEY_BINDINGS)
 }
 tasks.named<Zip>("plugin") {
+    archiveFileName.set("spw-lyrics-${project.version}.zip")
     // Compose's JetBrains modules and AndroidX modules can have identical JAR names.
     val libraryNames by lazy {
         val artifacts = configurations.runtimeClasspath.get().resolvedConfiguration.resolvedArtifacts
