@@ -2,10 +2,6 @@
 .idea/
 build/
 out/
-**/bin/
-**/obj/
-**/AppPackages/
-.vs/
 *.iml
 *.log
 *.tmp

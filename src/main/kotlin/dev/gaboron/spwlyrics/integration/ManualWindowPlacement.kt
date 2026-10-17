@@ -8,15 +8,15 @@ import kotlin.io.path.Path
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-/** Shares a safe remembered position between the WinUI window and Swing fallback. */
+/** Restores remembered window positions within the current display work areas. */
 internal object ManualWindowPlacement {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
-    private val file = (System.getenv("LOCALAPPDATA")?.takeIf(String::isNotBlank)?.let(::Path)
+    private val directory = (System.getenv("LOCALAPPDATA")?.takeIf(String::isNotBlank)?.let(::Path)
         ?: Path(System.getProperty("user.home")))
         .resolve("SPW Lyrics")
-        .resolve("manual-window-position.json")
 
-    fun restore(window: Window): Boolean = runCatching {
+    fun restore(window: Window, fileName: String = "manual-window-position.json"): Boolean = runCatching {
+        val file = directory.resolve(fileName)
         if (!Files.isRegularFile(file)) return false
         val placement = json.decodeFromString<Placement>(Files.readString(file))
         val screens = GraphicsEnvironment.getLocalGraphicsEnvironment().screenDevices
@@ -37,8 +37,9 @@ internal object ManualWindowPlacement {
         true
     }.getOrDefault(false)
 
-    fun save(window: Window) {
+    fun save(window: Window, fileName: String = "manual-window-position.json") {
         runCatching {
+            val file = directory.resolve(fileName)
             Files.createDirectories(file.parent)
             Files.writeString(file, json.encodeToString(Placement(window.x, window.y)))
         }

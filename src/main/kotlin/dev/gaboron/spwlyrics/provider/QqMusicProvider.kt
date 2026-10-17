@@ -1,5 +1,6 @@
 package dev.gaboron.spwlyrics.provider
 
+import dev.gaboron.spwlyrics.codec.LyricsContentFilter
 import dev.gaboron.spwlyrics.codec.LyricsTrackMerger
 import dev.gaboron.spwlyrics.codec.QrcCodec
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
@@ -41,12 +42,13 @@ class QqMusicProvider(private val http: ProviderHttp) : LyricsProvider {
         val values = extractQqLyricValues(xml)
         val original = values["content"]?.takeIf(String::isNotBlank)
             ?.let(::decodeTrack)
+            ?.let { LyricsContentFilter.clean(it, candidate) }
             ?: return@runCatching null
         val translation = values["contentts"]?.takeIf(String::isNotBlank)
-            ?.let { runCatching { decodeTrack(it).lines }.getOrNull() }.orEmpty()
+            ?.let { runCatching { LyricsContentFilter.clean(decodeTrack(it), candidate)?.lines }.getOrNull() }.orEmpty()
         val romanization = values["contentroma"]?.takeIf(String::isNotBlank)
-            ?.let { runCatching { decodeTrack(it).lines }.getOrNull() }.orEmpty()
-        LyricsTrackMerger.merge(original, translation, romanization)
+            ?.let { runCatching { LyricsContentFilter.clean(decodeTrack(it), candidate)?.lines }.getOrNull() }.orEmpty()
+        LyricsContentFilter.clean(LyricsTrackMerger.merge(original, translation, romanization), candidate)
     }.getOrNull()
 
     private fun decodeTrack(content: String): LyricsDocument {

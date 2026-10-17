@@ -1,6 +1,7 @@
 package dev.gaboron.spwlyrics.provider
 
 import dev.gaboron.spwlyrics.codec.LrcCodec
+import dev.gaboron.spwlyrics.codec.LyricsContentFilter
 import dev.gaboron.spwlyrics.codec.LyricsTrackMerger
 import dev.gaboron.spwlyrics.codec.YrcCodec
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
@@ -56,44 +57,40 @@ class NeteaseMusicProvider(private val http: ProviderHttp) : LyricsProvider {
         data["header"] = NeteaseEapi.header()
         val response = http.postForm(LYRIC_URL, NeteaseEapi.encrypt(LYRIC_URL, data), HEADERS)
         val root = providerJson.parseToJsonElement(response) as JsonObject
-        val yrc = root.obj("yrc")?.string("lyric")
-        val lrc = root.obj("lrc")?.string("lyric")
-        val original = when {
-            !yrc.isNullOrBlank() -> YrcCodec.parse(yrc, source)
-            !lrc.isNullOrBlank() -> LrcCodec.parse(lrc, source)
-            else -> return null
-        }
-        val translation = secondaryTrack(root, "ytlrc", "tlyric")
-        val romanization = secondaryTrack(root, "yromalrc", "romalrc")
-        return LyricsTrackMerger.merge(original, translation, romanization)
+        val original = originalTrack(root, candidate) ?: return null
+        val translation = secondaryTrack(root, "ytlrc", "tlyric", candidate)
+        val romanization = secondaryTrack(root, "yromalrc", "romalrc", candidate)
+        return LyricsContentFilter.clean(LyricsTrackMerger.merge(original, translation, romanization), candidate)
     }
 
     private fun fetchFallback(candidate: LyricsCandidate): LyricsDocument? {
         val fallback = "$FALLBACK_LYRIC_URL?id=${candidate.remoteId}&lv=-1&kv=-1&tv=-1&yv=-1&rv=-1&ytv=-1&yrv=-1"
         val root = providerJson.parseToJsonElement(http.get(fallback, HEADERS)) as JsonObject
-        val yrc = root.obj("yrc")?.string("lyric")
-        val original = if (yrc.isNullOrBlank()) {
-            LrcCodec.parse(root.obj("lrc")?.string("lyric").orEmpty(), source)
-        } else {
-            YrcCodec.parse(yrc, source)
-        }
-        return LyricsTrackMerger.merge(
+        val original = originalTrack(root, candidate) ?: return null
+        return LyricsContentFilter.clean(LyricsTrackMerger.merge(
             original,
-            secondaryTrack(root, "ytlrc", "tlyric"),
-            secondaryTrack(root, "yromalrc", "romalrc"),
-        ).takeIf { it.lines.isNotEmpty() }
+            secondaryTrack(root, "ytlrc", "tlyric", candidate),
+            secondaryTrack(root, "yromalrc", "romalrc", candidate),
+        ), candidate)
     }
 
-    private fun secondaryTrack(root: JsonObject, preferred: String, fallback: String) =
+    private fun originalTrack(root: JsonObject, candidate: LyricsCandidate): LyricsDocument? =
+        root.obj("yrc")?.string("lyric")?.takeIf(String::isNotBlank)
+            ?.let { LyricsContentFilter.clean(YrcCodec.parse(it, source), candidate) }
+            ?: root.obj("lrc")?.string("lyric")?.takeIf(String::isNotBlank)
+                ?.let { LyricsContentFilter.clean(LrcCodec.parse(it, source), candidate) }
+
+    private fun secondaryTrack(root: JsonObject, preferred: String, fallback: String, candidate: LyricsCandidate) =
         listOf(preferred, fallback).firstNotNullOfOrNull { key ->
             root.obj(key)?.string("lyric")?.takeIf(String::isNotBlank)
         }
             ?.let { raw ->
-                if (raw.lineSequence().any { it.matches(Regex("""^\s*\[\d+,\d+].*""")) }) {
-                    YrcCodec.parse(raw, source).lines
+                val parsed = if (raw.lineSequence().any { it.matches(Regex("""^\s*\[\d+,\d+].*""")) }) {
+                    YrcCodec.parse(raw, source)
                 } else {
-                    LrcCodec.parse(raw, source).lines
+                    LrcCodec.parse(raw, source)
                 }
+                LyricsContentFilter.clean(parsed, candidate)?.lines
             }.orEmpty()
 
     companion object {
