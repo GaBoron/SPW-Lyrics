@@ -14,12 +14,17 @@ class AmllProvider(
     private val http: ProviderHttp,
     private val clock: Clock = Clock.systemUTC(),
     legacyIndexPath: Path? = null,
-) : LyricsProvider {
+) : LyricsProvider, AutoCloseable {
     override val source: LyricsSource = LyricsSource.AMLL
     private val index = AmllIndexStore(cacheDirectory, http, clock, legacyIndexPath)
 
     override fun search(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> =
         index.search(query, keywords, limit)
+
+    override fun searchManual(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> =
+        index.search(query, keywords, limit, manual = true)
+
+    override fun close() = index.close()
 
     override fun fetch(candidate: LyricsCandidate): LyricsDocument? = runCatching {
         val url = candidate.context["url"] ?: "$RAW_BASE/${candidate.remoteId}.ttml"

@@ -189,6 +189,7 @@ class LyricsResolver(
 
     override fun close() {
         providerTasks.close()
+        providers.values.filterIsInstance<AutoCloseable>().forEach { provider -> runCatching { provider.close() } }
     }
 
     private fun fetchDocument(provider: LyricsProvider, candidate: LyricsCandidate): LyricsDocument? =
