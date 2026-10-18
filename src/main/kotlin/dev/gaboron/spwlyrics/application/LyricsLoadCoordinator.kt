@@ -54,7 +54,7 @@ class LyricsLoadCoordinator(
             localLyrics.set(local?.let { query.key to it })
             if (local != null) return render(query, local)
         } else if (override?.candidate == null) {
-            // Native acceptance returns null to SPW, which may still call its after-missing hook.
+            // Reuse the local TTML document if SPW also invokes its after-missing hook.
             localLyrics.get()?.takeIf { it.first == query.key }?.let { return render(query, it.second) }
         }
         if (override?.local == true) return null
