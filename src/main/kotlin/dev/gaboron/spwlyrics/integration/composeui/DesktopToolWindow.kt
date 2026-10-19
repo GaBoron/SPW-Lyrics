@@ -8,24 +8,31 @@ import java.awt.EventQueue
 import java.awt.event.WindowAdapter
 import java.awt.event.WindowEvent
 
-internal class DesktopWindowContent(val render: @Composable () -> Unit, val close: () -> Unit)
+internal class DesktopWindowContent(
+    val render: @Composable () -> Unit,
+    val close: () -> Unit,
+    val requestClose: (() -> Unit) -> Unit = { it() },
+)
 
 /** Owns a single native desktop frame, with Compose as its entire content. */
 internal class DesktopToolWindow(
     private val title: String,
     private val positionFile: String,
     private val onFailure: (String) -> Unit,
+    private val preferredWidth: Int = 1180,
+    private val preferredHeight: Int = 720,
     private val createContent: () -> DesktopWindowContent,
 ) : AutoCloseable {
     @Volatile private var closed = false
     private var window: ComposeWindow? = null
 
-    fun open() = EventQueue.invokeLater {
+    fun open(afterOpen: (() -> Unit)? = null) = EventQueue.invokeLater {
         if (closed) return@invokeLater
         window?.takeIf { it.isDisplayable }?.let {
             it.isVisible = true
             it.toFront()
             it.requestFocus()
+            afterOpen?.invoke()
             return@invokeLater
         }
         var frame: ComposeWindow? = null
@@ -44,11 +51,11 @@ internal class DesktopToolWindow(
             val availableWidth = screen.width - insets.left - insets.right
             val availableHeight = screen.height - insets.top - insets.bottom
             shown.minimumSize = Dimension(minOf((1060 * scale).toInt(), availableWidth), minOf((650 * scale).toInt(), availableHeight))
-            shown.setSize(minOf((1180 * scale).toInt(), availableWidth), minOf((720 * scale).toInt(), availableHeight))
+            shown.setSize(minOf((preferredWidth * scale).toInt(), availableWidth), minOf((preferredHeight * scale).toInt(), availableHeight))
             if (!ManualWindowPlacement.restore(shown, positionFile)) shown.setLocationRelativeTo(null)
             shown.setContent { DesktopTheme { session.render() } }
             shown.addWindowListener(object : WindowAdapter() {
-                override fun windowClosing(event: WindowEvent) { shown.dispose() }
+                override fun windowClosing(event: WindowEvent) { session.requestClose { shown.dispose() } }
                 override fun windowClosed(event: WindowEvent) {
                     ManualWindowPlacement.save(shown, positionFile)
                     session.close()
@@ -57,6 +64,7 @@ internal class DesktopToolWindow(
             })
             window = shown
             shown.isVisible = true
+            afterOpen?.invoke()
         }.onFailure {
             content?.close?.invoke()
             frame?.dispose()

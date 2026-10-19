@@ -34,6 +34,8 @@ internal fun ManualSearchContent(controller: ManualSearchController) {
                         listOf(it.title, it.artists.joinToString(" / ")).filter(String::isNotBlank).joinToString(" · ")
                     } ?: if (state.readingTrack) "正在读取当前歌曲…" else "当前没有正在播放的歌曲", size = 14)
                 }
+                DesktopButton("元数据编辑", controller::openMetadata)
+                Spacer(Modifier.width(8.dp))
                 DesktopButton("批量处理", controller::openBatch, glyph = DesktopGlyph.Library)
                 Spacer(Modifier.width(8.dp))
                 DesktopButton("刷新当前歌曲", controller::refreshTrack, enabled = !state.readingTrack && !state.mutating,
@@ -65,6 +67,7 @@ internal fun ManualSearchContent(controller: ManualSearchController) {
                 color = if (state.error) DesktopColors.Error else DesktopColors.Muted, size = 11)
             DesktopButton("恢复自动匹配", controller::useAutomatic, enabled = state.canMutate)
             DesktopButton("切回本地歌词", controller::useLocal, enabled = state.canMutate)
+            DesktopButton("导入元数据…", controller::editMetadata, enabled = !state.busy && state.document != null)
             DesktopButton("应用所选歌词", controller::apply, enabled = state.canMutate && state.selected != null,
                 primary = true, glyph = DesktopGlyph.Check)
         }

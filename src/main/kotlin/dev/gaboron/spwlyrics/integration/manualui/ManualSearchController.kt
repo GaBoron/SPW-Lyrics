@@ -102,6 +102,13 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
     }
 
     fun openBatch() = operations.openBatch()
+    fun openMetadata() = operations.openMetadata()
+    fun editMetadata() {
+        if (state.busy) return
+        val query = state.query ?: return
+        val document = state.document ?: return
+        operations.editMetadata(query, document)
+    }
 
     private fun mutate(message: String, action: () -> Boolean, success: () -> Unit = {}) {
         if (!state.canMutate) return

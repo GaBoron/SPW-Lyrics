@@ -104,7 +104,7 @@ class TtmlCodec : LyricCodec {
                             return
                         }
                     }
-                    if (!background && child.role() in BACKGROUND_ROLES) {
+                    if (child.role() in BACKGROUND_ROLES) {
                         parseLine(child, background = true, inheritedAgent = agent, backgrounds = backgrounds)
                             ?.let(backgrounds::add)
                         return

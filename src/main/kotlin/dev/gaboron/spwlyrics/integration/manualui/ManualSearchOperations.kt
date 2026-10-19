@@ -4,6 +4,7 @@ import dev.gaboron.spwlyrics.application.ResolvedLyrics
 import dev.gaboron.spwlyrics.domain.CandidateScore
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsSource
+import dev.gaboron.spwlyrics.domain.LyricsDocument
 import dev.gaboron.spwlyrics.domain.TrackQuery
 
 /** Keeps the window independent of host APIs, cache storage, and matching rules. */
@@ -17,4 +18,6 @@ internal interface ManualSearchOperations {
     fun delay(query: TrackQuery): Int
     fun setDelay(query: TrackQuery, delayMs: Int): Boolean
     fun openBatch()
+    fun openMetadata()
+    fun editMetadata(query: TrackQuery, document: LyricsDocument)
 }

@@ -8,5 +8,8 @@ object SpwLyricsActions {
     fun openBatchProcessing() = PluginRuntime.openBatchProcessing()
 
     @JvmStatic
+    fun openMetadataEditor() = PluginRuntime.openMetadataEditor()
+
+    @JvmStatic
     fun openCacheFolder() = PluginRuntime.openCacheFolder()
 }

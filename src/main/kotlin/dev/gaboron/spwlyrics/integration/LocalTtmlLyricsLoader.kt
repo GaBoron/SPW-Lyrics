@@ -5,12 +5,7 @@ import dev.gaboron.spwlyrics.domain.LyricsDocument
 import java.nio.file.Files
 import java.nio.file.Path
 import org.jaudiotagger.audio.AudioFileIO
-import org.jaudiotagger.tag.FieldKey
-import org.jaudiotagger.tag.Tag
-import org.jaudiotagger.tag.TagTextField
-import org.jaudiotagger.tag.id3.AbstractID3v2Frame
-import org.jaudiotagger.tag.id3.framebody.FrameBodyTXXX
-import org.jaudiotagger.tag.id3.framebody.FrameBodyUSLT
+import dev.gaboron.spwlyrics.storage.EmbeddedLyricsTags
 
 /** Reads local content in the playback callback without involving online providers. */
 internal class LocalTtmlLyricsLoader(
@@ -36,29 +31,10 @@ internal class LocalTtmlLyricsLoader(
 
     private fun readEmbedded(audio: Path): String? = runCatching {
         val tag = AudioFileIO.read(audio.toFile()).tag ?: return null
-        runCatching { tag.getAll(FieldKey.LYRICS).firstOrNull(String::isNotBlank) }.getOrNull()
-            ?: customLyrics(tag)
+        EmbeddedLyricsTags.read(tag).takeIf(String::isNotBlank)
     }.getOrNull()
-
-    private fun customLyrics(tag: Tag): String? {
-        val fields = tag.fields
-        while (fields.hasNext()) {
-            val field = fields.next()
-            val frame = field as? AbstractID3v2Frame
-            val body = frame?.body
-            val value = when {
-                body is FrameBodyTXXX && body.description.uppercase() in LYRIC_TAGS -> body.text
-                body is FrameBodyUSLT -> body.lyric
-                field.id.uppercase() in LYRIC_TAGS && field is TagTextField -> field.content
-                else -> null
-            }
-            if (!value.isNullOrBlank()) return value
-        }
-        return null
-    }
 
     private companion object {
         const val MAX_SIDECAR_BYTES = 4_000_000L
-        val LYRIC_TAGS = setOf("LYRICS", "UNSYNCEDLYRICS", "SYNCEDLYRICS", "TTMLLYRIC")
     }
 }

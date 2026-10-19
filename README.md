@@ -18,6 +18,8 @@ SPW Lyrics 是 [Salt Player for Windows（SPW）](https://github.com/Moriafly/SP
 - 综合歌名、歌手、专辑和歌曲时长匹配，尽量避开 Live、Remix、伴奏等错误版本。
 - 支持手动搜索、来源筛选、歌词预览、恢复自动匹配和切回 SPW 本地歌词。
 - 支持按歌曲保存歌词延迟，同时调整逐行和逐字时间。
+- 支持编辑本地歌曲元数据，导入搜索结果或本地歌词，并转换为 TTML、LRC、增强 LRC、SPL 后写入内嵌歌词。
+- 支持增删歌词、逐句和逐字修改，Ctrl / Shift 多选后批量调整延迟、主唱、对唱和背景人声，同时保留原文编辑。
 - 与 [AMLL into SPW](https://github.com/GaBoron/AMLL-into-SPW) 同时启用时，直接提供原始 TTML，保留其完整声部、翻译、音译和注音信息。
 - 支持批量预缓存音乐库，适合首次使用或一次加入大量歌曲后处理。
 - 搜索和缓存都在后台完成，不会因为单个歌词来源失败而阻塞播放。
@@ -26,7 +28,7 @@ SPW Lyrics 是 [Salt Player for Windows（SPW）](https://github.com/Moriafly/SP
 
 从 [Releases](https://github.com/GaBoron/SPW-Lyrics/releases/latest) 下载与当前 SPW 版本对应的安装包，然后在 SPW 的“设置 → 创意工坊”中使用本地安装或导入入口安装。
 
-当前版本 `1.1.2` 需要 SPW 1.19.0。下载 `spw-lyrics-1.1.2.spmod` 后直接导入，不要解压。SPW 1.18 用户请使用 [v0.4.0](https://github.com/GaBoron/SPW-Lyrics/releases/tag/v0.4.0)。
+当前版本 `1.2.0` 需要 SPW 1.19.0。下载 `spw-lyrics-1.2.0.spmod` 后直接导入，不要解压。SPW 1.18 用户请使用 [v0.4.0](https://github.com/GaBoron/SPW-Lyrics/releases/tag/v0.4.0)。
 
 Windows 和 Linux 使用同一个 `.spmod` 安装包。安装包已包含插件依赖，手动搜索和批量窗口复用 SPW 自带的 Compose/Skiko 和 JVM，普通用户不需要另外安装运行时。
 
@@ -36,6 +38,7 @@ Windows 和 Linux 使用同一个 `.spmod` 安装包。安装包已包含插件�
 
 - “自动替换歌词”用于控制插件何时自动搜索。
 - “打开手动搜索”用于修改关键词、指定来源、预览并应用候选歌词。
+- “歌曲元数据编辑”用于修改本地歌曲信息，或将歌词写入歌曲文件；写入失败时回退，不在歌曲目录留下备份。
 - “批量处理音乐库”用于提前搜索并缓存音乐库中的歌词。
 - “查看本地缓存文件夹”用于查看或清理插件缓存。
 
@@ -53,7 +56,7 @@ Windows 和 Linux 使用同一个 `.spmod` 安装包。安装包已包含插件�
 
 ## 兼容性
 
-`1.1.2` 面向 SPW 1.19.0 / Workshop API `0.1.0-dev23`，使用宿主的 JVM 25，不兼容旧版创意工坊接口。`0.4.0` 保留供 SPW 1.18 用户使用。
+`1.2.0` 面向 SPW 1.19.0 / Workshop API `0.1.0-dev23`，使用宿主的 JVM 25，不兼容旧版创意工坊接口。`0.4.0` 保留供 SPW 1.18 用户使用。
 
 SPW 创意工坊接口仍可能继续变化。如果 SPW 更新后插件无法加载、快捷键失效或歌词不能自动刷新，请先查看 [常见问题](docs/常见问题.md)，再提交 Issue。
 

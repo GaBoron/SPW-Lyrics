@@ -24,6 +24,7 @@ import dev.gaboron.spwlyrics.storage.FileLyricsCache
 import dev.gaboron.spwlyrics.integration.manualui.ManualSearchWindow
 import dev.gaboron.spwlyrics.integration.manualui.ManualSearchOperations
 import dev.gaboron.spwlyrics.integration.batchui.BatchProcessingWindow
+import dev.gaboron.spwlyrics.integration.metadataui.MetadataEditorWindow
 import dev.gaboron.spwlyrics.storage.FileLyricsDelaySettings
 import java.time.Duration
 import kotlin.io.path.Path
@@ -34,7 +35,9 @@ object PluginRuntime {
     @Volatile private var batchWindow: BatchProcessingWindow? = null
     @Volatile private var settings: PluginSettings? = null
     @Volatile private var manualWindow: ManualSearchWindow? = null
+    @Volatile private var metadataWindow: MetadataEditorWindow? = null
     @Volatile private var manualSearchShortcut: SpwManualSearchBinding? = null
+    @Volatile private var metadataEditorShortcut: SpwMetadataEditorBinding? = null
     @Volatile private var cacheFolderOpener: CacheFolderOpener? = null
     private val libraryTracks = SpwLibraryTrackSource()
     private val localTtmlLyrics = LocalTtmlLyricsLoader()
@@ -91,6 +94,17 @@ object PluginRuntime {
             if (error is PluginPermissionDeniedException) "请在 SPW 的插件权限中授予曲库读取权限后重试。"
             else "批量处理失败：${error.message ?: "未知错误"}"
         }
+        metadataWindow = MetadataEditorWindow(
+            readCurrentPath = { currentQuery()?.path },
+            refreshSavedPath = { path ->
+                val currentPath = WorkshopApi.playback.getCurrentMediaItem()?.path
+                if (currentPath != null && runCatching { java.nio.file.Path.of(currentPath).toRealPath() == path }.getOrDefault(false)) {
+                    check(refreshBridge.reloadCurrentLyrics()) { "请切换歌曲后重新播放以加载内嵌歌词。" }
+                }
+            },
+            openLyricsSearch = ::openManualSearch,
+            onFailure = ::toastWarning,
+        )
         manualWindow = ManualSearchWindow(object : ManualSearchOperations {
             override fun currentQuery() = PluginRuntime.currentQuery()
             override fun search(query: TrackQuery, keywords: String, source: LyricsSource?) =
@@ -104,6 +118,10 @@ object PluginRuntime {
             override fun setDelay(query: TrackQuery, delayMs: Int) =
                 isCurrentTrack(query) && coordinator?.setDelay(query, delayMs) == true
             override fun openBatch() = openBatchProcessing()
+            override fun openMetadata() = openMetadataEditor()
+            override fun editMetadata(query: TrackQuery, document: LyricsDocument) {
+                metadataWindow?.importSearch(query, document)
+            }
         }, ::toastWarning)
         settings = PluginSettings(WorkshopApi.manager.createConfigManager())
         val shortcut = SpwManualSearchBinding(::openManualSearch)
@@ -112,6 +130,11 @@ object PluginRuntime {
             toastWarning("无法注册歌词搜索快捷键，请检查 SPW 的快捷键权限和冲突设置。")
         }.onSuccess { granted ->
             if (!granted) toastWarning("歌词搜索快捷键未启用：请在 SPW 的插件权限中授予快捷键权限。")
+        }
+        val metadataShortcut = SpwMetadataEditorBinding(::openMetadataEditor)
+        metadataEditorShortcut = metadataShortcut
+        runCatching { metadataShortcut.register() }.onFailure {
+            toastWarning("无法注册元数据编辑快捷键，请检查 SPW 的快捷键权限和设置。")
         }
     }
 
@@ -137,6 +160,10 @@ object PluginRuntime {
     fun openBatchProcessing() {
         batchWindow?.open()
     }
+    @Synchronized
+    fun openMetadataEditor() {
+        metadataWindow?.open()
+    }
     fun openCacheFolder() {
         if (cacheFolderOpener?.open() != true) toastWarning("无法打开 SPW Lyrics 本地缓存文件夹。")
     }
@@ -145,8 +172,12 @@ object PluginRuntime {
     fun close() {
         manualSearchShortcut?.close()
         manualSearchShortcut = null
+        metadataEditorShortcut?.close()
+        metadataEditorShortcut = null
         manualWindow?.close()
         manualWindow = null
+        metadataWindow?.close()
+        metadataWindow = null
         cacheFolderOpener = null
         settings?.close()
         settings = null
