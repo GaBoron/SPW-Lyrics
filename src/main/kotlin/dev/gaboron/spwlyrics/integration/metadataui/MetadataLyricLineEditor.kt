@@ -22,8 +22,8 @@ internal fun MetadataLyricLineEditor(line: EditableLyricLine, controller: Metada
     val scroll = rememberScrollState()
     Box(modifier) {
         Column(Modifier.fillMaxSize().padding(end = 12.dp).verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("第 ${line.id + 1} 句", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            FlowRow(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("第 ${line.id + 1} 句", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 DesktopCheck(line.background, { controller.editLine { it.copy(background = !it.background) } }, enabled, "背景人声")
                 DesktopButton("−100 ms", { controller.shiftLine(-100) }, enabled = enabled)
                 DesktopButton("+100 ms", { controller.shiftLine(100) }, enabled = enabled)
@@ -34,7 +34,7 @@ internal fun MetadataLyricLineEditor(line: EditableLyricLine, controller: Metada
             }
             Text("格式 mm:ss.mmm，也可填写毫秒数；±100 ms 同时平移整句和逐字时间。",
                 fontSize = 10.sp, lineHeight = 16.sp, color = DesktopColors.Muted)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("演唱声部", fontSize = 12.sp, color = DesktopColors.Muted)
                 DesktopButton("主唱（左）", { controller.editLine { it.copy(vocalPart = LyricVocalPart.MAIN) } },
                     enabled = enabled, primary = controller.state.vocalPart(line) == LyricVocalPart.MAIN)

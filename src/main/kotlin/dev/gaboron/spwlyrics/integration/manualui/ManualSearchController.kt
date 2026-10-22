@@ -33,7 +33,7 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
             state = state.copy(
                 query = loaded?.first, keywords = loaded?.first?.title.orEmpty(),
                 delayText = (loaded?.second ?: 0).toString(), savedDelay = loaded?.second ?: 0,
-                readingTrack = false, status = if (loaded == null) "请先播放歌曲，再点击刷新当前歌曲。" else "正在搜索…",
+                readingTrack = false, status = if (loaded == null) "请先播放歌曲，再点击“刷新歌曲”。" else "正在搜索…",
             )
             if (loaded != null) search()
         }, { state = state.copy(readingTrack = false); reportFailure(it) })

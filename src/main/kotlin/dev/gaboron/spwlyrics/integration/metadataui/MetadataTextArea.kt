@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.gaboron.spwlyrics.integration.composeui.DesktopColors
+import com.moriafly.salt.ui.SaltTheme
 
 @Composable
 internal fun MetadataTextArea(
@@ -20,11 +21,9 @@ internal fun MetadataTextArea(
     enabled: Boolean = true, placeholder: String = "", invalid: Boolean = false,
 ) {
     val scroll = rememberScrollState()
-    Box(modifier.background(DesktopColors.Surface, RoundedCornerShape(7.dp))
-        .border(1.dp, if (invalid) DesktopColors.Error else DesktopColors.Border,
-            RoundedCornerShape(7.dp))) {
+    Box(modifier.then(if (invalid) Modifier.border(1.dp, DesktopColors.Error, SaltTheme.shapes.medium) else Modifier)) {
         @OptIn(com.moriafly.salt.ui.UnstableSaltUiApi::class)
-        com.moriafly.salt.ui.ItemEdit(value, onChange, Modifier.fillMaxSize().padding(end = 12.dp).verticalScroll(scroll),
+        com.moriafly.salt.ui.ItemEdit(value, onChange, Modifier.fillMaxWidth().padding(end = 12.dp).verticalScroll(scroll),
             hint = placeholder, readOnly = !enabled)
         VerticalScrollbar(rememberScrollbarAdapter(scroll), Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(4.dp))
     }

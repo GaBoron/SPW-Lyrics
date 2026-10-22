@@ -4,10 +4,9 @@ import dev.gaboron.spwlyrics.domain.CandidateScore
 import dev.gaboron.spwlyrics.domain.LyricsQuality
 import java.util.Locale
 
-/** Table formatting and sorting are presentation concerns, independent of matching gates. */
-internal enum class CandidateColumn(val title: String, val weight: Float = 0f, val width: Int = 0) {
-    SOURCE("来源", width = 98), TITLE("歌曲", weight = 1.5f), ARTIST("歌手", weight = 1f),
-    ALBUM("专辑", weight = 1.1f), DURATION("时长", width = 48), QUALITY("类型", width = 46), SCORE("匹配分", width = 62);
+/** Candidate labels and sorting stay independent of matching gates and list layout. */
+internal enum class CandidateColumn(val title: String) {
+    SOURCE("来源"), TITLE("歌曲"), ARTIST("歌手"), ALBUM("专辑"), DURATION("时长"), QUALITY("类型"), SCORE("匹配度");
 
     fun text(row: CandidateScore): String = when (this) {
         SOURCE -> row.candidate.source.displayName

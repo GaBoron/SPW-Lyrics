@@ -7,16 +7,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.text.selection.SelectionContainer
-import com.moriafly.salt.ui.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.moriafly.salt.ui.*
 import dev.gaboron.spwlyrics.codec.LyricsTimingOffset
 import dev.gaboron.spwlyrics.codec.SpwLyricsEncoder
 import dev.gaboron.spwlyrics.integration.composeui.*
+import dev.gaboron.spwlyrics.integration.workspace.LyricsSection
+import dev.gaboron.spwlyrics.integration.workspace.LyricsSectionTitle
 
 @Composable
 internal fun ManualLyricsPreview(state: ManualSearchState, modifier: Modifier) {
@@ -25,36 +26,29 @@ internal fun ManualLyricsPreview(state: ManualSearchState, modifier: Modifier) {
         state.document?.let { LyricsTimingOffset.shift(it, state.delayValue ?: state.savedDelay).lines }.orEmpty()
     }
     LaunchedEffect(state.selected) { list.scrollToItem(0) }
-    Column(modifier.desktopPanel()) {
-        Column(Modifier.fillMaxWidth().padding(16.dp, 13.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Text("歌词预览", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-            state.selected?.candidate?.let { candidate ->
-                ElidedText(listOf(candidate.title, candidate.artists.joinToString(" / "), candidate.source.displayName)
-                    .filter(String::isNotBlank).joinToString(" · "), color = DesktopColors.Muted, size = 11)
-            }
-        }
-        DesktopDivider()
+    LyricsSection(modifier) {
+        LyricsSectionTitle("歌词预览")
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
-                state.selected == null -> EmptyWorkspace("选择一个候选以预览歌词", glyph = DesktopGlyph.Music)
-                state.previewing -> EmptyWorkspace("正在加载歌词预览", loading = true)
-                lines.isEmpty() -> EmptyWorkspace("该候选没有可用歌词", glyph = DesktopGlyph.Music)
+                state.selected == null -> EmptyWorkspace("选择一份歌词预览", "在搜索结果中选择歌曲", glyph = DesktopGlyph.Lyrics)
+                state.previewing -> EmptyWorkspace("正在加载歌词", loading = true)
+                lines.isEmpty() -> EmptyWorkspace("这份歌词没有可预览内容", glyph = DesktopGlyph.Lyrics)
                 else -> {
                     SelectionContainer {
-                        LazyColumn(Modifier.fillMaxSize().padding(end = 10.dp), state = list, contentPadding = PaddingValues(18.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        LazyColumn(Modifier.fillMaxSize().padding(end = 12.dp), state = list,
+                            contentPadding = PaddingValues(24.dp, 12.dp, 24.dp, 24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
                             items(lines) { line ->
-                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    line.startMs?.let { Text(SpwLyricsEncoder.timestamp(it), color = DesktopColors.Muted, fontSize = 10.sp) }
-                                    Text(line.text, fontSize = 14.sp, lineHeight = 22.sp)
-                                    (line.translation?.takeIf(String::isNotBlank) ?: line.romanization?.takeIf(String::isNotBlank))?.let {
-                                        Text(it, color = DesktopColors.Muted, fontSize = 12.sp, lineHeight = 19.sp)
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    line.startMs?.let { Text(SpwLyricsEncoder.timestamp(it), color = SaltTheme.colors.subText, style = SaltTheme.textStyles.sub) }
+                                    Text(line.text, fontSize = 18.sp, lineHeight = 28.sp)
+                                    listOfNotNull(line.translation, line.romanization).filter(String::isNotBlank).forEach {
+                                        Text(it, color = SaltTheme.colors.subText, lineHeight = 22.sp)
                                     }
                                 }
                             }
                         }
                     }
-                    VerticalScrollbar(rememberScrollbarAdapter(list), Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(vertical = 6.dp))
+                    VerticalScrollbar(rememberScrollbarAdapter(list), Modifier.align(Alignment.CenterEnd).fillMaxHeight())
                 }
             }
         }

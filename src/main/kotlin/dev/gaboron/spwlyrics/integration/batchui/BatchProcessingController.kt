@@ -87,7 +87,7 @@ internal class BatchProcessingController(
         }.toSet()
         state = state.copy(snapshot = snapshot, keys = keys, selectedKeys = selected,
             message = if (snapshot.items.isEmpty()) "没有可处理的歌曲，请先完成 SPW 音乐库扫描，再重新读取音乐库。"
-            else "关闭窗口后任务继续；停止任务会保留已写入的缓存。", error = false)
+            else "离开页面后任务继续；停止任务会保留已写入的缓存。", error = false)
     }
 
     private fun failure(error: Throwable) { state = state.copy(error = true, message = describeFailure(error)) }

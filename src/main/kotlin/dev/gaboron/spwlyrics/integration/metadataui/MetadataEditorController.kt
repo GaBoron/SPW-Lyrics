@@ -45,7 +45,7 @@ internal class MetadataEditorController(
 
     fun current() = requestDiscard {
         run({ operations.currentAudioPath()?.takeIf(String::isNotBlank)?.let { store.read(Path.of(it)) }
-            ?: error("当前没有本地歌曲，请先播放歌曲或点击“打开歌曲文件”。") }, ::loaded)
+            ?: error("当前没有本地歌曲，请先播放歌曲或点击“打开歌曲”。") }, ::loaded)
     }
 
     fun openFile() = requestDiscard {
