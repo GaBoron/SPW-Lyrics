@@ -12,15 +12,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.*
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.moriafly.salt.ui.*
-import dev.gaboron.spwlyrics.application.LyricsBatchItem
 import dev.gaboron.spwlyrics.application.LyricsBatchItemState
 import dev.gaboron.spwlyrics.integration.composeui.*
 import dev.gaboron.spwlyrics.integration.workspace.LyricsSection
 import dev.gaboron.spwlyrics.integration.workspace.LyricsListDivider
-import dev.gaboron.spwlyrics.integration.workspace.lyricsSelection
 
 @OptIn(UnstableSaltUiApi::class)
 @Composable
@@ -50,40 +47,17 @@ internal fun BatchTrackList(state: BatchProcessingState, select: (String) -> Uni
             else {
                 LazyColumn(Modifier.fillMaxSize().padding(end = 12.dp), state = list, contentPadding = PaddingValues(4.dp)) {
                     itemsIndexed(state.snapshot.items, key = { index, _ -> "$index:${state.keys[index]}" }) { index, item ->
-                        Row(Modifier.fillMaxWidth().lyricsSelection(cursor == index || item.state == LyricsBatchItemState.SEARCHING),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            ItemCheck(state.keys[index] in state.selectedKeys, {
+                        Column {
+                            BatchTrackRow(item, state.keys[index] in state.selectedKeys,
+                                cursor == index || item.state == LyricsBatchItemState.SEARCHING, state.editable) {
                                 focus.requestFocus(); cursor = index; select(state.keys[index])
-                            }, item.query.title, Modifier.weight(1f), enabled = state.editable,
-                                sub = item.query.artists.joinToString(" / ").ifBlank { item.query.album })
-                            BatchItemStatus(item, Modifier.widthIn(max = 180.dp).padding(end = 16.dp))
+                            }
+                            LyricsListDivider()
                         }
-                        LyricsListDivider()
                     }
                 }
                 VerticalScrollbar(rememberScrollbarAdapter(list), Modifier.align(Alignment.CenterEnd).fillMaxHeight(), interactionSource = scrollbar)
             }
         }
-    }
-}
-
-@Composable
-private fun BatchItemStatus(item: LyricsBatchItem, modifier: Modifier) {
-    Column(modifier, horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(when (item.state) {
-            LyricsBatchItemState.WAITING -> "等待处理"
-            LyricsBatchItemState.SEARCHING -> "搜索中 ${(item.progress * 100).toInt()}%"
-            LyricsBatchItemState.COMPLETED -> "已缓存"
-            LyricsBatchItemState.FAILED -> "需要重试"
-            LyricsBatchItemState.CACHED -> "已有缓存"
-            LyricsBatchItemState.EXCLUDED -> "未选择"
-            LyricsBatchItemState.CANCELLED -> "已停止"
-        }, style = SaltTheme.textStyles.sub, color = when (item.state) {
-            LyricsBatchItemState.FAILED -> SaltTheme.colors.error
-            LyricsBatchItemState.SEARCHING, LyricsBatchItemState.COMPLETED -> SaltTheme.colors.highlight
-            else -> SaltTheme.colors.subText
-        })
-        Text(listOf(item.source, item.quality).filter(String::isNotBlank).joinToString(" · ").ifBlank { item.stage.ifBlank { item.message } },
-            color = SaltTheme.colors.subText, style = SaltTheme.textStyles.sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

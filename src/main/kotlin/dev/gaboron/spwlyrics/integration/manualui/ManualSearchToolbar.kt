@@ -48,6 +48,6 @@ internal fun ManualSearchToolbar(controller: ManualSearchController, searchFocus
             }
         }
         ManualSourceStatuses(state.sourceStatuses)
-        LyricsStatus(state.status, state.error)
+        if (state.status.isNotBlank()) LyricsStatus(state.status, state.error)
     }
 }

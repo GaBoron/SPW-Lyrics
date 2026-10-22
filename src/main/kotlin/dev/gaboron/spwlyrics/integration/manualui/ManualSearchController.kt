@@ -82,7 +82,7 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
             }
         } }, { rows ->
             state = state.copy(candidates = rows, searching = false, searched = true,
-                status = if (rows.isEmpty()) "没有找到候选，请缩短关键词或换一个来源。" else "找到 ${rows.size} 个候选，请核对录音版本后应用。")
+                status = if (rows.isEmpty()) "没有找到候选，请缩短关键词或换一个来源。" else "")
         }, { error ->
             state = state.copy(searching = false, searched = true, sourceStatuses = state.sourceStatuses.mapValues { (_, status) ->
                 if (status.phase == ProviderSearchPhase.SEARCHING) status.copy(phase = ProviderSearchPhase.FAILED, detail = "搜索未完成，请重试。") else status
