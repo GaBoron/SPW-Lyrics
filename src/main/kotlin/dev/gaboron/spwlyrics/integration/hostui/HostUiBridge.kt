@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.dp
 import dev.gaboron.spwlyrics.integration.composeui.DesktopGlyph
 import dev.gaboron.spwlyrics.integration.composeui.DesktopIcon
 import dev.gaboron.spwlyrics.integration.workspace.LyricsWorkspace
+import dev.gaboron.spwlyrics.integration.workspace.LyricsToolPage
 import java.lang.invoke.MethodType
 import java.lang.reflect.Method
 
@@ -28,7 +29,7 @@ internal class HostUiBridge(val targets: HostUiDiscovery.Targets, private val lo
     var replaying = false
         private set
     private var navigator: Any? = null
-    private val openPage: () -> Unit = { workspace.open() }
+    private val openPage: () -> Unit = { workspace.open(LyricsToolPage.BATCH) }
 
     fun method(key: HostBytecodeIndex.Method): Method {
         val signature = MethodType.fromMethodDescriptorString(key.descriptor(), loader)

@@ -13,9 +13,11 @@ internal class QqSearchClient(private val http: ProviderHttp) {
         val query = providerJson.encodeToString(JsonPrimitive.serializer(), JsonPrimitive(keywords.trim()))
         val params = """{"query":$query,"num_per_page":20,"page_num":1,"search_type":0}"""
         val call = """{"module":"music.search.SearchCgiService","method":"DoSearchForQQMusicDesktop","param":$params}"""
+        var validResponse = false
+        var lastFailure: Throwable? = null
         for (alternate in listOf(false, true)) {
             if (Thread.currentThread().isInterrupted) throw InterruptedException("QQ search cancelled")
-            val results = runCatching {
+            val attempt = runCatching {
                 val response = if (alternate) {
                     http.get("$FALLBACK_URL?format=json&w=${ProviderHttpClient.encode(keywords.trim())}&n=20&p=1", HEADERS)
                 } else {
@@ -23,32 +25,38 @@ internal class QqSearchClient(private val http: ProviderHttp) {
                     http.postJson(QqMusicProvider.SEARCH_URL, request, HEADERS)
                 }
                 decode(response, alternate)
-            }.getOrElse { failure ->
+            }
+            val results = attempt.getOrElse { failure ->
                 if (failure is InterruptedException || Thread.currentThread().isInterrupted) throw failure
+                lastFailure = failure
                 emptyList()
             }
+            if (attempt.isSuccess) validResponse = true
             if (results.isNotEmpty()) return results.take(limit)
         }
-        return emptyList()
+        if (validResponse) return emptyList()
+        throw checkNotNull(lastFailure)
     }
 
     private fun decode(response: String, alternate: Boolean): List<LyricsCandidate> {
-        val root = providerJson.parseToJsonElement(response) as? JsonObject ?: return emptyList()
-        if (root.long("code") != 0L) return emptyList()
+        val root = providerJson.parseToJsonElement(response) as? JsonObject ?: error("QQ 搜索响应格式无效")
+        check(root.long("code") == 0L) { "QQ 搜索接口返回错误" }
         val songs = if (alternate) {
-            root.obj("data")?.obj("song")?.array("list")
+            checkNotNull(root.obj("data")?.obj("song")) { "QQ 搜索响应缺少歌曲数据" }.array("list")
         } else {
-            val result = root.obj("req_1") ?: return emptyList()
-            if (result.long("code") != 0L) return emptyList()
-            result.obj("data")?.obj("body")?.obj("song")?.array("list")
+            val result = checkNotNull(root.obj("req_1")) { "QQ 搜索响应缺少请求结果" }
+            check(result.long("code") == 0L) { "QQ 搜索接口返回错误" }
+            checkNotNull(result.obj("data")?.obj("body")?.obj("song")) { "QQ 搜索响应缺少歌曲数据" }.array("list")
         }
-        return songs.orEmpty()
+        checkNotNull(songs) { "QQ 搜索响应缺少候选列表" }
+        return songs
             .mapNotNull { it.asObject() }
             .flatMap { song ->
                 listOf(song) + (song.array("grp") ?: song.array("group")).orEmpty().mapNotNull { it.asObject() }
             }
             .mapNotNull { song -> runCatching { candidate(song) }.getOrNull() }
             .distinctBy(LyricsCandidate::remoteId)
+            .also { check(songs.isEmpty() || it.isNotEmpty()) { "QQ 搜索候选格式无效" } }
     }
 
     private fun candidate(song: JsonObject): LyricsCandidate? {

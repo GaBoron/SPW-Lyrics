@@ -6,11 +6,13 @@ import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsSource
 import dev.gaboron.spwlyrics.domain.LyricsDocument
 import dev.gaboron.spwlyrics.domain.TrackQuery
+import dev.gaboron.spwlyrics.domain.ProviderSearchStatus
 
 /** Keeps the window independent of host APIs, cache storage, and matching rules. */
 internal interface ManualSearchOperations {
     fun currentQuery(): TrackQuery?
-    fun search(query: TrackQuery, keywords: String, source: LyricsSource?): List<CandidateScore>
+    fun search(query: TrackQuery, keywords: String, source: LyricsSource?,
+        onStatus: (ProviderSearchStatus) -> Unit): List<CandidateScore>
     fun preview(candidate: LyricsCandidate): ResolvedLyrics?
     fun apply(query: TrackQuery, candidate: LyricsCandidate): Boolean
     fun useLocal(query: TrackQuery): Boolean

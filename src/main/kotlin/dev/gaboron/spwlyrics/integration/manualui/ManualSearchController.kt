@@ -5,6 +5,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.gaboron.spwlyrics.domain.CandidateScore
 import dev.gaboron.spwlyrics.domain.LyricsSource
+import dev.gaboron.spwlyrics.domain.ProviderSearchStatus
+import dev.gaboron.spwlyrics.domain.ProviderSearchPhase
 import dev.gaboron.spwlyrics.codec.TtmlVocalParts
 import dev.gaboron.spwlyrics.storage.LyricsDelaySettings
 import java.awt.EventQueue
@@ -40,8 +42,20 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
         }, { state = state.copy(readingTrack = false); reportFailure(it) })
     }
 
-    fun keywords(value: String) { state = state.copy(keywords = value) }
-    fun source(value: LyricsSource?) { state = state.copy(source = value) }
+    fun keywords(value: String) {
+        if (value != state.keywords) { invalidateSearch(); state = state.copy(keywords = value) }
+    }
+    fun source(value: LyricsSource?) {
+        if (value != state.source) { invalidateSearch(); state = state.copy(source = value) }
+    }
+
+    private fun invalidateSearch() {
+        searchGeneration++
+        previewGeneration++
+        state = state.copy(candidates = emptyList(), selected = null, document = null,
+            searching = false, previewing = false, searched = false, sourceStatuses = ProviderSearchStatus.unchecked(),
+            status = "搜索条件已更改，请点击搜索。", error = false)
+    }
     fun delayText(value: String) {
         if (value.length <= 7 && value.matches(Regex("-?\\d*"))) state = state.copy(delayText = value)
     }
@@ -60,11 +74,21 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
         val generation = ++searchGeneration
         previewGeneration++
         state = state.copy(candidates = emptyList(), selected = null, document = null,
+            sourceStatuses = ProviderSearchStatus.unchecked(),
             searching = true, previewing = false, searched = false, status = "正在搜索…", error = false)
-        submit({ searchGeneration == generation }, { operations.search(query, keywords, source) }, { rows ->
+        submit({ searchGeneration == generation }, { operations.search(query, keywords, source) { update ->
+            EventQueue.invokeLater {
+                if (!closed && searchGeneration == generation) state = state.copy(sourceStatuses = state.sourceStatuses + (update.source to update))
+            }
+        } }, { rows ->
             state = state.copy(candidates = rows, searching = false, searched = true,
                 status = if (rows.isEmpty()) "没有找到候选，请缩短关键词或换一个来源。" else "找到 ${rows.size} 个候选，请核对录音版本后应用。")
-        }, { state = state.copy(searching = false, searched = true); reportFailure(it) })
+        }, { error ->
+            state = state.copy(searching = false, searched = true, sourceStatuses = state.sourceStatuses.mapValues { (_, status) ->
+                if (status.phase == ProviderSearchPhase.SEARCHING) status.copy(phase = ProviderSearchPhase.FAILED, detail = "搜索未完成，请重试。") else status
+            })
+            reportFailure(error)
+        })
     }
 
     fun select(row: CandidateScore) {

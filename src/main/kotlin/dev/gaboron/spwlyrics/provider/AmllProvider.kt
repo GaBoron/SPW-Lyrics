@@ -6,6 +6,7 @@ import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsDocument
 import dev.gaboron.spwlyrics.domain.LyricsSource
 import dev.gaboron.spwlyrics.domain.TrackQuery
+import dev.gaboron.spwlyrics.domain.ProviderSearchStatus
 import java.nio.file.Path
 import java.time.Clock
 
@@ -23,6 +24,9 @@ class AmllProvider(
 
     override fun searchManual(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> =
         index.search(query, keywords, limit, manual = true)
+
+    override fun searchManual(query: TrackQuery, keywords: String, limit: Int,
+        onStatus: (ProviderSearchStatus) -> Unit): List<LyricsCandidate> = index.searchManual(query, keywords, limit, onStatus)
 
     override fun close() = index.close()
 

@@ -8,6 +8,7 @@ import dev.gaboron.spwlyrics.domain.LyricsQuality
 import dev.gaboron.spwlyrics.domain.LyricsSource
 import dev.gaboron.spwlyrics.domain.MatchEngine
 import dev.gaboron.spwlyrics.domain.TrackQuery
+import dev.gaboron.spwlyrics.domain.ProviderSearchStatus
 import dev.gaboron.spwlyrics.provider.LyricsProvider
 import dev.gaboron.spwlyrics.storage.CachedLyrics
 import java.time.Clock
@@ -108,28 +109,14 @@ class LyricsResolver(
         return resolved
     }
 
-    fun searchManual(query: TrackQuery, keywords: String, source: LyricsSource?): List<CandidateScore> {
+    fun searchManual(query: TrackQuery, keywords: String, source: LyricsSource?,
+        onStatus: (ProviderSearchStatus) -> Unit = {}): List<CandidateScore> {
         val selected = if (source == null) {
             orderedSources.filter { it != LyricsSource.LOCAL }.mapNotNull(providers::get)
         } else {
             listOfNotNull(providers[source])
         }
-        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(MANUAL_SEARCH_TIMEOUT_MILLIS)
-        val searched = providerTasks.collect(
-            selected.map { provider -> { searchManual(provider, query, keywords) } },
-            deadline,
-        )
-        val requests = searched.flatMap { result ->
-            val provider = selected[result.index]
-            result.value.map { ManualCandidateRequest(provider, it) }
-        }
-        return manualCandidateInspector.inspect(requests)
-            .map { MatchEngine.score(query, it) }
-            .sortedWith(
-                compareByDescending<CandidateScore> { it.candidate.qualityHint?.rank ?: -1 }
-                    .thenBy { it.candidate.source.priority }
-                    .thenByDescending(CandidateScore::score),
-            )
+        return ManualLyricsSearch(providerTasks, manualCandidateInspector).search(selected, query, keywords, onStatus)
     }
 
     fun fetchManual(candidate: LyricsCandidate): ResolvedLyrics? = providers[candidate.source]?.let { provider ->
@@ -145,9 +132,6 @@ class LyricsResolver(
 
     private fun search(provider: LyricsProvider, query: TrackQuery, keywords: String): List<LyricsCandidate> =
         runCatching { provider.search(query, keywords) }.getOrDefault(emptyList())
-
-    private fun searchManual(provider: LyricsProvider, query: TrackQuery, keywords: String): List<LyricsCandidate> =
-        runCatching { provider.searchManual(query, keywords, MANUAL_RESULTS_PER_SOURCE) }.getOrDefault(emptyList())
 
     private fun resolved(fetched: FetchedLyrics): ResolvedLyrics? =
         fetched.document.takeIf { it.lines.any { line -> line.text.isNotBlank() } }
@@ -212,8 +196,6 @@ class LyricsResolver(
     }
 
     private companion object {
-        const val MANUAL_RESULTS_PER_SOURCE = 8
-        const val MANUAL_SEARCH_TIMEOUT_MILLIS = 6_000L
         const val PROVIDER_SEARCH_BUDGET_MILLIS = 12_000L
         const val FULL_SEARCH_TIMEOUT_MILLIS = 20_000L
     }

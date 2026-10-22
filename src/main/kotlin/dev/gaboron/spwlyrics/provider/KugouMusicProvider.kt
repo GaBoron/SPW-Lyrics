@@ -12,10 +12,12 @@ import kotlinx.serialization.json.JsonObject
 class KugouMusicProvider(private val http: ProviderHttp) : LyricsProvider {
     override val source = LyricsSource.KUGOU
 
-    override fun search(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> = runCatching {
+    override fun search(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> {
         val url = "$SEARCH_URL?keyword=${ProviderHttpClient.encode(keywords)}&page=1&pagesize=$limit"
         val root = providerJson.parseToJsonElement(http.get(url)) as JsonObject
-        root.obj("data")?.array("lists").orEmpty().mapNotNull { element ->
+        check(root.long("status") == 1L && (root.long("error_code") ?: 0L) == 0L) { "酷狗搜索接口返回错误" }
+        val songs = checkNotNull(root.obj("data")?.array("lists")) { "酷狗搜索响应缺少候选列表" }
+        return songs.mapNotNull { element ->
             val song = element.asObject() ?: return@mapNotNull null
             val hash = song.string("FileHash") ?: song.string("EMixSongID") ?: return@mapNotNull null
             LyricsCandidate(
@@ -28,8 +30,8 @@ class KugouMusicProvider(private val http: ProviderHttp) : LyricsProvider {
                 qualityHint = LyricsQuality.KARAOKE_SYNCED,
                 context = mapOf("hash" to hash),
             )
-        }
-    }.getOrDefault(emptyList())
+        }.also { check(songs.isEmpty() || it.isNotEmpty()) { "酷狗搜索候选格式无效" } }
+    }
 
     override fun fetch(candidate: LyricsCandidate): LyricsDocument? = runCatching {
         val hash = candidate.context["hash"] ?: candidate.remoteId

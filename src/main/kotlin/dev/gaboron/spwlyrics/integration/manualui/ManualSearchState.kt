@@ -4,6 +4,7 @@ import dev.gaboron.spwlyrics.domain.CandidateScore
 import dev.gaboron.spwlyrics.domain.LyricsDocument
 import dev.gaboron.spwlyrics.domain.LyricsSource
 import dev.gaboron.spwlyrics.domain.TrackQuery
+import dev.gaboron.spwlyrics.domain.ProviderSearchStatus
 import dev.gaboron.spwlyrics.storage.LyricsDelaySettings
 
 internal data class ManualSearchState(
@@ -11,6 +12,7 @@ internal data class ManualSearchState(
     val keywords: String = "",
     val source: LyricsSource? = null,
     val candidates: List<CandidateScore> = emptyList(),
+    val sourceStatuses: Map<LyricsSource, ProviderSearchStatus> = ProviderSearchStatus.unchecked(),
     val selected: CandidateScore? = null,
     val document: LyricsDocument? = null,
     val previewMainAgent: String = "v1",

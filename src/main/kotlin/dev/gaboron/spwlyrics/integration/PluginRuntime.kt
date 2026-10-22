@@ -14,6 +14,7 @@ import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsDocument
 import dev.gaboron.spwlyrics.domain.LyricsSource
 import dev.gaboron.spwlyrics.domain.TrackQuery
+import dev.gaboron.spwlyrics.domain.ProviderSearchStatus
 import dev.gaboron.spwlyrics.provider.AmllProvider
 import dev.gaboron.spwlyrics.provider.KugouMusicProvider
 import dev.gaboron.spwlyrics.provider.LocalLyricsProvider
@@ -38,8 +39,6 @@ object PluginRuntime {
     @Volatile private var workspace: LyricsWorkspace? = null
     @Volatile private var hostUi: HostUiIntegration? = null
     @Volatile private var settings: PluginSettings? = null
-    @Volatile private var manualSearchShortcut: SpwManualSearchBinding? = null
-    @Volatile private var metadataEditorShortcut: SpwMetadataEditorBinding? = null
     @Volatile private var cacheFolderOpener: CacheFolderOpener? = null
     private val libraryTracks = SpwLibraryTrackSource()
     private val localTtmlLyrics = LocalTtmlLyricsLoader()
@@ -110,8 +109,8 @@ object PluginRuntime {
         }
         val manualOperations = object : ManualSearchOperations {
             override fun currentQuery() = PluginRuntime.currentQuery()
-            override fun search(query: TrackQuery, keywords: String, source: LyricsSource?) =
-                coordinator?.searchManual(query, keywords, source).orEmpty()
+            override fun search(query: TrackQuery, keywords: String, source: LyricsSource?, onStatus: (ProviderSearchStatus) -> Unit) =
+                checkNotNull(coordinator) { "歌词搜索尚未启用。" }.searchManual(query, keywords, source, onStatus)
             override fun preview(candidate: LyricsCandidate) = coordinator?.preview(candidate)
             override fun apply(query: TrackQuery, candidate: LyricsCandidate) =
                 isCurrentTrack(query) && coordinator?.applyManual(query, candidate) == true
@@ -127,18 +126,6 @@ object PluginRuntime {
         workspace = LyricsWorkspace({ LyricsWorkspaceSession(manualOperations, metadataOperations, batch, describeBatchFailure) }, ::toastWarning)
         hostUi = HostUiIntegration(checkNotNull(workspace), ::toastWarning).also { it.start() }
         settings = PluginSettings(WorkshopApi.manager.createConfigManager())
-        val shortcut = SpwManualSearchBinding(::openManualSearch)
-        manualSearchShortcut = shortcut
-        runCatching { shortcut.register() }.onFailure {
-            toastWarning("无法注册歌词搜索快捷键，请检查 SPW 的快捷键权限和冲突设置。")
-        }.onSuccess { granted ->
-            if (!granted) toastWarning("歌词搜索快捷键未启用：请在 SPW 的插件权限中授予快捷键权限。")
-        }
-        val metadataShortcut = SpwMetadataEditorBinding(::openMetadataEditor)
-        metadataEditorShortcut = metadataShortcut
-        runCatching { metadataShortcut.register() }.onFailure {
-            toastWarning("无法注册元数据编辑快捷键，请检查 SPW 的快捷键权限和设置。")
-        }
     }
 
     fun beforeLoad(mediaItem: PlaybackExtensionPoint.MediaItem): String? =
@@ -167,17 +154,13 @@ object PluginRuntime {
     fun openMetadataEditor() {
         workspace?.open(LyricsToolPage.METADATA)
     }
-    fun openWorkspace() = workspace?.open()
+    fun openWorkspace() = workspace?.open(LyricsToolPage.BATCH)
     fun openCacheFolder() {
         if (cacheFolderOpener?.open() != true) toastWarning("无法打开 SPW Lyrics 本地缓存文件夹。")
     }
 
     @Synchronized
     fun close() {
-        manualSearchShortcut?.close()
-        manualSearchShortcut = null
-        metadataEditorShortcut?.close()
-        metadataEditorShortcut = null
         hostUi?.close()
         hostUi = null
         workspace?.close()

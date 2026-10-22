@@ -5,13 +5,6 @@
       "config": "spw-lyrics.json",
       "preferences": [
         {
-          "type": "button",
-          "title": "打开歌词管理",
-          "summary": "在统一页面中搜索歌词、编辑元数据和批量处理",
-          "arrow_type": "none",
-          "on_click": "dev.gaboron.spwlyrics.integration.SpwLyricsActions.openWorkspace"
-        },
-        {
           "key": "automatic_replacement_policy",
           "type": "list",
           "title": "自动替换歌词",
@@ -19,27 +12,6 @@
           "entries": ["始终优先使用插件歌词", "仅在本地无歌词时补充", "仅手动选择时替换"],
           "entry_values": ["always", "when_local_missing", "manual_only"],
           "default_value": "always"
-        },
-        {
-          "type": "button",
-          "title": "打开手动搜索",
-          "summary": "切换到歌词管理的手动搜索标签页",
-          "arrow_type": "none",
-          "on_click": "dev.gaboron.spwlyrics.integration.SpwLyricsActions.openManualSearch"
-        },
-        {
-          "type": "button",
-          "title": "歌曲元数据编辑",
-          "summary": "读取、修改本地歌曲信息，编辑或导入内嵌歌词",
-          "arrow_type": "none",
-          "on_click": "dev.gaboron.spwlyrics.integration.SpwLyricsActions.openMetadataEditor"
-        },
-        {
-          "type": "button",
-          "title": "批量处理音乐库",
-          "summary": "提前搜索并缓存音乐库歌词，首次播放时无需逐首等待",
-          "arrow_type": "none",
-          "on_click": "dev.gaboron.spwlyrics.integration.SpwLyricsActions.openBatchProcessing"
         },
         {
           "type": "button",

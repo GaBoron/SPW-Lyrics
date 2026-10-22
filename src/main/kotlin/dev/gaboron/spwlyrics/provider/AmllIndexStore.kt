@@ -2,6 +2,10 @@ package dev.gaboron.spwlyrics.provider
 
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.TrackQuery
+import dev.gaboron.spwlyrics.domain.LyricsSource
+import dev.gaboron.spwlyrics.domain.ProviderSearchPhase
+import dev.gaboron.spwlyrics.domain.ProviderSearchStatus
+import java.awt.Desktop
 import java.nio.charset.StandardCharsets
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
@@ -27,6 +31,9 @@ internal class AmllIndexStore(
     @Volatile private var searchIndex: AmllSearchIndex? = null
     private var lastRefreshAttempt: Instant? = null
     private var refreshTask: Future<*>? = null
+    private var refreshing = false
+    private var refreshFailure: Throwable? = null
+    private val refreshListeners = mutableListOf<(ProviderSearchStatus) -> Unit>()
     @Volatile private var closed = false
     private val refreshExecutor = Executors.newSingleThreadExecutor { task ->
         Thread(task, "spw-amll-index-refresh").apply { isDaemon = true }
@@ -38,21 +45,54 @@ internal class AmllIndexStore(
     }
 
     @Synchronized
+    fun searchManual(query: TrackQuery, keywords: String, limit: Int,
+        onStatus: (ProviderSearchStatus) -> Unit): List<LyricsCandidate> {
+        val previousAttempt = lastRefreshAttempt
+        ensureCurrent()
+        val status = when {
+            refreshing -> ProviderSearchStatus(LyricsSource.AMLL, ProviderSearchPhase.SEARCHING, "正在更新索引（使用本地索引）。")
+            refreshFailure != null -> indexFailure(checkNotNull(refreshFailure))
+            lastRefreshAttempt != previousAttempt -> ProviderSearchStatus(LyricsSource.AMLL, ProviderSearchPhase.AVAILABLE, "索引获取成功。")
+            searchIndex?.isEmpty == false -> ProviderSearchStatus(LyricsSource.AMLL, ProviderSearchPhase.AVAILABLE, "本地索引可用；本次未检查网络。")
+            else -> ProviderSearchStatus(LyricsSource.AMLL, ProviderSearchPhase.FAILED, "索引获取失败，请稍后重试。")
+        }
+        onStatus(status)
+        if (refreshing) refreshListeners += onStatus
+        return searchIndex?.search(query, keywords, limit, manual = true).orEmpty()
+    }
+
+    private fun indexFailure(error: Throwable): ProviderSearchStatus {
+        val failure = ProviderSearchFailure.status(LyricsSource.AMLL, error)
+        val reason = if (searchIndex?.isEmpty == false) "更新失败（使用本地索引）" else "索引获取失败"
+        return failure.copy(detail = "$reason：${failure.detail}")
+    }
+
+    @Synchronized
     private fun ensureCurrent() {
         if (closed) return
         Files.createDirectories(cacheDirectory)
         migrateLegacyIndex()
         if (searchIndex == null) loadIndex()
         val now = clock.instant()
-        if (!isStale(now) || !mayAttemptRefresh(now) || refreshTask?.isDone == false) return
+        if ((searchIndex?.isEmpty == false && !isStale(now)) || !mayAttemptRefresh(now) || refreshing) return
         lastRefreshAttempt = now
         if (searchIndex?.isEmpty == false) {
             // Keep searches responsive while an existing index is refreshed.
+            refreshing = true
             refreshTask = refreshExecutor.submit {
-                if (refresh(now)) synchronized(this) { if (!closed) loadIndex() }
+                val refreshed = runCatching { refresh(now).getOrThrow(); synchronized(this) { if (!closed) loadIndex() } }
+                val (listeners, status) = synchronized(this) {
+                    refreshing = false
+                    refreshFailure = refreshed.exceptionOrNull()
+                    val status = refreshFailure?.let(::indexFailure)
+                        ?: ProviderSearchStatus(LyricsSource.AMLL, ProviderSearchPhase.AVAILABLE, "索引更新成功。")
+                    refreshListeners.toList().also { refreshListeners.clear() } to status
+                }
+                if (!closed) listeners.forEach { runCatching { it(status) } }
             }
-        } else if (refresh(now)) {
-            loadIndex()
+        } else {
+            val refreshed = runCatching { refresh(now).getOrThrow(); loadIndex() }
+            refreshFailure = refreshed.exceptionOrNull()
         }
     }
 
@@ -63,7 +103,7 @@ internal class AmllIndexStore(
         ?.plus(REFRESH_RETRY_DELAY)
         ?.isAfter(now) != true
 
-    private fun refresh(now: Instant): Boolean {
+    private fun refresh(now: Instant): Result<Unit> {
         return runCatching {
             val content = http.get(AmllProvider.INDEX_URL)
             check(!closed && !Thread.currentThread().isInterrupted) { "AMLL index refresh cancelled" }
@@ -74,9 +114,14 @@ internal class AmllIndexStore(
                 Files.setLastModifiedTime(temporary, FileTime.from(now))
                 moveReplacing(temporary, indexPath)
             } finally {
-                Files.deleteIfExists(temporary)
+                if (Files.exists(temporary)) {
+                    val recycled = runCatching { Desktop.isDesktopSupported() &&
+                        Desktop.getDesktop().isSupported(Desktop.Action.MOVE_TO_TRASH) &&
+                        Desktop.getDesktop().moveToTrash(temporary.toFile()) }.getOrDefault(false)
+                    if (!recycled) System.getLogger("SPW Lyrics").log(System.Logger.Level.WARNING, "AMLL 临时索引保留在：$temporary")
+                }
             }
-        }.isSuccess
+        }
     }
 
     private fun loadIndex() {
@@ -110,6 +155,7 @@ internal class AmllIndexStore(
     override fun close() {
         closed = true
         refreshTask?.cancel(true)
+        refreshListeners.clear()
         refreshExecutor.shutdownNow()
     }
 

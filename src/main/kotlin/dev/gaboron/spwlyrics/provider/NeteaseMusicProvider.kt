@@ -22,15 +22,32 @@ import kotlinx.serialization.json.put
 class NeteaseMusicProvider(private val http: ProviderHttp) : LyricsProvider {
     override val source = LyricsSource.NETEASE
 
-    override fun search(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> =
-        SEARCH_URLS.firstNotNullOfOrNull { searchUrl ->
-            runCatching { search(searchUrl, keywords, limit) }.getOrNull()?.takeIf(List<LyricsCandidate>::isNotEmpty)
-        }.orEmpty()
+    override fun search(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> {
+        var validResponse = false
+        var lastFailure: Throwable? = null
+        for (url in SEARCH_URLS) {
+            if (Thread.currentThread().isInterrupted) throw InterruptedException("NetEase search cancelled")
+            val attempt = runCatching { search(url, keywords, limit) }
+            attempt.onSuccess { rows ->
+                validResponse = true
+                if (rows.isNotEmpty()) return rows
+            }.onFailure {
+                if (it is InterruptedException || Thread.currentThread().isInterrupted) throw it
+                lastFailure = it
+            }
+        }
+        if (validResponse) return emptyList()
+        throw checkNotNull(lastFailure)
+    }
 
     private fun search(searchUrl: String, keywords: String, limit: Int): List<LyricsCandidate> {
         val url = "$searchUrl?s=${ProviderHttpClient.encode(keywords)}&type=1&offset=0&total=true&limit=$limit"
         val root = providerJson.parseToJsonElement(http.get(url, HEADERS)) as JsonObject
-        return root.obj("result")?.array("songs").orEmpty().mapNotNull { element ->
+        check(root.long("code") == 200L) { "网易云搜索接口返回错误" }
+        val result = checkNotNull(root.obj("result")) { "网易云搜索响应缺少结果" }
+        val songs = result.array("songs") ?: if (result.long("songCount") == 0L) emptyList()
+            else error("网易云搜索响应缺少候选列表")
+        return songs.mapNotNull { element ->
             val song = element.asObject() ?: return@mapNotNull null
             val id = song.long("id")?.toString() ?: song.string("id") ?: return@mapNotNull null
             LyricsCandidate(
@@ -42,7 +59,7 @@ class NeteaseMusicProvider(private val http: ProviderHttp) : LyricsProvider {
                 durationMs = song.long("duration") ?: song.long("dt"),
                 qualityHint = LyricsQuality.KARAOKE_SYNCED,
             )
-        }
+        }.also { check(songs.isEmpty() || it.isNotEmpty()) { "网易云搜索候选格式无效" } }
     }
 
     override fun fetch(candidate: LyricsCandidate): LyricsDocument? =

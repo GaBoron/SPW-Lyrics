@@ -82,8 +82,9 @@ class LyricsLoadCoordinator(
         return null
     }
 
-    fun searchManual(query: TrackQuery, keywords: String, source: dev.gaboron.spwlyrics.domain.LyricsSource?) =
-        resolver.searchManual(query, keywords, source)
+    fun searchManual(query: TrackQuery, keywords: String, source: dev.gaboron.spwlyrics.domain.LyricsSource?,
+        onStatus: (dev.gaboron.spwlyrics.domain.ProviderSearchStatus) -> Unit = {}) =
+        resolver.searchManual(query, keywords, source, onStatus)
 
     fun preview(candidate: LyricsCandidate): ResolvedLyrics? = resolver.fetchManual(candidate)
 

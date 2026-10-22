@@ -71,7 +71,7 @@ spmod {
     PluginDescription = "为 Salt Player for Windows 自动搜索、匹配并加载多来源歌词。"
     PluginOpenSourceUrl = "https://github.com/GaBoron/SPW-Lyrics"
     PluginHasConfig = true
-    PluginPermissions = listOf(PluginPermission.LIBRARY_READ, PluginPermission.KEY_BINDINGS, PluginPermission.CLASS_TRANSFORM)
+    PluginPermissions = listOf(PluginPermission.LIBRARY_READ, PluginPermission.CLASS_TRANSFORM)
 }
 tasks.named<Zip>("plugin") {
     archiveFileName.set("spw-lyrics-${project.version}.spmod")

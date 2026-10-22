@@ -14,6 +14,7 @@ internal class HostUiIntegration(private val workspace: LyricsWorkspace, private
     private val worker = Executors.newSingleThreadScheduledExecutor { Thread(it, "spw-lyrics-host-ui").apply { isDaemon = true } }
     @Volatile private var stopped = false
     private var hooks: HostUiHooks? = null
+    private var playerMenu: HostPlayerMenu? = null
 
     fun start() {
         worker.execute {
@@ -21,24 +22,31 @@ internal class HostUiIntegration(private val workspace: LyricsWorkspace, private
                 check(WorkshopApi.manager.isPermissionGranted(PluginPermission.CLASS_TRANSFORM)) { "请授予类变换权限后重新启用插件" }
                 val host = WorkshopApi.instance.javaClass
                 val source = Path.of(checkNotNull(host.protectionDomain.codeSource).location.toURI())
-                val targets = HostUiDiscovery.discover(HostBytecodeIndex.read(source))
-                HostUiBridge(targets, host.classLoader, workspace)
+                val index = HostBytecodeIndex.read(source)
+                val targets = HostUiDiscovery.discover(index)
+                val bridge = HostUiBridge(targets, host.classLoader, workspace)
+                bridge to runCatching { HostPlayerMenu(HostPlayerMenuDiscovery.discover(index), host.classLoader, workspace) { bridge.isDarkTheme() } }
             }
             EventQueue.invokeLater {
                 if (stopped) return@invokeLater
-                result.onSuccess { bridge ->
+                result.onSuccess { (bridge, menu) ->
                     runCatching {
                         check(WorkshopApi.manager.isPermissionGranted(PluginPermission.CLASS_TRANSFORM)) { "类变换权限已撤销" }
                         HostUiHooks(bridge, workspace).also { it.install(); hooks = it }
                         workspace.beforeOpen = bridge::enter
                         workspace.available = true
+                        menu.onSuccess { entry ->
+                            runCatching { entry.install(); playerMenu = entry }.onFailure {
+                                entry.close(); menuFailed(it)
+                            }
+                        }.onFailure(::menuFailed)
                     }.onFailure(::failed)
                 }.onFailure(::failed)
             }
         }
         worker.scheduleWithFixedDelay({
             if (!stopped && !WorkshopApi.manager.isPermissionGranted(PluginPermission.CLASS_TRANSFORM)) EventQueue.invokeLater {
-                if (hooks != null) { hooks?.close(); hooks = null; workspace.unavailable() }
+                if (hooks != null) { playerMenu?.close(); playerMenu = null; hooks?.close(); hooks = null; workspace.unavailable() }
             }
         }, 1, 1, TimeUnit.SECONDS)
     }
@@ -48,10 +56,15 @@ internal class HostUiIntegration(private val workspace: LyricsWorkspace, private
         notify("歌词管理主窗口入口未启用：${error.cause?.message ?: error.message}。请检查权限或反馈 SPW 版本及异常。")
     }
 
+    private fun menuFailed(error: Throwable) {
+        System.getLogger("SPW Lyrics").log(System.Logger.Level.WARNING, "播放器歌词菜单接入失败", error)
+        notify("播放器歌词工具菜单未启用，请从顶部歌词管理进入。原因：${error.cause?.message ?: error.message}")
+    }
+
     override fun close() {
         stopped = true
         worker.shutdownNow()
-        val release = { hooks?.close(); hooks = null; workspace.unavailable() }
+        val release = { playerMenu?.close(); playerMenu = null; hooks?.close(); hooks = null; workspace.unavailable() }
         if (EventQueue.isDispatchThread()) release() else EventQueue.invokeLater(release)
     }
 }
