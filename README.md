@@ -29,9 +29,11 @@ SPW Lyrics 是 [Salt Player for Windows（SPW）](https://github.com/Moriafly/SP
 
 从 [Releases](https://github.com/GaBoron/SPW-Lyrics/releases/latest) 下载与当前 SPW 版本对应的安装包，然后在 SPW 的“设置 → 创意工坊”中使用本地安装或导入入口安装。
 
-当前版本 `1.2.0` 需要 SPW 1.19.0。下载 `spw-lyrics-1.2.0.spmod` 后直接导入，不要解压。SPW 1.18 用户请使用 [v0.4.0](https://github.com/GaBoron/SPW-Lyrics/releases/tag/v0.4.0)。
+当前版本 `2.0.0` 需要 SPW 1.19.0。下载 `spw-lyrics-2.0.0.spmod` 后直接导入，不要解压。SPW 1.18 用户请使用 [v0.4.0](https://github.com/GaBoron/SPW-Lyrics/releases/tag/v0.4.0)。
 
 Windows 和 Linux 使用同一个 `.spmod` 安装包。安装包包含 Salt UI 等插件依赖，界面复用 SPW 自带的 Compose/Skiko 和 JVM，普通用户不需要另外安装运行时。
+
+`2.0.0` 已取消独立工具窗口，歌词管理需要“类变换”权限及主窗口 Hook 接入成功。动态发现不能保证适应宿主结构变化；Linux 主窗口嵌入尚未实机验证。
 
 ## 使用
 
@@ -57,7 +59,7 @@ Windows 和 Linux 使用同一个 `.spmod` 安装包。安装包包含 Salt UI �
 
 ## 兼容性
 
-`1.2.0` 面向 SPW 1.19.0 / Workshop API `0.1.0-dev23`，使用宿主的 JVM 25，不兼容旧版创意工坊接口。`0.4.0` 保留供 SPW 1.18 用户使用。
+`2.0.0` 面向 SPW 1.19.0 / Workshop API `0.1.0-dev23`，使用宿主的 JVM 25，不兼容旧版创意工坊接口。`0.4.0` 保留供 SPW 1.18 用户使用。
 
 SPW 创意工坊接口仍可能继续变化。如果 SPW 更新后插件无法加载、快捷键失效或歌词不能自动刷新，请先查看 [常见问题](docs/常见问题.md)，再提交 Issue。
 
