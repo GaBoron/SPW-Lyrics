@@ -17,7 +17,7 @@ import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 
 /**
- * Retries an HTTPS GET against a public DNS address while preserving the
+ * Retries an HTTPS request against a public DNS address while preserving the
  * original hostname for SNI and certificate verification.
  */
 internal class DirectHttpsFallback(
@@ -25,9 +25,13 @@ internal class DirectHttpsFallback(
     private val readTimeoutMs: Int,
     private val resolver: PublicDnsResolver = PublicDnsResolver(),
 ) {
-    fun get(url: String, headers: Map<String, String>): String = get(URI.create(url), headers, redirectsLeft = 3)
+    fun get(url: String, headers: Map<String, String>): String = send(URI.create(url), "GET", null, headers, redirectsLeft = 3)
 
-    private fun get(uri: URI, headers: Map<String, String>, redirectsLeft: Int): String {
+    fun postJson(url: String, body: ByteArray, headers: Map<String, String>): String =
+        send(URI.create(url), "POST", body, mapOf("Content-Type" to "application/json; charset=utf-8") + headers, redirectsLeft = 3)
+
+    private fun send(uri: URI, method: String, body: ByteArray?, headers: Map<String, String>, redirectsLeft: Int): String {
+        if (Thread.currentThread().isInterrupted) throw InterruptedException("Provider request cancelled")
         require(uri.scheme.equals("https", ignoreCase = true)) { "HTTPS required" }
         val host = uri.host ?: error("HTTPS host missing")
         val port = uri.port.takeIf { it >= 0 } ?: 443
@@ -36,15 +40,18 @@ internal class DirectHttpsFallback(
 
         var lastFailure: Throwable? = null
         for (address in addresses) {
+            if (Thread.currentThread().isInterrupted) throw InterruptedException("Provider request cancelled")
             try {
-                val response = request(uri, host, port, address, headers)
+                val response = request(uri, host, port, address, method, body, headers)
                 if (response.status in 300..399 && redirectsLeft > 0) {
                     val location = response.headers["location"] ?: error("HTTP ${response.status} without Location")
-                    return get(uri.resolve(location), headers, redirectsLeft - 1)
+                    val useGet = response.status == 303 || method == "POST" && response.status in listOf(301, 302)
+                    return send(uri.resolve(location), if (useGet) "GET" else method, if (useGet) null else body, headers, redirectsLeft - 1)
                 }
                 check(response.status in 200..299) { "HTTP ${response.status}" }
                 return response.text()
             } catch (failure: Throwable) {
+                if (failure is InterruptedException || Thread.currentThread().isInterrupted) throw failure
                 lastFailure = failure
             }
         }
@@ -56,6 +63,8 @@ internal class DirectHttpsFallback(
         host: String,
         port: Int,
         address: InetAddress,
+        method: String,
+        body: ByteArray?,
         headers: Map<String, String>,
     ): Response {
         val plain = Socket()
@@ -70,7 +79,7 @@ internal class DirectHttpsFallback(
                     serverNames = listOf(SNIHostName(host))
                 }
                 socket.startHandshake()
-                writeRequest(socket, uri, host, port, headers)
+                writeRequest(socket, uri, host, port, method, body, headers)
                 readResponse(socket)
             }
         } catch (failure: Throwable) {
@@ -79,7 +88,7 @@ internal class DirectHttpsFallback(
         }
     }
 
-    private fun writeRequest(socket: SSLSocket, uri: URI, host: String, port: Int, headers: Map<String, String>) {
+    private fun writeRequest(socket: SSLSocket, uri: URI, host: String, port: Int, method: String, body: ByteArray?, headers: Map<String, String>) {
         val target = (uri.rawPath?.takeIf(String::isNotEmpty) ?: "/") +
             uri.rawQuery?.let { "?$it" }.orEmpty()
         val authority = if (port == 443) host else "$host:$port"
@@ -88,15 +97,16 @@ internal class DirectHttpsFallback(
             "User-Agent" to ProviderHttpClient.USER_AGENT,
             "Accept-Encoding" to "gzip",
             "Connection" to "close",
-        ) + headers
+        ) + headers + if (body != null) mapOf("Content-Length" to body.size.toString()) else emptyMap()
         require(requestHeaders.all { (name, value) -> '\r' !in name && '\n' !in name && '\r' !in value && '\n' !in value })
         val request = buildString {
-            append("GET ").append(target).append(" HTTP/1.1\r\n")
+            append(method).append(' ').append(target).append(" HTTP/1.1\r\n")
             requestHeaders.forEach { (name, value) -> append(name).append(": ").append(value).append("\r\n") }
             append("\r\n")
         }
         socket.outputStream.apply {
             write(request.toByteArray(StandardCharsets.US_ASCII))
+            body?.let(::write)
             flush()
         }
     }

@@ -32,13 +32,18 @@ class ProviderHttpClient(
         }
     }
 
-    override fun postJson(url: String, body: String, headers: Map<String, String>): String = send(
-        url,
-        "POST",
-        "application/json; charset=utf-8",
-        body.toByteArray(StandardCharsets.UTF_8),
-        headers,
-    )
+    override fun postJson(url: String, body: String, headers: Map<String, String>): String {
+        val bytes = body.toByteArray(StandardCharsets.UTF_8)
+        return try {
+            send(url, "POST", "application/json; charset=utf-8", bytes, headers)
+        } catch (failure: Throwable) {
+            if (!url.startsWith("https://") || !failure.hasTlsFailure() || Thread.currentThread().isInterrupted) throw failure
+            runCatching { directHttpsFallback.postJson(url, bytes, headers) }.getOrElse { fallbackFailure ->
+                failure.addSuppressed(fallbackFailure)
+                throw failure
+            }
+        }
+    }
 
     override fun postForm(url: String, values: Map<String, String>, headers: Map<String, String>): String {
         val body = values.entries.joinToString("&") { (key, value) -> "${encode(key)}=${encode(value)}" }

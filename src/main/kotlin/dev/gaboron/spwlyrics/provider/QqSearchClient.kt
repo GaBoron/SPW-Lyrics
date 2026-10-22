@@ -1,83 +1,77 @@
 package dev.gaboron.spwlyrics.provider
 
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
-import dev.gaboron.spwlyrics.domain.LyricsQuality
-import dev.gaboron.spwlyrics.domain.LyricsSource
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
+import java.net.SocketTimeoutException
+import java.util.concurrent.ExecutorCompletionService
+import java.util.concurrent.Executors
+import java.util.concurrent.Future
+import java.util.concurrent.TimeUnit
 
-/** Keeps QQ's business status, alternate request and result decoding out of lyric fetching. */
-internal class QqSearchClient(private val http: ProviderHttp) {
+/** A slow endpoint cannot consume the fallback's entire budget. Only nonempty results are cached. */
+internal class QqSearchClient(http: ProviderHttp, private val timeoutMillis: Long = 5_000,
+    private val hedgeDelayMillis: Long = 900, private val nanoTime: () -> Long = System::nanoTime) : AutoCloseable {
+    private val protocol = QqSearchProtocol(http)
+    private val requests = Executors.newVirtualThreadPerTaskExecutor()
+    private data class Cached(val rows: List<LyricsCandidate>, val created: Long)
+    private val cache = object : LinkedHashMap<String, Cached>(16, .75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Cached>?): Boolean = size > 64
+    }
+
     fun search(keywords: String, limit: Int): List<LyricsCandidate> {
         if (keywords.isBlank() || limit <= 0) return emptyList()
-        val query = providerJson.encodeToString(JsonPrimitive.serializer(), JsonPrimitive(keywords.trim()))
-        val params = """{"query":$query,"num_per_page":20,"page_num":1,"search_type":0}"""
-        val call = """{"module":"music.search.SearchCgiService","method":"DoSearchForQQMusicDesktop","param":$params}"""
+        if (Thread.currentThread().isInterrupted) throw InterruptedException("QQ search cancelled")
+        val key = keywords.trim()
+        synchronized(cache) {
+            cache[key]?.takeIf { nanoTime() - it.created < TimeUnit.MINUTES.toNanos(2) }?.let { return it.rows.take(limit) }
+        }
+        val completion = ExecutorCompletionService<Result<List<LyricsCandidate>>>(requests)
+        val pending = mutableListOf<Future<Result<List<LyricsCandidate>>>>()
+        val variants = QqSearchProtocol.Variant.entries
+        val deadline = nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
+        var nextLaunch = nanoTime()
+        var finished = 0
         var validResponse = false
         var lastFailure: Throwable? = null
-        for (alternate in listOf(false, true)) {
-            if (Thread.currentThread().isInterrupted) throw InterruptedException("QQ search cancelled")
-            val attempt = runCatching {
-                val response = if (alternate) {
-                    http.get("$FALLBACK_URL?format=json&w=${ProviderHttpClient.encode(keywords.trim())}&n=20&p=1", HEADERS)
-                } else {
-                    val request = """{"req_1":$call,"comm":{"ct":"19","cv":"1859"}}"""
-                    http.postJson(QqMusicProvider.SEARCH_URL, request, HEADERS)
+
+        fun launchNext() {
+            val variant = variants[pending.size]
+            pending += completion.submit { runCatching { protocol.search(variant, key) } }
+            nextLaunch = nanoTime() + TimeUnit.MILLISECONDS.toNanos(hedgeDelayMillis)
+        }
+        try {
+            launchNext()
+            while (finished < pending.size || pending.size < variants.size) {
+                if (Thread.currentThread().isInterrupted) throw InterruptedException("QQ search cancelled")
+                val remaining = deadline - nanoTime()
+                if (remaining <= 0) break
+                val wait = if (pending.size < variants.size) minOf(remaining, (nextLaunch - nanoTime()).coerceAtLeast(0)) else remaining
+                val completed = completion.poll(wait, TimeUnit.NANOSECONDS)
+                if (completed == null) {
+                    if (pending.size < variants.size && nanoTime() >= nextLaunch && nanoTime() < deadline) launchNext()
+                    continue
                 }
-                decode(response, alternate)
+                finished++
+                val attempt = completed.get()
+                val rows = attempt.getOrElse { lastFailure = it; emptyList() }
+                if (attempt.isSuccess) validResponse = true
+                if (rows.isNotEmpty()) {
+                    synchronized(cache) { cache[key] = Cached(rows.toList(), nanoTime()) }
+                    return rows.take(limit)
+                }
+                if (pending.size < variants.size) launchNext()
             }
-            val results = attempt.getOrElse { failure ->
-                if (failure is InterruptedException || Thread.currentThread().isInterrupted) throw failure
-                lastFailure = failure
-                emptyList()
+            if (validResponse) return emptyList()
+            if (finished < pending.size) throw SocketTimeoutException("QQ 搜索在 ${timeoutMillis}ms 内未完成").apply {
+                lastFailure?.let(::addSuppressed)
             }
-            if (attempt.isSuccess) validResponse = true
-            if (results.isNotEmpty()) return results.take(limit)
+            throw checkNotNull(lastFailure)
+        } finally {
+            pending.filterNot { it.isDone }.forEach { it.cancel(true) }
         }
-        if (validResponse) return emptyList()
-        throw checkNotNull(lastFailure)
     }
 
-    private fun decode(response: String, alternate: Boolean): List<LyricsCandidate> {
-        val root = providerJson.parseToJsonElement(response) as? JsonObject ?: error("QQ 搜索响应格式无效")
-        check(root.long("code") == 0L) { "QQ 搜索接口返回错误" }
-        val songs = if (alternate) {
-            checkNotNull(root.obj("data")?.obj("song")) { "QQ 搜索响应缺少歌曲数据" }.array("list")
-        } else {
-            val result = checkNotNull(root.obj("req_1")) { "QQ 搜索响应缺少请求结果" }
-            check(result.long("code") == 0L) { "QQ 搜索接口返回错误" }
-            checkNotNull(result.obj("data")?.obj("body")?.obj("song")) { "QQ 搜索响应缺少歌曲数据" }.array("list")
-        }
-        checkNotNull(songs) { "QQ 搜索响应缺少候选列表" }
-        return songs
-            .mapNotNull { it.asObject() }
-            .flatMap { song ->
-                listOf(song) + (song.array("grp") ?: song.array("group")).orEmpty().mapNotNull { it.asObject() }
-            }
-            .mapNotNull { song -> runCatching { candidate(song) }.getOrNull() }
-            .distinctBy(LyricsCandidate::remoteId)
-            .also { check(songs.isEmpty() || it.isNotEmpty()) { "QQ 搜索候选格式无效" } }
-    }
-
-    private fun candidate(song: JsonObject): LyricsCandidate? {
-        val title = song.string("title")?.takeIf(String::isNotBlank)
-            ?: song.string("name")?.takeIf(String::isNotBlank)
-            ?: song.string("songname")?.takeIf(String::isNotBlank) ?: return null
-        val musicId = (song.long("id") ?: song.long("songid"))?.takeIf { it > 0 } ?: return null
-        return LyricsCandidate(
-            source = LyricsSource.QQ,
-            remoteId = (song.string("mid") ?: song.string("songmid"))?.takeIf(String::isNotBlank) ?: musicId.toString(),
-            title = title,
-            artists = song.array("singer").orEmpty().mapNotNull { it.asObject()?.string("name") },
-            album = (song.obj("album")?.string("name") ?: song.string("albumname")).orEmpty(),
-            durationMs = song.long("interval")?.times(1_000),
-            qualityHint = LyricsQuality.KARAOKE_SYNCED,
-            context = mapOf("musicId" to musicId.toString()),
-        )
-    }
-
-    private companion object {
-        const val FALLBACK_URL = "https://c.y.qq.com/soso/fcgi-bin/client_search_cp"
-        val HEADERS = mapOf("Referer" to "https://y.qq.com/", "Origin" to "https://y.qq.com")
+    override fun close() {
+        requests.shutdownNow()
+        synchronized(cache) { cache.clear() }
     }
 }

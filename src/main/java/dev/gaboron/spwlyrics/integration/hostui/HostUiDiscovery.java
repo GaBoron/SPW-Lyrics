@@ -11,7 +11,7 @@ public final class HostUiDiscovery {
     private static final String CAPTION = "(Lkotlin/jvm/functions/Function0;Ljava/lang/String;Landroidx/compose/ui/Modifier;ZLjava/lang/String;FLkotlin/jvm/functions/Function3;Landroidx/compose/runtime/Composer;II)V";
     public record Site(Method target, String caller) {}
     public record Targets(Site page, Site captionEntry, Method captionControl, Method back,
-                          Method navigate, List<Method> navigation, Field backStack, List<Field> locals,
+                          Method navigate, Method collapsePlayer, List<Method> navigation, Field backStack, List<Field> locals,
                           HostThemeDiscovery.Targets theme) {}
 
     public static Targets discover(HostBytecodeIndex index) {
@@ -49,10 +49,16 @@ public final class HostUiDiscovery {
             || b.method().descriptor().equals("()V") && b.calls().stream().anyMatch(c ->
                 c.owner().equals("androidx/navigation3/runtime/NavBackStack") && c.name().equals("add")))
             .map(Body::method).toList();
+        var collapse = unique(bodies.stream().filter(b -> b.method().owner().equals(navClass.name())
+            && Modifier.isPublic(b.flags()) && !Modifier.isStatic(b.flags()) && b.method().descriptor().equals("()V")
+            && !b.fields().contains(stack)
+            && b.fields().stream().anyMatch(f -> f.owner().equals(navClass.name() + "$PlayerSheetRequest") && f.name().equals("Collapse"))
+            && b.calls().stream().anyMatch(c -> c.owner().equals("kotlinx/coroutines/channels/Channel") && c.name().startsWith("trySend")))
+            .map(Body::method).toList(), "player collapse action");
         var locals = content.fields().stream().filter(f -> f.owner().equals(root.method().owner())
             && f.descriptor().equals("Landroidx/compose/runtime/ProvidableCompositionLocal;")).distinct().toList();
         if (locals.isEmpty()) throw new IllegalStateException("Navigation composition locals are missing");
-        return new Targets(page, captionSite, caption.method(), back.method(), navigate.method(), navigation, stack, locals,
+        return new Targets(page, captionSite, caption.method(), back.method(), navigate.method(), collapse, navigation, stack, locals,
             HostThemeDiscovery.discover(index, entry.method().owner()));
     }
 

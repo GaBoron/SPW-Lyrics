@@ -8,12 +8,14 @@ import dev.gaboron.spwlyrics.domain.LyricsDocument
 import dev.gaboron.spwlyrics.domain.LyricsSource
 import dev.gaboron.spwlyrics.domain.TrackQuery
 
-class QqMusicProvider(private val http: ProviderHttp) : LyricsProvider {
+class QqMusicProvider(private val http: ProviderHttp) : LyricsProvider, AutoCloseable {
     override val source = LyricsSource.QQ
     private val searchClient = QqSearchClient(http)
 
     override fun search(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> =
         searchClient.search(keywords, limit)
+
+    override fun close() = searchClient.close()
 
     override fun fetch(candidate: LyricsCandidate): LyricsDocument? = runCatching {
         val musicId = candidate.context["musicId"]?.takeIf(String::isNotBlank) ?: return@runCatching null

@@ -23,6 +23,7 @@ internal class HostUiBridge(val targets: HostUiDiscovery.Targets, private val lo
     private val themeConfigs = method(targets.theme().configs())
     private val themeDark = method(targets.theme().dark())
     private val navigate = method(targets.navigate())
+    private val collapsePlayer = method(targets.collapsePlayer())
     private val stack = field(targets.backStack())
     private val navigatorType = stack.declaringClass
     private val locals = targets.locals().map(::field)
@@ -55,8 +56,10 @@ internal class HostUiBridge(val targets: HostUiDiscovery.Targets, private val lo
     fun enter() {
         val host = checkNotNull(navigator) { "主窗口尚未准备好，请稍后重试" }
         val current = (stack.get(host) as List<*>).lastOrNull() ?: return
-        // A same-route request closes other host-composed tools before the host's early return.
-        replay { navigate.invoke(host, current) }
+        replay {
+            collapsePlayer.invoke(host)
+            navigate.invoke(host, current)
+        }
     }
 
     fun replay(action: () -> Unit) {
