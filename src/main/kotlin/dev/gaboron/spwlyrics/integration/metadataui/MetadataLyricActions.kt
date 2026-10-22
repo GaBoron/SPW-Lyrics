@@ -1,6 +1,7 @@
 package dev.gaboron.spwlyrics.integration.metadataui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.animation.*
 import com.moriafly.salt.ui.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,7 +24,8 @@ internal fun MetadataLyricActions(controller: MetadataEditorController) {
             DesktopButton("全选", controller::selectAllLines, enabled = enabled && state.structured != null)
             Text("已选 ${state.selectedLineIds.size} 句 · Ctrl 点选 / Shift 连选", color = DesktopColors.Muted, fontSize = 10.sp)
         }
-        if (state.selectedLineIds.size > 1) FlowRow(verticalArrangement = Arrangement.spacedBy(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        AnimatedVisibility(state.selectedLineIds.size > 1, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+          FlowRow(verticalArrangement = Arrangement.spacedBy(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("批量", color = DesktopColors.Muted, fontSize = 11.sp)
             DesktopField(delay, { delay = it }, Modifier.width(80.dp), enabled = selected)
             DesktopButton("延迟 ms", { controller.shiftSelected(delay) }, enabled = selected)
@@ -31,6 +33,7 @@ internal fun MetadataLyricActions(controller: MetadataEditorController) {
             DesktopButton("对唱（右）", { controller.editSelected { it.copy(vocalPart = LyricVocalPart.DUET) } }, enabled = selected)
             DesktopButton("背景", { controller.editSelected { it.copy(background = true) } }, enabled = selected)
             DesktopButton("取消背景", { controller.editSelected { it.copy(background = false) } }, enabled = selected)
+          }
         }
     }
 }

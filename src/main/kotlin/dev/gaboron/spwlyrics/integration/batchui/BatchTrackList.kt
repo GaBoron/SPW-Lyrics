@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -18,32 +19,38 @@ import dev.gaboron.spwlyrics.application.LyricsBatchItem
 import dev.gaboron.spwlyrics.application.LyricsBatchItemState
 import dev.gaboron.spwlyrics.integration.composeui.*
 import dev.gaboron.spwlyrics.integration.workspace.LyricsSection
+import dev.gaboron.spwlyrics.integration.workspace.lyricsSelection
 
 @OptIn(UnstableSaltUiApi::class)
 @Composable
 internal fun BatchTrackList(state: BatchProcessingState, select: (String) -> Unit, modifier: Modifier) {
     val list = rememberLazyListState()
     val focus = remember { FocusRequester() }
+    val scrollbar = remember { MutableInteractionSource() }
+    val following = rememberBatchAutoFollow(state, list, scrollbar)
     var cursor by remember { mutableStateOf(-1) }
     LaunchedEffect(cursor) {
-        if (cursor >= 0 && list.layoutInfo.visibleItemsInfo.none { it.index == cursor }) list.scrollToItem(cursor)
+        if (cursor in state.keys.indices && list.layoutInfo.visibleItemsInfo.none { it.index == cursor }) list.animateScrollToItem(cursor)
     }
     LyricsSection(modifier) {
-        Box(Modifier.fillMaxSize().focusRequester(focus).onPreviewKeyEvent { event ->
-            if (event.type != KeyEventType.KeyDown || state.keys.isEmpty()) false else when (event.key) {
+        Box(Modifier.fillMaxSize().then(following.modifier).focusRequester(focus).onPreviewKeyEvent { event ->
+            if (event.type != KeyEventType.KeyDown || state.keys.isEmpty()) false else {
+              if (event.key in listOf(Key.DirectionDown, Key.DirectionUp, Key.PageDown, Key.PageUp, Key.MoveHome, Key.MoveEnd, Key.Spacebar)) following.userInput()
+              when (event.key) {
                 Key.DirectionDown -> { cursor = (cursor + 1).coerceAtMost(state.keys.lastIndex); true }
                 Key.DirectionUp -> { cursor = (cursor - 1).coerceIn(0, state.keys.lastIndex); true }
                 Key.Spacebar -> if (state.editable) { state.keys.getOrNull(cursor)?.let(select); true } else false
                 else -> false
+              }
             }
         }.focusable()) {
             if (state.snapshot.items.isEmpty()) EmptyWorkspace(if (state.busy) "正在读取音乐库" else "音乐库中暂无歌曲",
                 if (state.busy) "" else "在 SPW 扫描歌曲后，点击刷新音乐库", loading = state.busy, glyph = DesktopGlyph.Library)
             else {
-                LazyColumn(Modifier.fillMaxSize().padding(end = 12.dp), state = list) {
-                    itemsIndexed(state.snapshot.items) { index, item ->
-                        Row(Modifier.fillMaxWidth().background(if (cursor == index) SaltTheme.colors.highlight.copy(alpha = .08f)
-                            else androidx.compose.ui.graphics.Color.Transparent), verticalAlignment = Alignment.CenterVertically) {
+                LazyColumn(Modifier.fillMaxSize().padding(end = 12.dp), state = list, contentPadding = PaddingValues(4.dp)) {
+                    itemsIndexed(state.snapshot.items, key = { index, _ -> "$index:${state.keys[index]}" }) { index, item ->
+                        Row(Modifier.fillMaxWidth().lyricsSelection(cursor == index || item.state == LyricsBatchItemState.SEARCHING),
+                            verticalAlignment = Alignment.CenterVertically) {
                             ItemCheck(state.keys[index] in state.selectedKeys, {
                                 focus.requestFocus(); cursor = index; select(state.keys[index])
                             }, item.query.title, Modifier.weight(1f), enabled = state.editable,
@@ -53,7 +60,7 @@ internal fun BatchTrackList(state: BatchProcessingState, select: (String) -> Uni
                         ItemDivider()
                     }
                 }
-                VerticalScrollbar(rememberScrollbarAdapter(list), Modifier.align(Alignment.CenterEnd).fillMaxHeight())
+                VerticalScrollbar(rememberScrollbarAdapter(list), Modifier.align(Alignment.CenterEnd).fillMaxHeight(), interactionSource = scrollbar)
             }
         }
     }

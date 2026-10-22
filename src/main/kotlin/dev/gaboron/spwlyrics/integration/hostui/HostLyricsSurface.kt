@@ -12,6 +12,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import dev.gaboron.spwlyrics.integration.workspace.LyricsWorkspace
+import dev.gaboron.spwlyrics.integration.workspace.LyricsTransition
 
 /** Retain the host composition/state while hiding its page ink beneath the transparent workspace. */
 @Composable
@@ -29,6 +30,9 @@ internal fun HostLyricsSurface(bridge: HostUiBridge, workspace: LyricsWorkspace)
             bridge.HostPage()
             bridge.capture(currentComposer)
         }
-        HostLyricsPage(workspace, bridge.isDarkTheme())
+        val dark = bridge.isDarkTheme()
+        LyricsTransition(workspace.session, Modifier.fillMaxSize()) { session ->
+            if (session != null) HostLyricsPage(workspace, dark, session)
+        }
     }
 }

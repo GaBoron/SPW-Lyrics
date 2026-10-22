@@ -27,10 +27,10 @@ internal fun LyricsWorkspaceContent(session: LyricsWorkspaceSession, close: () -
             }
             LyricsTabs(LyricsToolPage.entries.map { it.title }, session.page.ordinal,
                 { session.select(LyricsToolPage.entries[it]) })
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                pages.SaveableStateProvider(session.page.name) {
+            LyricsTransition(session.page, Modifier.weight(1f).fillMaxWidth()) { page ->
+                pages.SaveableStateProvider(page.name) {
                     LyricsViewport(Modifier.fillMaxSize()) {
-                        when (session.page) {
+                        when (page) {
                             LyricsToolPage.SEARCH -> ManualSearchContent(session.manual)
                             LyricsToolPage.METADATA -> MetadataEditorContent(session.metadata)
                             LyricsToolPage.BATCH -> BatchProcessingContent(session.batch)

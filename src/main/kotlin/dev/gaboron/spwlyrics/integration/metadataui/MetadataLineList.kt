@@ -17,6 +17,8 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.moriafly.salt.ui.*
+import dev.gaboron.spwlyrics.domain.LyricVocalPart
+import dev.gaboron.spwlyrics.integration.workspace.*
 
 @Composable
 internal fun MetadataLineList(controller: MetadataEditorController, modifier: Modifier) {
@@ -29,16 +31,17 @@ internal fun MetadataLineList(controller: MetadataEditorController, modifier: Mo
         else if (it.type == KeyEventType.KeyDown && it.key == Key.Delete) { controller.deleteSelected(); true }
         else false
     }.focusable()) {
-        LazyColumn(Modifier.fillMaxSize().padding(end = 10.dp), state = scroll) {
+        LazyColumn(Modifier.fillMaxSize().padding(end = 10.dp), state = scroll, contentPadding = PaddingValues(4.dp)) {
             items(state.structured?.lines.orEmpty(), key = { it.id }) { original ->
                 val line = state.line(original.id) ?: original
-                Column(Modifier.fillMaxWidth().background(if (line.id in state.selectedLineIds) SaltTheme.colors.highlight.copy(alpha = .12f)
-                    else androidx.compose.ui.graphics.Color.Transparent).clickable(enabled = !state.busy) {
+                Column(Modifier.fillMaxWidth().lyricsSelection(line.id in state.selectedLineIds).clickable(enabled = !state.busy) {
                         focus.requestFocus()
                         controller.selectLine(line.id, window.keyboardModifiers.isCtrlPressed, window.keyboardModifiers.isShiftPressed)
                     }.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text("${line.id + 1}  ${line.start.ifBlank { "未定时" }}", color = SaltTheme.colors.subText, style = SaltTheme.textStyles.sub)
                     Text(state.lineText(line.id), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(lyricVoiceLabel(state.vocalPart(line) == LyricVocalPart.DUET, line.background),
+                        color = SaltTheme.colors.subText, style = SaltTheme.textStyles.sub)
                 }
                 ItemDivider()
             }

@@ -1,15 +1,15 @@
 package dev.gaboron.spwlyrics.integration.composeui
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.CircularProgressIndicator
 import com.moriafly.salt.ui.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -19,34 +19,12 @@ internal fun DesktopButton(
     enabled: Boolean = true, primary: Boolean = false, loading: Boolean = false,
     glyph: DesktopGlyph? = null,
 ) {
-    com.moriafly.salt.ui.Button(onClick, modifier = modifier, enabled = enabled,
+    com.moriafly.salt.ui.Button(onClick, modifier = modifier.desktopControlMotion(enabled).animateContentSize(tween(160)), enabled = enabled,
         appearance = if (primary) com.moriafly.salt.ui.ButtonAppearance.Filled else com.moriafly.salt.ui.ButtonAppearance.Subtle) {
-        val ink = com.moriafly.salt.ui.LocalContentColor.current
+        val ink by animateColorAsState(com.moriafly.salt.ui.LocalContentColor.current, tween(150), label = "button ink")
         if (loading) { CircularProgressIndicator(Modifier.size(14.dp), color = ink, strokeWidth = 1.5.dp); Spacer(Modifier.width(7.dp)) }
         else if (glyph != null) { DesktopIcon(glyph, ink); Spacer(Modifier.width(7.dp)) }
-        Text(text, maxLines = 1)
-    }
-}
-
-@Composable
-internal fun DesktopField(
-    value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier,
-    placeholder: String = "", enabled: Boolean = true, onEnter: () -> Unit = {},
-    glyph: DesktopGlyph? = null, suffix: String? = null, invalid: Boolean = false,
-) {
-    Row(modifier.clip(com.moriafly.salt.ui.SaltTheme.shapes.medium)
-        .background(DesktopColors.Surface)
-        .then(if (invalid) Modifier.border(1.dp, DesktopColors.Error, com.moriafly.salt.ui.SaltTheme.shapes.medium) else Modifier),
-        verticalAlignment = Alignment.CenterVertically) {
-        if (glyph != null) DesktopIcon(glyph, DesktopColors.Muted, Modifier.padding(start = 10.dp).size(15.dp))
-        @OptIn(com.moriafly.salt.ui.UnstableSaltUiApi::class)
-        com.moriafly.salt.ui.ItemEdit(value, onValueChange, Modifier.weight(1f)
-        .onPreviewKeyEvent { event ->
-            if (event.type == KeyEventType.KeyDown && (event.key == Key.Enter || event.key == Key.NumPadEnter) && !event.isCtrlPressed) {
-                onEnter(); true
-            } else false
-        }, hint = placeholder, readOnly = !enabled)
-        if (suffix != null) Text(suffix, Modifier.padding(end = 10.dp), color = DesktopColors.Muted, fontSize = 11.sp)
+        Crossfade(text, animationSpec = tween(140), label = "button label") { Text(it, color = ink, maxLines = 1) }
     }
 }
 

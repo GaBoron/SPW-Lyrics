@@ -13,6 +13,7 @@ internal data class ManualSearchState(
     val candidates: List<CandidateScore> = emptyList(),
     val selected: CandidateScore? = null,
     val document: LyricsDocument? = null,
+    val previewMainAgent: String = "v1",
     val delayText: String = "0",
     val savedDelay: Int = 0,
     val readingTrack: Boolean = true,

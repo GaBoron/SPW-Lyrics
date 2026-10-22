@@ -7,15 +7,20 @@ import androidx.compose.ui.unit.dp
 import com.moriafly.salt.ui.*
 import dev.gaboron.spwlyrics.domain.AudioMetadataField
 import dev.gaboron.spwlyrics.integration.workspace.*
+import dev.gaboron.spwlyrics.integration.composeui.DesktopField
 
 @Composable
 internal fun MetadataFieldsPanel(controller: MetadataEditorController, modifier: Modifier) {
     val state = controller.state
     LyricsScroll(modifier) {
         AudioMetadataField.entries.forEach { field ->
-            LyricsSection {
-                LyricsSectionTitle(field.label)
-                MetadataTextArea(state.draft[field], { controller.field(field, it) }, Modifier.fillMaxWidth().height(64.dp),
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(field.label, color = SaltTheme.colors.subText, style = SaltTheme.textStyles.sub)
+                val multiple = field in listOf(AudioMetadataField.ARTIST, AudioMetadataField.ALBUM_ARTIST, AudioMetadataField.COMPOSER, AudioMetadataField.COMMENT)
+                if (multiple) MetadataTextArea(state.draft[field], { controller.field(field, it) },
+                    Modifier.fillMaxWidth().height(if (field == AudioMetadataField.COMMENT) 80.dp else 58.dp),
+                    enabled = state.loaded != null && !state.busy, placeholder = "填写${field.label}")
+                else DesktopField(state.draft[field], { controller.field(field, it) }, Modifier.fillMaxWidth(),
                     enabled = state.loaded != null && !state.busy, placeholder = "填写${field.label}")
             }
         }

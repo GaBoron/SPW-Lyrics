@@ -33,11 +33,9 @@ internal fun BatchProcessingContent(controller: BatchProcessingController) {
             DesktopButton("刷新音乐库", controller::refresh, enabled = state.editable, glyph = DesktopGlyph.Refresh)
         }
         BatchProgressPanel(state, summary, Modifier.fillMaxWidth())
-        LyricsSection {
-            ItemCheck(state.includeCached, controller::includeCached, "重新处理已有缓存", enabled = state.editable)
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("已选 ${summary.selected} / ${state.snapshot.items.size} 首", Modifier.weight(1f), color = SaltTheme.colors.subText, style = SaltTheme.textStyles.sub)
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("已选 ${summary.selected} / ${state.snapshot.items.size} 首", Modifier.padding(vertical = 8.dp), color = SaltTheme.colors.subText, style = SaltTheme.textStyles.sub)
+            DesktopCheck(state.includeCached, { controller.includeCached(!state.includeCached) }, state.editable, "重新处理已有缓存")
             DesktopButton("全选", { controller.selectAll(true) }, enabled = state.editable && state.keys.isNotEmpty())
             DesktopButton("取消全选", { controller.selectAll(false) }, enabled = state.editable && state.keys.isNotEmpty())
         }

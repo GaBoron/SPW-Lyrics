@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.gaboron.spwlyrics.domain.CandidateScore
 import dev.gaboron.spwlyrics.domain.LyricsSource
+import dev.gaboron.spwlyrics.codec.TtmlVocalParts
 import dev.gaboron.spwlyrics.storage.LyricsDelaySettings
 import java.awt.EventQueue
 import java.util.concurrent.Executors
@@ -70,8 +71,10 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
         if (closed || state.mutating || row !in state.candidates || state.selected == row) return
         val generation = ++previewGeneration
         state = state.copy(selected = row, document = null, previewing = true)
-        submit({ previewGeneration == generation }, { operations.preview(row.candidate) }, { resolved ->
-            state = state.copy(document = resolved?.document, previewing = false)
+        submit({ previewGeneration == generation }, {
+            operations.preview(row.candidate)?.document?.let { it to TtmlVocalParts.mainAgent(it) }
+        }, { resolved ->
+            state = state.copy(document = resolved?.first, previewMainAgent = resolved?.second ?: "v1", previewing = false)
         }, { state = state.copy(previewing = false); reportFailure(it) })
     }
 

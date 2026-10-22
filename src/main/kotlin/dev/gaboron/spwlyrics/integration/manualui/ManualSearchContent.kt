@@ -34,20 +34,14 @@ internal fun ManualSearchContent(controller: ManualSearchController) {
             DesktopButton("刷新歌曲", controller::refreshTrack, enabled = !state.readingTrack && !state.mutating,
                 loading = state.readingTrack, glyph = DesktopGlyph.Refresh)
         }
-        LyricsSection {
-            Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DesktopField(state.keywords, controller::keywords, Modifier.weight(1f).focusRequester(searchFocus),
-                    placeholder = "歌曲、歌手或专辑", enabled = !state.readingTrack && !state.mutating,
-                    onEnter = controller::search, glyph = DesktopGlyph.Search)
-                DesktopButton("搜索", controller::search, enabled = state.canSearch,
-                    primary = true, loading = state.searching)
-            }
-        }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            DesktopField(state.keywords, controller::keywords, Modifier.weight(1f).focusRequester(searchFocus),
+                placeholder = "歌曲、歌手或专辑", enabled = !state.readingTrack && !state.mutating,
+                onEnter = controller::search, glyph = DesktopGlyph.Search)
             ManualSourceFilter(state.source, controller::source, !state.readingTrack && !state.mutating)
-            DesktopButton("恢复自动匹配", controller::useAutomatic, enabled = state.canMutate)
-            DesktopButton("切回本地歌词", controller::useLocal, enabled = state.canMutate)
+            DesktopButton("搜索", controller::search, enabled = state.canSearch,
+                primary = true, loading = state.searching)
         }
         LyricsStatus(state.status, state.error)
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
@@ -57,9 +51,18 @@ internal fun ManualSearchContent(controller: ManualSearchController) {
                 ManualPreviewContent(controller, Modifier.weight(1.05f).fillMaxHeight())
             } else Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 LyricsTabs(listOf("搜索结果", "歌词预览"), if (detail) 1 else 0, { detail = it == 1 })
-                if (detail) ManualPreviewContent(controller, Modifier.weight(1f).fillMaxWidth())
-                else ManualCandidateList(state, { controller.select(it); detail = true }, Modifier.weight(1f).fillMaxWidth())
+                LyricsTransition(detail, Modifier.weight(1f).fillMaxWidth()) { preview ->
+                    if (preview) ManualPreviewContent(controller, Modifier.fillMaxSize())
+                    else ManualCandidateList(state, { controller.select(it); detail = true }, Modifier.fillMaxSize())
+                }
             }
+        }
+        LyricsActionBar {
+            DesktopButton("恢复自动匹配", controller::useAutomatic, enabled = state.canMutate)
+            DesktopButton("切回本地歌词", controller::useLocal, enabled = state.canMutate)
+            DesktopButton("导入元数据", controller::editMetadata, enabled = !state.busy && state.document != null)
+            DesktopButton("应用歌词", controller::apply, enabled = state.canMutate && state.selected != null,
+                primary = true, glyph = DesktopGlyph.Check)
         }
     }
 }
@@ -68,11 +71,6 @@ internal fun ManualSearchContent(controller: ManualSearchController) {
 private fun ManualPreviewContent(controller: ManualSearchController, modifier: Modifier) {
     val state = controller.state
     Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            DesktopButton("应用歌词", controller::apply, enabled = state.canMutate && state.selected != null,
-                primary = true, glyph = DesktopGlyph.Check)
-            DesktopButton("导入元数据", controller::editMetadata, enabled = !state.busy && state.document != null)
-        }
         ManualLyricsPreview(state, Modifier.weight(1f).fillMaxWidth())
         ManualDelayEditor(state, controller)
     }

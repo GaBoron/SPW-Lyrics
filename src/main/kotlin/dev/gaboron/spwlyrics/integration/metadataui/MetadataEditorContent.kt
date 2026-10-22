@@ -25,7 +25,6 @@ internal fun MetadataEditorContent(controller: MetadataEditorController) {
             DesktopButton("打开歌曲", controller::openFile, enabled = !state.busy, glyph = DesktopGlyph.Library)
             DesktopButton("读取当前歌曲", controller::current, enabled = !state.busy, loading = state.busy)
             DesktopButton("重新读取", controller::reload, enabled = state.loaded != null && !state.busy, glyph = DesktopGlyph.Refresh)
-            DesktopButton("写入歌曲文件", controller::save, enabled = state.canSave, primary = true, glyph = DesktopGlyph.Check)
         }
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(state.loaded?.path?.toString() ?: "打开歌曲，编辑信息与内嵌歌词", maxLines = 2,
@@ -34,14 +33,17 @@ internal fun MetadataEditorContent(controller: MetadataEditorController) {
         }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             if (maxWidth >= 1000.dp) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                MetadataFieldsPanel(controller, Modifier.width(300.dp).fillMaxHeight())
+                MetadataFieldsPanel(controller, Modifier.width(250.dp).fillMaxHeight())
                 MetadataLyricsPanel(controller, Modifier.weight(1f).fillMaxHeight())
             } else Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 LyricsTabs(listOf("歌曲信息", "内嵌歌词"), page, { page = it })
-                if (page == 0) MetadataFieldsPanel(controller, Modifier.weight(1f).fillMaxWidth())
-                else MetadataLyricsPanel(controller, Modifier.weight(1f).fillMaxWidth())
+                LyricsTransition(page, Modifier.weight(1f).fillMaxWidth()) { section ->
+                    if (section == 0) MetadataFieldsPanel(controller, Modifier.fillMaxSize())
+                    else MetadataLyricsPanel(controller, Modifier.fillMaxSize())
+                }
             }
         }
+        MetadataEditorActions(controller)
     }
 }
 

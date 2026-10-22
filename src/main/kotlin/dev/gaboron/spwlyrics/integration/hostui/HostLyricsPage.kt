@@ -15,11 +15,11 @@ import androidx.compose.ui.unit.dp
 import dev.gaboron.spwlyrics.integration.composeui.DesktopTheme
 import dev.gaboron.spwlyrics.integration.workspace.LyricsWorkspace
 import dev.gaboron.spwlyrics.integration.workspace.LyricsWorkspaceContent
+import dev.gaboron.spwlyrics.integration.workspace.LyricsWorkspaceSession
 
 /** Input belongs to the workspace above the player's reserved area. */
 @Composable
-internal fun HostLyricsPage(workspace: LyricsWorkspace, isDarkTheme: Boolean) {
-    val session = workspace.session ?: return
+internal fun HostLyricsPage(workspace: LyricsWorkspace, isDarkTheme: Boolean, session: LyricsWorkspaceSession) {
     val focus = remember { FocusRequester() }
     LaunchedEffect(session) { focus.requestFocus() }
     Box(Modifier.fillMaxSize().padding(bottom = 96.dp).focusRequester(focus)

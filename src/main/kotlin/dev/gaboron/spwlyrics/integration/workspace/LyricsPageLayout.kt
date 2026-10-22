@@ -41,12 +41,18 @@ internal fun LyricsStatus(text: String, error: Boolean = false) {
         style = SaltTheme.textStyles.sub)
 }
 
+@Composable
+internal fun LyricsActionBar(content: @Composable FlowRowScope.() -> Unit) {
+    FlowRow(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+        verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
+}
+
 /** Short windows scroll the page instead of squeezing controls into the player or a zero-height list. */
 @Composable
 internal fun LyricsViewport(modifier: Modifier, content: @Composable () -> Unit) {
     BoxWithConstraints(modifier) {
-        if (maxHeight < 560.dp) LyricsScroll(Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxWidth().height(560.dp)) { content() }
+        if (maxHeight < 420.dp) LyricsScroll(Modifier.fillMaxSize()) {
+            Box(Modifier.fillMaxWidth().height(420.dp)) { content() }
         } else content()
     }
 }

@@ -3,6 +3,7 @@ package dev.gaboron.spwlyrics.codec
 import dev.gaboron.spwlyrics.domain.EditableLyrics
 import dev.gaboron.spwlyrics.domain.EditableLyricLine
 import dev.gaboron.spwlyrics.domain.LyricVocalPart
+import dev.gaboron.spwlyrics.domain.LyricsDocument
 import org.w3c.dom.Element
 import javax.xml.XMLConstants
 
@@ -10,6 +11,9 @@ import javax.xml.XMLConstants
 internal object TtmlVocalParts {
     private const val TT = "http://www.w3.org/ns/ttml"
     private const val TTM = "http://www.w3.org/ns/ttml#metadata"
+
+    fun mainAgent(document: LyricsDocument): String = document.rawTtml
+        ?.let { mainAgent(TtmlXmlDocument.parse(it).documentElement) } ?: "v1"
 
     fun mainAgent(root: Element): String {
         val agents = root.getElementsByTagNameNS(TTM, "agent")
