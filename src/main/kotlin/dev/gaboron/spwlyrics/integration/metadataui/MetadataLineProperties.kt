@@ -11,15 +11,19 @@ import dev.gaboron.spwlyrics.domain.LyricVocalPart
 import dev.gaboron.spwlyrics.integration.composeui.*
 
 @Composable
-internal fun MetadataLineVoice(line: EditableLyricLine, controller: MetadataEditorController, enabled: Boolean) {
+internal fun MetadataLineVoice(controller: MetadataEditorController, enabled: Boolean) {
+    val state = controller.state
+    val selected = state.selectedLineIds.mapNotNull(state::line)
+    val allBackground = selected.isNotEmpty() && selected.all { it.background }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("演唱声部", color = DesktopColors.Muted, style = SaltTheme.textStyles.sub)
+        Text(if (selected.size > 1) "演唱声部 · 应用于所选 ${selected.size} 句" else "演唱声部",
+            color = DesktopColors.Muted, style = SaltTheme.textStyles.sub)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            DesktopButton("主唱（左）", { controller.editLine { it.copy(vocalPart = LyricVocalPart.MAIN) } },
-                enabled = enabled, primary = controller.state.vocalPart(line) == LyricVocalPart.MAIN)
-            DesktopButton("对唱（右）", { controller.editLine { it.copy(vocalPart = LyricVocalPart.DUET) } },
-                enabled = enabled, primary = controller.state.vocalPart(line) == LyricVocalPart.DUET)
-            DesktopCheck(line.background, { controller.editLine { it.copy(background = !it.background) } }, enabled, "背景人声")
+            DesktopButton("主唱（左）", { controller.editSelected { it.copy(vocalPart = LyricVocalPart.MAIN) } },
+                enabled = enabled, primary = selected.isNotEmpty() && selected.all { state.vocalPart(it) == LyricVocalPart.MAIN })
+            DesktopButton("对唱（右）", { controller.editSelected { it.copy(vocalPart = LyricVocalPart.DUET) } },
+                enabled = enabled, primary = selected.isNotEmpty() && selected.all { state.vocalPart(it) == LyricVocalPart.DUET })
+            DesktopCheck(allBackground, { controller.editSelected { it.copy(background = !allBackground) } }, enabled, "背景人声")
         }
     }
 }

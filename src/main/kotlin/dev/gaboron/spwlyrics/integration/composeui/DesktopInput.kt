@@ -43,13 +43,15 @@ internal fun DesktopField(value: String, onValueChange: (String) -> Unit, modifi
 
 @Composable
 internal fun DesktopTextArea(value: String, onChange: (String) -> Unit, modifier: Modifier = Modifier,
-    enabled: Boolean = true, placeholder: String = "", invalid: Boolean = false) {
+    enabled: Boolean = true, placeholder: String = "", invalid: Boolean = false, growWithContent: Boolean = false) {
     val scroll = rememberScrollState()
     Box(modifier.inputSurface(invalid)) {
-        BasicTextField(value, onChange, Modifier.fillMaxWidth().padding(end = 12.dp).verticalScroll(scroll).padding(12.dp),
+        val textModifier = if (growWithContent) Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)
+            else Modifier.fillMaxWidth().padding(end = 12.dp).verticalScroll(scroll).padding(12.dp)
+        BasicTextField(value, onChange, textModifier,
             readOnly = !enabled, textStyle = SaltTheme.textStyles.main.copy(color = DesktopColors.Text),
             cursorBrush = SolidColor(DesktopColors.Accent),
             decorationBox = { input -> Box { if (value.isEmpty()) Text(placeholder, color = DesktopColors.Muted); input() } })
-        VerticalScrollbar(rememberScrollbarAdapter(scroll), Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(4.dp))
+        if (!growWithContent) VerticalScrollbar(rememberScrollbarAdapter(scroll), Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(4.dp))
     }
 }

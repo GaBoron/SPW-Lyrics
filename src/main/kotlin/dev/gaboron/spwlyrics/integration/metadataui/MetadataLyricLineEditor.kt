@@ -22,7 +22,7 @@ internal fun MetadataLyricLineEditor(line: EditableLyricLine, controller: Metada
     Box(modifier) {
         Column(Modifier.fillMaxSize().padding(end = 12.dp).verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("第 ${line.id + 1} 句", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            MetadataLineVoice(line, controller, enabled)
+            MetadataLineVoice(controller, enabled)
             MetadataLineTiming(line, controller, enabled)
             Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Text("歌词正文", fontSize = 12.sp, color = DesktopColors.Muted)

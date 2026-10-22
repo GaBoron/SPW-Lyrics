@@ -7,7 +7,7 @@ import dev.gaboron.spwlyrics.integration.composeui.DesktopTextArea
 @Composable
 internal fun MetadataTextArea(
     value: String, onChange: (String) -> Unit, modifier: Modifier = Modifier,
-    enabled: Boolean = true, placeholder: String = "", invalid: Boolean = false,
+    enabled: Boolean = true, placeholder: String = "", invalid: Boolean = false, growWithContent: Boolean = false,
 ) {
-    DesktopTextArea(value, onChange, modifier, enabled, placeholder, invalid)
+    DesktopTextArea(value, onChange, modifier, enabled, placeholder, invalid, growWithContent)
 }
