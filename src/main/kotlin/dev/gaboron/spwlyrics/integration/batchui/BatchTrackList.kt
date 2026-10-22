@@ -19,6 +19,7 @@ import dev.gaboron.spwlyrics.application.LyricsBatchItem
 import dev.gaboron.spwlyrics.application.LyricsBatchItemState
 import dev.gaboron.spwlyrics.integration.composeui.*
 import dev.gaboron.spwlyrics.integration.workspace.LyricsSection
+import dev.gaboron.spwlyrics.integration.workspace.LyricsListDivider
 import dev.gaboron.spwlyrics.integration.workspace.lyricsSelection
 
 @OptIn(UnstableSaltUiApi::class)
@@ -57,7 +58,7 @@ internal fun BatchTrackList(state: BatchProcessingState, select: (String) -> Uni
                                 sub = item.query.artists.joinToString(" / ").ifBlank { item.query.album })
                             BatchItemStatus(item, Modifier.widthIn(max = 180.dp).padding(end = 16.dp))
                         }
-                        ItemDivider()
+                        LyricsListDivider()
                     }
                 }
                 VerticalScrollbar(rememberScrollbarAdapter(list), Modifier.align(Alignment.CenterEnd).fillMaxHeight(), interactionSource = scrollbar)

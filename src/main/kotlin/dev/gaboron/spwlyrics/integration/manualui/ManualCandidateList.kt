@@ -56,7 +56,7 @@ internal fun ManualCandidateList(state: ManualSearchState, select: (CandidateSco
                         LazyColumn(Modifier.fillMaxSize().padding(end = 10.dp), state = list, contentPadding = PaddingValues(4.dp)) {
                             items(rows) { row ->
                                 ManualCandidateRow(row, row == state.selected, !state.mutating) { focus.requestFocus(); select(row) }
-                                ItemDivider()
+                                LyricsListDivider()
                             }
                         }
                         VerticalScrollbar(rememberScrollbarAdapter(list), Modifier.align(Alignment.CenterEnd).fillMaxHeight())

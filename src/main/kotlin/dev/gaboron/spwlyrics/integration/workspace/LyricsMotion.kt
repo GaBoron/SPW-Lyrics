@@ -20,5 +20,6 @@ internal fun <T> LyricsTransition(value: T, modifier: Modifier = Modifier, conte
 internal fun Modifier.lyricsSelection(selected: Boolean): Modifier {
     val color by animateColorAsState(if (selected) SaltTheme.colors.highlight.copy(alpha = .12f) else Color.Transparent,
         tween(160), label = "lyrics selection")
-    return clip(SaltTheme.shapes.medium).background(color)
+    val shape = SaltTheme.shapes.medium
+    return background(color, shape).clip(shape)
 }

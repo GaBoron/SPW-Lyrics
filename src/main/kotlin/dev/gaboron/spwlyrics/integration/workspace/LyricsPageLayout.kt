@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.moriafly.salt.ui.RoundedColumn
 import com.moriafly.salt.ui.ItemContainer
+import com.moriafly.salt.ui.ItemDivider
 import com.moriafly.salt.ui.SaltTheme
 import com.moriafly.salt.ui.Text
 
@@ -23,6 +24,12 @@ internal fun LyricsSection(modifier: Modifier = Modifier, content: @Composable C
 @Composable
 internal fun LyricsSectionTitle(text: String) {
     ItemContainer { Text(text, color = SaltTheme.colors.subText, style = SaltTheme.textStyles.sub) }
+}
+
+/** Match row backgrounds' full width and leave their rounded edges clear of separator strokes. */
+@Composable
+internal fun LyricsListDivider() {
+    ItemDivider(Modifier.padding(vertical = 2.dp), startIndent = 0.dp)
 }
 
 @Composable

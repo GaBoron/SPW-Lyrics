@@ -43,7 +43,7 @@ internal fun MetadataLineList(controller: MetadataEditorController, modifier: Mo
                     Text(lyricVoiceLabel(state.vocalPart(line) == LyricVocalPart.DUET, line.background),
                         color = SaltTheme.colors.subText, style = SaltTheme.textStyles.sub)
                 }
-                ItemDivider()
+                LyricsListDivider()
             }
         }
         VerticalScrollbar(rememberScrollbarAdapter(scroll), Modifier.align(Alignment.CenterEnd).fillMaxHeight())
