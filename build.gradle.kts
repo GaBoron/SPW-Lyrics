@@ -41,10 +41,12 @@ dependencies {
     implementation("io.github.moriafly:salt-ui:3.0.0-beta03")
 }
 
-// UI components are packaged; their Compose/Skiko runtime belongs to SPW.
+// UI components are packaged; shared runtimes and the native dispatcher belong to SPW.
 configurations.runtimeClasspath {
     exclude(group = "org.jetbrains.kotlin")
     exclude(group = "org.jetbrains.skiko")
+    // JNA's native resource cache keeps a plugin-owned JAR locked after unload on Windows.
+    exclude(group = "net.java.dev.jna")
     exclude(group = "androidx.lifecycle")
     exclude(group = "org.jetbrains.androidx.lifecycle")
     exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core")
