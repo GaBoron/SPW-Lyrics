@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.CircularProgressIndicator
-import androidx.compose.material.Text
+import com.moriafly.salt.ui.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+@Composable
 internal fun Modifier.desktopPanel() = clip(RoundedCornerShape(12.dp))
     .background(DesktopColors.Surface).border(1.dp, DesktopColors.Border, RoundedCornerShape(12.dp))
 
@@ -37,21 +38,9 @@ internal fun DesktopButton(
     enabled: Boolean = true, primary: Boolean = false, loading: Boolean = false,
     glyph: DesktopGlyph? = null,
 ) {
-    val interaction = remember { MutableInteractionSource() }
-    val hover by interaction.collectIsHoveredAsState()
-    val focus by interaction.collectIsFocusedAsState()
-    val fill = when {
-        !enabled -> DesktopColors.Disabled
-        primary && hover -> DesktopColors.AccentHover
-        primary -> DesktopColors.Accent
-        hover -> DesktopColors.Hover
-        else -> DesktopColors.Surface
-    }
-    val ink = if (!enabled) DesktopColors.Muted.copy(alpha = .6f) else if (primary) Color.White else DesktopColors.Text
-    Row(modifier.height(DesktopColors.ControlHeight).clip(RoundedCornerShape(7.dp))
-        .background(fill).border(1.dp, if (focus) DesktopColors.Accent else if (primary && enabled) fill else DesktopColors.Border, RoundedCornerShape(7.dp))
-        .hoverable(interaction, enabled).clickable(interaction, null, enabled, role = Role.Button, onClick = onClick)
-        .padding(horizontal = 13.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+    val ink = if (primary) com.moriafly.salt.ui.SaltTheme.colors.onHighlight else DesktopColors.Text
+    com.moriafly.salt.ui.Button(onClick, modifier = modifier, enabled = enabled,
+        appearance = if (primary) com.moriafly.salt.ui.ButtonAppearance.Filled else com.moriafly.salt.ui.ButtonAppearance.Subtle) {
         if (loading) { CircularProgressIndicator(Modifier.size(14.dp), color = ink, strokeWidth = 1.5.dp); Spacer(Modifier.width(7.dp)) }
         else if (glyph != null) { DesktopIcon(glyph, ink); Spacer(Modifier.width(7.dp)) }
         Text(text, color = ink, fontSize = 12.sp, fontWeight = if (primary) FontWeight.Medium else FontWeight.Normal, maxLines = 1)
@@ -64,27 +53,19 @@ internal fun DesktopField(
     placeholder: String = "", enabled: Boolean = true, onEnter: () -> Unit = {},
     glyph: DesktopGlyph? = null, suffix: String? = null, invalid: Boolean = false,
 ) {
-    val interaction = remember { MutableInteractionSource() }
-    val focused by interaction.collectIsFocusedAsState()
-    BasicTextField(value, onValueChange, modifier.height(DesktopColors.ControlHeight)
+    Row(modifier.background(DesktopColors.Surface, RoundedCornerShape(7.dp))
+        .border(1.dp, if (invalid) DesktopColors.Error else DesktopColors.Border, RoundedCornerShape(7.dp)),
+        verticalAlignment = Alignment.CenterVertically) {
+        if (glyph != null) DesktopIcon(glyph, DesktopColors.Muted, Modifier.padding(start = 10.dp).size(15.dp))
+        @OptIn(com.moriafly.salt.ui.UnstableSaltUiApi::class)
+        com.moriafly.salt.ui.ItemEdit(value, onValueChange, Modifier.weight(1f)
         .onPreviewKeyEvent { event ->
             if (event.type == KeyEventType.KeyDown && (event.key == Key.Enter || event.key == Key.NumPadEnter) && !event.isCtrlPressed) {
                 onEnter(); true
             } else false
-        }, enabled = enabled, singleLine = true, interactionSource = interaction,
-        textStyle = TextStyle(fontSize = 13.sp, color = if (enabled) DesktopColors.Text else DesktopColors.Muted),
-        cursorBrush = SolidColor(DesktopColors.Accent), decorationBox = { inner ->
-            Row(Modifier.fillMaxSize().clip(RoundedCornerShape(7.dp)).background(if (enabled) DesktopColors.Surface else DesktopColors.Subtle)
-                .border(1.dp, if (invalid) DesktopColors.Error else if (focused) DesktopColors.Accent else DesktopColors.Border, RoundedCornerShape(7.dp))
-                .padding(horizontal = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (glyph != null) { DesktopIcon(glyph, DesktopColors.Muted); Spacer(Modifier.width(9.dp)) }
-                Box(Modifier.weight(1f)) {
-                    if (value.isEmpty()) Text(placeholder, color = DesktopColors.Muted, fontSize = 13.sp, maxLines = 1)
-                    inner()
-                }
-                if (suffix != null) { Spacer(Modifier.width(5.dp)); Text(suffix, color = DesktopColors.Muted, fontSize = 11.sp) }
-            }
-        })
+        }, hint = placeholder, readOnly = !enabled)
+        if (suffix != null) Text(suffix, Modifier.padding(end = 10.dp), color = DesktopColors.Muted, fontSize = 11.sp)
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)

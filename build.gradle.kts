@@ -38,6 +38,21 @@ dependencies {
     implementation("net.jthink:jaudiotagger:3.0.1")
     // Tool windows share the host's Compose classes and platform-native Skiko.
     compileOnly("org.jetbrains.compose.desktop:desktop:1.12.1")
+    implementation("io.github.moriafly:salt-ui:3.0.0-beta03")
+}
+
+// UI components are packaged; their Compose/Skiko runtime belongs to SPW.
+configurations.runtimeClasspath {
+    exclude(group = "org.jetbrains.kotlin")
+    exclude(group = "org.jetbrains.skiko")
+    exclude(group = "androidx.lifecycle")
+    exclude(group = "org.jetbrains.androidx.lifecycle")
+    exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core")
+    exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core-jvm")
+    listOf("animation", "foundation", "material", "material3", "runtime", "ui", "desktop", "components")
+        .forEach { exclude(group = "org.jetbrains.compose.$it") }
+    listOf("animation", "foundation", "material", "material3", "runtime", "ui")
+        .forEach { exclude(group = "androidx.compose.$it") }
 }
 
 tasks.jar {

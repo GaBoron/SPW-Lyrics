@@ -11,7 +11,7 @@ import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.Text
+import com.moriafly.salt.ui.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,13 +32,9 @@ internal fun MetadataTextArea(
     Box(modifier.background(DesktopColors.Surface, RoundedCornerShape(7.dp))
         .border(1.dp, if (invalid) DesktopColors.Error else if (focused) DesktopColors.Accent else DesktopColors.Border,
             RoundedCornerShape(7.dp))) {
-        BasicTextField(value, onChange, Modifier.fillMaxSize().padding(11.dp, 9.dp, 20.dp, 9.dp).verticalScroll(scroll),
-            enabled = enabled, interactionSource = interaction,
-            textStyle = TextStyle(fontSize = 13.sp, lineHeight = 21.sp, color = DesktopColors.Text),
-            cursorBrush = SolidColor(DesktopColors.Accent), decorationBox = { inner ->
-                if (value.isEmpty()) Text(placeholder, color = DesktopColors.Muted, fontSize = 12.sp)
-                inner()
-            })
+        @OptIn(com.moriafly.salt.ui.UnstableSaltUiApi::class)
+        com.moriafly.salt.ui.ItemEdit(value, onChange, Modifier.fillMaxSize().padding(end = 12.dp).verticalScroll(scroll),
+            hint = placeholder, readOnly = !enabled)
         VerticalScrollbar(rememberScrollbarAdapter(scroll), Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(4.dp))
     }
 }

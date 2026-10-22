@@ -1,7 +1,7 @@
 package dev.gaboron.spwlyrics.integration.manualui
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.Text
+import com.moriafly.salt.ui.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier

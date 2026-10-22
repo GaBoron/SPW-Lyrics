@@ -7,7 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.material.Text
+import com.moriafly.salt.ui.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier

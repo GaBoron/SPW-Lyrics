@@ -5,6 +5,20 @@
       "config": "spw-lyrics.json",
       "preferences": [
         {
+          "type": "button",
+          "title": "打开歌词管理",
+          "summary": "在统一页面中搜索歌词、编辑元数据和批量处理",
+          "arrow_type": "none",
+          "on_click": "dev.gaboron.spwlyrics.integration.SpwLyricsActions.openWorkspace"
+        },
+        {
+          "type": "button",
+          "title": "在独立窗口打开歌词管理",
+          "summary": "主窗口入口不可用时使用；保留当前标签页和未保存的修改",
+          "arrow_type": "none",
+          "on_click": "dev.gaboron.spwlyrics.integration.SpwLyricsActions.openStandaloneWorkspace"
+        },
+        {
           "key": "automatic_replacement_policy",
           "type": "list",
           "title": "自动替换歌词",
@@ -16,7 +30,7 @@
         {
           "type": "button",
           "title": "打开手动搜索",
-          "summary": "无需快捷键，直接打开当前歌曲的手动搜索窗口",
+          "summary": "切换到歌词管理的手动搜索标签页",
           "arrow_type": "none",
           "on_click": "dev.gaboron.spwlyrics.integration.SpwLyricsActions.openManualSearch"
         },

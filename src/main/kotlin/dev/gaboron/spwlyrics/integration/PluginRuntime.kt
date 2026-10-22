@@ -21,10 +21,12 @@ import dev.gaboron.spwlyrics.provider.NeteaseMusicProvider
 import dev.gaboron.spwlyrics.provider.ProviderHttpClient
 import dev.gaboron.spwlyrics.provider.QqMusicProvider
 import dev.gaboron.spwlyrics.storage.FileLyricsCache
-import dev.gaboron.spwlyrics.integration.manualui.ManualSearchWindow
 import dev.gaboron.spwlyrics.integration.manualui.ManualSearchOperations
-import dev.gaboron.spwlyrics.integration.batchui.BatchProcessingWindow
-import dev.gaboron.spwlyrics.integration.metadataui.MetadataEditorWindow
+import dev.gaboron.spwlyrics.integration.metadataui.MetadataEditorOperations
+import dev.gaboron.spwlyrics.integration.metadataui.MetadataFilePicker
+import dev.gaboron.spwlyrics.integration.workspace.LyricsWorkspace
+import dev.gaboron.spwlyrics.integration.workspace.LyricsWorkspaceSession
+import dev.gaboron.spwlyrics.integration.workspace.LyricsToolPage
 import dev.gaboron.spwlyrics.storage.FileLyricsDelaySettings
 import java.time.Duration
 import kotlin.io.path.Path
@@ -32,10 +34,8 @@ import kotlin.io.path.Path
 object PluginRuntime {
     @Volatile private var coordinator: LyricsLoadCoordinator? = null
     @Volatile private var batchProcessor: LyricsBatchProcessor? = null
-    @Volatile private var batchWindow: BatchProcessingWindow? = null
+    @Volatile private var workspace: LyricsWorkspace? = null
     @Volatile private var settings: PluginSettings? = null
-    @Volatile private var manualWindow: ManualSearchWindow? = null
-    @Volatile private var metadataWindow: MetadataEditorWindow? = null
     @Volatile private var manualSearchShortcut: SpwManualSearchBinding? = null
     @Volatile private var metadataEditorShortcut: SpwMetadataEditorBinding? = null
     @Volatile private var cacheFolderOpener: CacheFolderOpener? = null
@@ -90,22 +90,23 @@ object PluginRuntime {
             resolver = resolver,
         )
         batchProcessor = batch
-        batchWindow = BatchProcessingWindow(batch, ::toastWarning) { error ->
+        val describeBatchFailure: (Throwable) -> String = { error ->
             if (error is PluginPermissionDeniedException) "请在 SPW 的插件权限中授予曲库读取权限后重试。"
             else "批量处理失败：${error.message ?: "未知错误"}"
         }
-        metadataWindow = MetadataEditorWindow(
-            readCurrentPath = { currentQuery()?.path },
-            refreshSavedPath = { path ->
+        val metadataOperations = object : MetadataEditorOperations {
+            override fun currentAudioPath() = currentQuery()?.path
+            override fun chooseAudioFile() = MetadataFilePicker.audio()
+            override fun chooseLyricsFile() = MetadataFilePicker.lyrics()
+            override fun openSearch() = openManualSearch()
+            override fun afterSave(path: java.nio.file.Path) {
                 val currentPath = WorkshopApi.playback.getCurrentMediaItem()?.path
                 if (currentPath != null && runCatching { java.nio.file.Path.of(currentPath).toRealPath() == path }.getOrDefault(false)) {
                     check(refreshBridge.reloadCurrentLyrics()) { "请切换歌曲后重新播放以加载内嵌歌词。" }
                 }
-            },
-            openLyricsSearch = ::openManualSearch,
-            onFailure = ::toastWarning,
-        )
-        manualWindow = ManualSearchWindow(object : ManualSearchOperations {
+            }
+        }
+        val manualOperations = object : ManualSearchOperations {
             override fun currentQuery() = PluginRuntime.currentQuery()
             override fun search(query: TrackQuery, keywords: String, source: LyricsSource?) =
                 coordinator?.searchManual(query, keywords, source).orEmpty()
@@ -120,9 +121,10 @@ object PluginRuntime {
             override fun openBatch() = openBatchProcessing()
             override fun openMetadata() = openMetadataEditor()
             override fun editMetadata(query: TrackQuery, document: LyricsDocument) {
-                metadataWindow?.importSearch(query, document)
+                workspace?.importSearch(query, document)
             }
-        }, ::toastWarning)
+        }
+        workspace = LyricsWorkspace({ LyricsWorkspaceSession(manualOperations, metadataOperations, batch, describeBatchFailure) }, ::toastWarning)
         settings = PluginSettings(WorkshopApi.manager.createConfigManager())
         val shortcut = SpwManualSearchBinding(::openManualSearch)
         manualSearchShortcut = shortcut
@@ -154,16 +156,18 @@ object PluginRuntime {
     }
     @Synchronized
     fun openManualSearch() {
-        manualWindow?.open()
+        workspace?.open(LyricsToolPage.SEARCH)
     }
     @Synchronized
     fun openBatchProcessing() {
-        batchWindow?.open()
+        workspace?.open(LyricsToolPage.BATCH)
     }
     @Synchronized
     fun openMetadataEditor() {
-        metadataWindow?.open()
+        workspace?.open(LyricsToolPage.METADATA)
     }
+    fun openWorkspace() = workspace?.open()
+    fun openStandaloneWorkspace() = workspace?.open(standalone = true)
     fun openCacheFolder() {
         if (cacheFolderOpener?.open() != true) toastWarning("无法打开 SPW Lyrics 本地缓存文件夹。")
     }
@@ -174,15 +178,11 @@ object PluginRuntime {
         manualSearchShortcut = null
         metadataEditorShortcut?.close()
         metadataEditorShortcut = null
-        manualWindow?.close()
-        manualWindow = null
-        metadataWindow?.close()
-        metadataWindow = null
+        workspace?.close()
+        workspace = null
         cacheFolderOpener = null
         settings?.close()
         settings = null
-        batchWindow?.close()
-        batchWindow = null
         batchProcessor?.close()
         batchProcessor = null
         coordinator?.close()

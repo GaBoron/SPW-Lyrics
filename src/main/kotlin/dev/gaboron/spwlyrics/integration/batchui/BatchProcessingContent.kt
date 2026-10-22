@@ -2,7 +2,7 @@ package dev.gaboron.spwlyrics.integration.batchui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.Text
+import com.moriafly.salt.ui.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,14 +37,12 @@ internal fun BatchProcessingContent(controller: BatchProcessingController) {
                 Spacer(Modifier.weight(1f))
                 DesktopCheck(state.includeCached, { controller.includeCached(!state.includeCached) }, state.editable, "重新处理已有缓存")
             }
-            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                BatchTrackList(state, controller::select, Modifier.weight(1f).fillMaxHeight())
-                BatchProgressPanel(state, summary, Modifier.width(270.dp).fillMaxHeight())
-            }
+            ToolColumns(Modifier.weight(1f).fillMaxWidth(), 270.dp,
+                main = { BatchTrackList(state, controller::select, it) }, side = { BatchProgressPanel(state, summary, it) })
         }
         DesktopDivider()
-        Row(Modifier.fillMaxWidth().background(DesktopColors.Subtle).padding(24.dp, 13.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(Modifier.fillMaxWidth().background(DesktopColors.Subtle).padding(16.dp, 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             ElidedText(state.message, Modifier.weight(1f).padding(end = 12.dp), color = if (state.error) DesktopColors.Error else DesktopColors.Muted, size = 11)
             DesktopButton("重试失败项", controller::retry,
                 enabled = state.editable && state.snapshot.items.any { it.state == LyricsBatchItemState.FAILED })
