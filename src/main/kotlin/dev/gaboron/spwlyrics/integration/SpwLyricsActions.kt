@@ -5,9 +5,6 @@ object SpwLyricsActions {
     fun openWorkspace() = PluginRuntime.openWorkspace()
 
     @JvmStatic
-    fun openStandaloneWorkspace() = PluginRuntime.openStandaloneWorkspace()
-
-    @JvmStatic
     fun openManualSearch() = PluginRuntime.openManualSearch()
 
     @JvmStatic

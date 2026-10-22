@@ -3,37 +3,28 @@ package dev.gaboron.spwlyrics.integration.workspace
 import androidx.compose.runtime.*
 import dev.gaboron.spwlyrics.domain.LyricsDocument
 import dev.gaboron.spwlyrics.domain.TrackQuery
-import dev.gaboron.spwlyrics.integration.composeui.DesktopToolWindow
-import dev.gaboron.spwlyrics.integration.composeui.DesktopWindowContent
 import java.awt.EventQueue
 
-/** Owns one session and routes it to exactly one view. Hook integration supplies only a host port. */
+/** Owns the host page session. Hook integration supplies readiness and navigation activation. */
 internal class LyricsWorkspace(private val createSession: () -> LyricsWorkspaceSession,
     private val onFailure: (String) -> Unit) : AutoCloseable {
-    var embeddedSession by mutableStateOf<LyricsWorkspaceSession?>(null)
+    var session by mutableStateOf<LyricsWorkspaceSession?>(null)
         private set
-    var embeddedAvailable = false
-    var beforeEmbed: () -> Unit = {}
-    private var session: LyricsWorkspaceSession? = null
-    private var window: DesktopToolWindow? = null
+    var available = false
+    var beforeOpen: () -> Unit = {}
     private var stopped = false
 
-    fun open(page: LyricsToolPage? = null, standalone: Boolean = false) = onEdt {
+    fun open(page: LyricsToolPage? = null) = onEdt {
         if (stopped) return@onEdt
-        val active = session ?: createSession().also { session = it }
-        page?.let { active.select(it) }
-        if (!standalone && embeddedAvailable) {
-            if (embeddedSession == null) beforeEmbed()
-            window?.close(); window = null
-            embeddedSession = active
-        } else {
-            embeddedSession = null
-            val shown = window ?: DesktopToolWindow("SPW Lyrics · 歌词管理", "lyrics-workspace-position.json", onFailure) {
-                DesktopWindowContent({ LyricsWorkspaceContent(active, false, {}, ::dismiss) }, {},
-                    { dispose -> active.requestClose { dismiss(); dispose() } })
-            }.also { window = it }
-            shown.open()
+        if (!available) {
+            onFailure("歌词管理主窗口入口尚未启用，请检查类变换权限及插件启动提示。")
+            return@onEdt
         }
+        if (session == null && runCatching(beforeOpen).onFailure {
+            onFailure("歌词管理页面未能打开：${it.cause?.message ?: it.message}")
+        }.isFailure) return@onEdt
+        val active = session ?: createSession().also { session = it }
+        active.select(page ?: active.page)
     }
 
     fun importSearch(query: TrackQuery, document: LyricsDocument) = onEdt {
@@ -46,20 +37,18 @@ internal class LyricsWorkspace(private val createSession: () -> LyricsWorkspaceS
     }
 
     fun requestLeave(action: () -> Unit): Boolean {
-        val active = embeddedSession ?: return false
+        val active = session ?: return false
         active.requestClose { dismiss(); action() }
         return true
     }
 
     fun unavailable() = onEdt {
-        embeddedAvailable = false
-        beforeEmbed = {}
-        if (embeddedSession != null) open(standalone = true)
+        available = false
+        beforeOpen = {}
+        dismiss()
     }
 
-    private fun dismiss() {
-        embeddedSession = null
-        window?.close(); window = null
+    fun dismiss() {
         session?.close(); session = null
     }
 

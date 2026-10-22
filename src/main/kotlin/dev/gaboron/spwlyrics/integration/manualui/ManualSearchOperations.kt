@@ -17,7 +17,5 @@ internal interface ManualSearchOperations {
     fun useAutomatic(query: TrackQuery): Boolean
     fun delay(query: TrackQuery): Int
     fun setDelay(query: TrackQuery, delayMs: Int): Boolean
-    fun openBatch()
-    fun openMetadata()
     fun editMetadata(query: TrackQuery, document: LyricsDocument)
 }

@@ -4,14 +4,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.hoverable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.CircularProgressIndicator
 import com.moriafly.salt.ui.Text
 import androidx.compose.runtime.*
@@ -19,10 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.*
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -38,7 +29,8 @@ internal fun DesktopButton(
     enabled: Boolean = true, primary: Boolean = false, loading: Boolean = false,
     glyph: DesktopGlyph? = null,
 ) {
-    val ink = if (primary) com.moriafly.salt.ui.SaltTheme.colors.onHighlight else DesktopColors.Text
+    val baseInk = if (primary) com.moriafly.salt.ui.SaltTheme.colors.onHighlight else DesktopColors.Text
+    val ink = if (enabled) baseInk else baseInk.copy(alpha = .38f)
     com.moriafly.salt.ui.Button(onClick, modifier = modifier, enabled = enabled,
         appearance = if (primary) com.moriafly.salt.ui.ButtonAppearance.Filled else com.moriafly.salt.ui.ButtonAppearance.Subtle) {
         if (loading) { CircularProgressIndicator(Modifier.size(14.dp), color = ink, strokeWidth = 1.5.dp); Spacer(Modifier.width(7.dp)) }

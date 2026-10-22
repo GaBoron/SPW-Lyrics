@@ -27,6 +27,7 @@ import dev.gaboron.spwlyrics.integration.metadataui.MetadataFilePicker
 import dev.gaboron.spwlyrics.integration.workspace.LyricsWorkspace
 import dev.gaboron.spwlyrics.integration.workspace.LyricsWorkspaceSession
 import dev.gaboron.spwlyrics.integration.workspace.LyricsToolPage
+import dev.gaboron.spwlyrics.integration.hostui.HostUiIntegration
 import dev.gaboron.spwlyrics.storage.FileLyricsDelaySettings
 import java.time.Duration
 import kotlin.io.path.Path
@@ -35,6 +36,7 @@ object PluginRuntime {
     @Volatile private var coordinator: LyricsLoadCoordinator? = null
     @Volatile private var batchProcessor: LyricsBatchProcessor? = null
     @Volatile private var workspace: LyricsWorkspace? = null
+    @Volatile private var hostUi: HostUiIntegration? = null
     @Volatile private var settings: PluginSettings? = null
     @Volatile private var manualSearchShortcut: SpwManualSearchBinding? = null
     @Volatile private var metadataEditorShortcut: SpwMetadataEditorBinding? = null
@@ -118,13 +120,12 @@ object PluginRuntime {
             override fun delay(query: TrackQuery) = delays.get(query)
             override fun setDelay(query: TrackQuery, delayMs: Int) =
                 isCurrentTrack(query) && coordinator?.setDelay(query, delayMs) == true
-            override fun openBatch() = openBatchProcessing()
-            override fun openMetadata() = openMetadataEditor()
             override fun editMetadata(query: TrackQuery, document: LyricsDocument) {
                 workspace?.importSearch(query, document)
             }
         }
         workspace = LyricsWorkspace({ LyricsWorkspaceSession(manualOperations, metadataOperations, batch, describeBatchFailure) }, ::toastWarning)
+        hostUi = HostUiIntegration(checkNotNull(workspace), ::toastWarning).also { it.start() }
         settings = PluginSettings(WorkshopApi.manager.createConfigManager())
         val shortcut = SpwManualSearchBinding(::openManualSearch)
         manualSearchShortcut = shortcut
@@ -167,7 +168,6 @@ object PluginRuntime {
         workspace?.open(LyricsToolPage.METADATA)
     }
     fun openWorkspace() = workspace?.open()
-    fun openStandaloneWorkspace() = workspace?.open(standalone = true)
     fun openCacheFolder() {
         if (cacheFolderOpener?.open() != true) toastWarning("无法打开 SPW Lyrics 本地缓存文件夹。")
     }
@@ -178,6 +178,8 @@ object PluginRuntime {
         manualSearchShortcut = null
         metadataEditorShortcut?.close()
         metadataEditorShortcut = null
+        hostUi?.close()
+        hostUi = null
         workspace?.close()
         workspace = null
         cacheFolderOpener = null

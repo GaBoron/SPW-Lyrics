@@ -101,8 +101,6 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
         }) { state = state.copy(savedDelay = value) }
     }
 
-    fun openBatch() = operations.openBatch()
-    fun openMetadata() = operations.openMetadata()
     fun editMetadata() {
         if (state.busy) return
         val query = state.query ?: return

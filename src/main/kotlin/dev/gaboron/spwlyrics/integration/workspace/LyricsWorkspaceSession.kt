@@ -1,8 +1,8 @@
 package dev.gaboron.spwlyrics.integration.workspace
 
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import dev.gaboron.spwlyrics.application.LyricsBatchProcessor
 import dev.gaboron.spwlyrics.integration.batchui.BatchProcessingController
 import dev.gaboron.spwlyrics.integration.manualui.ManualSearchController
@@ -28,11 +28,16 @@ internal class LyricsWorkspaceSession(
     var page by mutableStateOf(LyricsToolPage.SEARCH)
         private set
 
-    init { manual.refreshTrack(); batch.load() }
+    private val initialized = mutableSetOf<LyricsToolPage>()
 
     fun select(value: LyricsToolPage, initialize: Boolean = true) {
         page = value
-        if (initialize && value == LyricsToolPage.METADATA && metadata.state.loaded == null && !metadata.state.busy) metadata.current()
+        if (!initialize || !initialized.add(value)) return
+        when (value) {
+            LyricsToolPage.SEARCH -> manual.refreshTrack()
+            LyricsToolPage.BATCH -> batch.load()
+            LyricsToolPage.METADATA -> if (metadata.state.loaded == null && !metadata.state.busy) metadata.current()
+        }
     }
 
     fun requestClose(close: () -> Unit) = metadata.requestDiscard(close)

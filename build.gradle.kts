@@ -5,7 +5,7 @@ plugins {
     kotlin("jvm") version "2.4.20"
     kotlin("plugin.serialization") version "2.4.20"
     id("org.jetbrains.kotlin.plugin.compose") version "2.4.20"
-    id("org.jetbrains.compose") version "1.12.1"
+    id("org.jetbrains.compose") version "1.12.2"
     id("com.xuncorp.spw.workshop") version "0.1.0-dev23"
 }
 
@@ -36,8 +36,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     implementation("com.github.houbb:opencc4j:1.14.0")
     implementation("net.jthink:jaudiotagger:3.0.1")
-    // Tool windows share the host's Compose classes and platform-native Skiko.
-    compileOnly("org.jetbrains.compose.desktop:desktop:1.12.1")
+    // The host renders plugin pages with its Compose classes and platform-native Skiko.
+    compileOnly("org.jetbrains.compose.desktop:desktop:1.12.2")
     implementation("io.github.moriafly:salt-ui:3.0.0-beta03")
 }
 
@@ -69,7 +69,7 @@ spmod {
     PluginDescription = "为 Salt Player for Windows 自动搜索、匹配并加载多来源歌词。"
     PluginOpenSourceUrl = "https://github.com/GaBoron/SPW-Lyrics"
     PluginHasConfig = true
-    PluginPermissions = listOf(PluginPermission.LIBRARY_READ, PluginPermission.KEY_BINDINGS)
+    PluginPermissions = listOf(PluginPermission.LIBRARY_READ, PluginPermission.KEY_BINDINGS, PluginPermission.CLASS_TRANSFORM)
 }
 tasks.named<Zip>("plugin") {
     archiveFileName.set("spw-lyrics-${project.version}.spmod")

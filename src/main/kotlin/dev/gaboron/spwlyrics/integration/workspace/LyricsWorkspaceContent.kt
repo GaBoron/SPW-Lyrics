@@ -16,8 +16,7 @@ import dev.gaboron.spwlyrics.integration.metadataui.MetadataDiscardDialog
 import dev.gaboron.spwlyrics.integration.metadataui.MetadataEditorContent
 
 @Composable
-internal fun LyricsWorkspaceContent(session: LyricsWorkspaceSession, embedded: Boolean,
-    detach: () -> Unit, close: () -> Unit) {
+internal fun LyricsWorkspaceContent(session: LyricsWorkspaceSession, close: () -> Unit) {
     Column(Modifier.fillMaxSize().background(DesktopColors.Background)) {
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(12.dp, 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -25,7 +24,6 @@ internal fun LyricsWorkspaceContent(session: LyricsWorkspaceSession, embedded: B
             LyricsToolPage.entries.forEach { page ->
                 DesktopButton(page.title, { session.select(page) }, primary = session.page == page)
             }
-            if (embedded) DesktopButton("在独立窗口打开", detach)
             DesktopButton("返回", { session.requestClose(close) })
         }
         DesktopDivider()
