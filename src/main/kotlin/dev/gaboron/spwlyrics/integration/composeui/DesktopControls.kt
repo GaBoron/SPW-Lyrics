@@ -19,13 +19,12 @@ internal fun DesktopButton(
     enabled: Boolean = true, primary: Boolean = false, loading: Boolean = false,
     glyph: DesktopGlyph? = null,
 ) {
-    val baseInk = if (primary) com.moriafly.salt.ui.SaltTheme.colors.onHighlight else DesktopColors.Text
-    val ink = if (enabled) baseInk else baseInk.copy(alpha = .38f)
     com.moriafly.salt.ui.Button(onClick, modifier = modifier, enabled = enabled,
         appearance = if (primary) com.moriafly.salt.ui.ButtonAppearance.Filled else com.moriafly.salt.ui.ButtonAppearance.Subtle) {
+        val ink = com.moriafly.salt.ui.LocalContentColor.current
         if (loading) { CircularProgressIndicator(Modifier.size(14.dp), color = ink, strokeWidth = 1.5.dp); Spacer(Modifier.width(7.dp)) }
         else if (glyph != null) { DesktopIcon(glyph, ink); Spacer(Modifier.width(7.dp)) }
-        Text(text, color = ink, maxLines = 1)
+        Text(text, maxLines = 1)
     }
 }
 

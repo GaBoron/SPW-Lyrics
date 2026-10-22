@@ -18,7 +18,7 @@ import dev.gaboron.spwlyrics.integration.workspace.LyricsWorkspaceContent
 
 /** Input belongs to the workspace above the player's reserved area. */
 @Composable
-internal fun HostLyricsPage(workspace: LyricsWorkspace) {
+internal fun HostLyricsPage(workspace: LyricsWorkspace, isDarkTheme: Boolean) {
     val session = workspace.session ?: return
     val focus = remember { FocusRequester() }
     LaunchedEffect(session) { focus.requestFocus() }
@@ -30,7 +30,7 @@ internal fun HostLyricsPage(workspace: LyricsWorkspace) {
         }.focusGroup().focusable().pointerInput(Unit) {
             awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } }
         }) {
-        DesktopTheme {
+        DesktopTheme(isDarkTheme) {
             LyricsWorkspaceContent(session, workspace::dismiss)
         }
     }

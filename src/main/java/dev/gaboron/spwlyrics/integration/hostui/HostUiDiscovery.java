@@ -11,7 +11,8 @@ public final class HostUiDiscovery {
     private static final String CAPTION = "(Lkotlin/jvm/functions/Function0;Ljava/lang/String;Landroidx/compose/ui/Modifier;ZLjava/lang/String;FLkotlin/jvm/functions/Function3;Landroidx/compose/runtime/Composer;II)V";
     public record Site(Method target, String caller) {}
     public record Targets(Site page, Site captionEntry, Method captionControl, Method back,
-                          Method navigate, List<Method> navigation, Field backStack, List<Field> locals) {}
+                          Method navigate, List<Method> navigation, Field backStack, List<Field> locals,
+                          HostThemeDiscovery.Targets theme) {}
 
     public static Targets discover(HostBytecodeIndex index) {
         var bodies = index.methods().stream().toList();
@@ -51,7 +52,8 @@ public final class HostUiDiscovery {
         var locals = content.fields().stream().filter(f -> f.owner().equals(root.method().owner())
             && f.descriptor().equals("Landroidx/compose/runtime/ProvidableCompositionLocal;")).distinct().toList();
         if (locals.isEmpty()) throw new IllegalStateException("Navigation composition locals are missing");
-        return new Targets(page, captionSite, caption.method(), back.method(), navigate.method(), navigation, stack, locals);
+        return new Targets(page, captionSite, caption.method(), back.method(), navigate.method(), navigation, stack, locals,
+            HostThemeDiscovery.discover(index, entry.method().owner()));
     }
 
     private static Site site(HostBytecodeIndex index, Method target) {

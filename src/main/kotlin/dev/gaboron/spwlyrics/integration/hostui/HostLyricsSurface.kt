@@ -29,6 +29,6 @@ internal fun HostLyricsSurface(bridge: HostUiBridge, workspace: LyricsWorkspace)
             bridge.HostPage()
             bridge.capture(currentComposer)
         }
-        HostLyricsPage(workspace)
+        HostLyricsPage(workspace, bridge.isDarkTheme())
     }
 }

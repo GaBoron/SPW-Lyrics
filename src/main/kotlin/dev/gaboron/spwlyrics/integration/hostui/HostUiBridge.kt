@@ -1,7 +1,6 @@
 @file:OptIn(androidx.compose.runtime.InternalComposeApi::class)
 package dev.gaboron.spwlyrics.integration.hostui
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Alignment
@@ -20,6 +19,8 @@ internal class HostUiBridge(val targets: HostUiDiscovery.Targets, private val lo
     private val workspace: LyricsWorkspace) {
     private val caption = method(targets.captionControl())
     private val page = method(targets.page().target())
+    private val themeConfigs = method(targets.theme().configs())
+    private val themeDark = method(targets.theme().dark())
     private val navigate = method(targets.navigate())
     private val stack = field(targets.backStack())
     private val navigatorType = stack.declaringClass
@@ -63,6 +64,9 @@ internal class HostUiBridge(val targets: HostUiDiscovery.Targets, private val lo
     }
 
     @Composable
+    fun isDarkTheme(): Boolean = themeDark.invoke(themeConfigs.invoke(null, currentComposer)) as Boolean
+
+    @Composable
     fun HostPage() {
         page.invoke(null, currentComposer, 0)
     }
@@ -70,7 +74,7 @@ internal class HostUiBridge(val targets: HostUiDiscovery.Targets, private val lo
     @Composable
     fun Entry() {
         val icon: @Composable BoxScope.() -> Unit = {
-            DesktopIcon(DesktopGlyph.Lyrics, if (isSystemInDarkTheme()) Color.White else Color.Black,
+            DesktopIcon(DesktopGlyph.Lyrics, if (isDarkTheme()) Color.White else Color.Black,
                 Modifier.align(Alignment.Center).size(18.dp))
         }
         caption.invoke(null, openPage, "歌词管理", Modifier, true, null, 0f, icon, currentComposer, 0, 32)

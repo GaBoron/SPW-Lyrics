@@ -1,7 +1,6 @@
 package dev.gaboron.spwlyrics.integration.composeui
 
 import androidx.compose.runtime.Composable
-import androidx.compose.foundation.isSystemInDarkTheme
 import com.moriafly.salt.ui.SaltConfigs
 import com.moriafly.salt.ui.SaltTheme
 import androidx.compose.ui.graphics.Color
@@ -15,6 +14,6 @@ internal object DesktopColors {
 }
 
 @Composable
-internal fun DesktopTheme(content: @Composable () -> Unit) {
-    SaltTheme(configs = SaltConfigs.default(isDarkTheme = isSystemInDarkTheme()), content = content)
+internal fun DesktopTheme(isDarkTheme: Boolean, content: @Composable () -> Unit) {
+    SaltTheme(configs = SaltConfigs.default(isDarkTheme = isDarkTheme), content = content)
 }

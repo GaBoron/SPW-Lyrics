@@ -56,7 +56,9 @@ public final class HostBytecodeIndex {
     private static void parse(byte[] bytes, List<Body> bodies, List<Type> types) {
         // Restrict indexing to UI/navigation code, including host classes relocated into Compose.
         var pool = new String(bytes, StandardCharsets.ISO_8859_1);
-        if (!pool.contains("androidx/compose/runtime/Composer") && !pool.contains("androidx/navigation3/runtime/NavBackStack")) return;
+        if (!pool.contains("androidx/compose/runtime/Composer") && !pool.contains("androidx/navigation3/runtime/NavBackStack")
+            && !pool.contains("androidx/compose/runtime/MutableState")
+            && !pool.contains("androidx/compose/runtime/ProvidableCompositionLocal")) return;
         var model = ClassFile.of().parse(bytes);
         var owner = model.thisClass().asInternalName();
         var ownFields = model.fields().stream().map(f -> new Field(owner, f.fieldName().stringValue(), f.fieldType().stringValue())).toList();
