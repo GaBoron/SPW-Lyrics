@@ -28,17 +28,6 @@ internal class HostUiHooks(private val bridge: HostUiBridge, private val workspa
                         }
                     })
             }
-            // Coordinate all native titlebar tool actions, including other plugins' caption buttons.
-            val caption = bridge.targets.captionControl()
-            handles += WorkshopApi.hookRegistrar.hookMethod(caption.owner().replace('/', '.'), caption.name(),
-                bridge.caption.parameterTypes.map { it.name }, object : MethodHook(80) {
-                    override fun before(call: MethodHookParam) {
-                        if (call.args[0] === bridge.openPage) return
-                        @Suppress("UNCHECKED_CAST")
-                        val action = call.args[0] as () -> Unit
-                        call.args[0] = { if (!workspace.requestLeave(action)) action() }
-                    }
-                })
             val page = bridge.targets.page()
             handles += WorkshopApi.hookRegistrar.afterComposable(page.target().owner().replace('/', '.'),
                 page.target().name(), page.caller().replace('/', '.'), parameterTypes = emptyList()) {

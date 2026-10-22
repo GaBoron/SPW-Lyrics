@@ -17,7 +17,7 @@ import java.lang.reflect.Method
 /** Only this boundary translates discovered JVM members to host objects and Compose calls. */
 internal class HostUiBridge(val targets: HostUiDiscovery.Targets, private val loader: ClassLoader,
     private val workspace: LyricsWorkspace) {
-    val caption = method(targets.captionControl())
+    private val caption = method(targets.captionControl())
     private val navigate = method(targets.navigate())
     private val stack = field(targets.backStack())
     private val navigatorType = stack.declaringClass
@@ -25,7 +25,7 @@ internal class HostUiBridge(val targets: HostUiDiscovery.Targets, private val lo
     var replaying = false
         private set
     private var navigator: Any? = null
-    val openPage: () -> Unit = { workspace.open() }
+    private val openPage: () -> Unit = { workspace.open() }
 
     fun method(key: HostBytecodeIndex.Method): Method {
         val signature = MethodType.fromMethodDescriptorString(key.descriptor(), loader)
