@@ -1,7 +1,6 @@
-@file:OptIn(com.xuncorp.spw.workshop.api.UnstableSpwWorkshopApi::class, androidx.compose.runtime.InternalComposeApi::class)
+@file:OptIn(com.xuncorp.spw.workshop.api.UnstableSpwWorkshopApi::class)
 package dev.gaboron.spwlyrics.integration.hostui
 
-import androidx.compose.runtime.currentComposer
 import com.xuncorp.spw.workshop.api.WorkshopApi
 import com.xuncorp.spw.workshop.api.hook.MethodHook
 import com.xuncorp.spw.workshop.api.hook.MethodHookParam
@@ -29,10 +28,9 @@ internal class HostUiHooks(private val bridge: HostUiBridge, private val workspa
                     })
             }
             val page = bridge.targets.page()
-            handles += WorkshopApi.hookRegistrar.afterComposable(page.target().owner().replace('/', '.'),
-                page.target().name(), page.caller().replace('/', '.'), parameterTypes = emptyList()) {
-                bridge.capture(currentComposer)
-                HostLyricsPage(workspace)
+            handles += WorkshopApi.hookRegistrar.replaceComposable(page.target().owner().replace('/', '.'),
+                page.target().name(), page.caller().replace('/', '.'), parameterTypes = emptyList(), priority = 80) {
+                HostLyricsSurface(bridge, workspace)
             }
             val entry = bridge.targets.captionEntry()
             handles += WorkshopApi.hookRegistrar.afterComposable(entry.target().owner().replace('/', '.'),
