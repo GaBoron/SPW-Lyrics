@@ -21,6 +21,10 @@ import dev.gaboron.spwlyrics.provider.LocalLyricsProvider
 import dev.gaboron.spwlyrics.provider.NeteaseMusicProvider
 import dev.gaboron.spwlyrics.provider.ProviderHttpClient
 import dev.gaboron.spwlyrics.provider.QqMusicProvider
+import dev.gaboron.spwlyrics.provider.SodaMusicProvider
+import dev.gaboron.spwlyrics.provider.AppleMusicProvider
+import dev.gaboron.spwlyrics.provider.LrcShareProvider
+import dev.gaboron.spwlyrics.provider.MusicBrainzProvider
 import dev.gaboron.spwlyrics.storage.FileLyricsCache
 import dev.gaboron.spwlyrics.integration.manualui.ManualSearchOperations
 import dev.gaboron.spwlyrics.integration.metadataui.MetadataEditorOperations
@@ -54,6 +58,7 @@ object PluginRuntime {
         val cache = FileLyricsCache(cacheDirectory)
         val delays = FileLyricsDelaySettings(root.resolve("歌词延迟"))
         cacheFolderOpener = CacheFolderOpener(cacheDirectory)
+        settings = PluginSettings(WorkshopApi.manager.createConfigManager(), { coordinator?.selectionChanged() }, ::toastWarning)
         val http = ProviderHttpClient()
         val providers = listOf(
             AmllProvider(
@@ -64,9 +69,13 @@ object PluginRuntime {
             QqMusicProvider(http),
             KugouMusicProvider(http),
             NeteaseMusicProvider(http),
+            SodaMusicProvider(http),
+            AppleMusicProvider(http),
+            LrcShareProvider(http) { settings?.lrcShareApiKey().orEmpty() },
+            MusicBrainzProvider(http),
             LocalLyricsProvider(),
         )
-        val resolver = LyricsResolver(providers)
+        val resolver = LyricsResolver(providers, preferences = { settings?.lyricsPreferences() ?: dev.gaboron.spwlyrics.domain.LyricsPreferences() })
         val refreshBridge = ReflectiveLyricsRefreshBridge()
         val output = LyricsOutputRouter(
             receiver = JmxTtmlReceiver(),
@@ -119,13 +128,13 @@ object PluginRuntime {
             override fun delay(query: TrackQuery) = delays.get(query)
             override fun setDelay(query: TrackQuery, delayMs: Int) =
                 isCurrentTrack(query) && coordinator?.setDelay(query, delayMs) == true
-            override fun editMetadata(query: TrackQuery, document: LyricsDocument) {
-                workspace?.importSearch(query, document)
+            override fun metadata(candidate: LyricsCandidate) = resolver.metadata(candidate)
+            override fun editMetadata(query: TrackQuery, candidate: LyricsCandidate, document: LyricsDocument?) {
+                workspace?.importSearch(query, candidate, document)
             }
         }
         workspace = LyricsWorkspace({ LyricsWorkspaceSession(manualOperations, metadataOperations, batch, describeBatchFailure) }, ::toastWarning)
         hostUi = HostUiIntegration(checkNotNull(workspace), ::toastWarning).also { it.start() }
-        settings = PluginSettings(WorkshopApi.manager.createConfigManager())
     }
 
     fun beforeLoad(mediaItem: PlaybackExtensionPoint.MediaItem): String? =
@@ -157,6 +166,9 @@ object PluginRuntime {
     fun openWorkspace() = workspace?.open(LyricsToolPage.BATCH)
     fun openCacheFolder() {
         if (cacheFolderOpener?.open() != true) toastWarning("无法打开 SPW Lyrics 本地缓存文件夹。")
+    }
+    fun resetLyricsOrder() {
+        toastWarning(if (settings?.resetSelection() == true) "已恢复默认歌词排序。关闭并重新打开设置可查看默认顺序。" else "重置未完成，请重新打开设置后重试。")
     }
 
     @Synchronized

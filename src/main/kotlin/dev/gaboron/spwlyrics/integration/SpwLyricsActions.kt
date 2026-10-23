@@ -15,4 +15,7 @@ object SpwLyricsActions {
 
     @JvmStatic
     fun openCacheFolder() = PluginRuntime.openCacheFolder()
+
+    @JvmStatic
+    fun resetLyricsOrder() = PluginRuntime.resetLyricsOrder()
 }

@@ -9,6 +9,7 @@ import dev.gaboron.spwlyrics.domain.LyricsSource
 import dev.gaboron.spwlyrics.domain.MatchEngine
 import dev.gaboron.spwlyrics.domain.TrackQuery
 import dev.gaboron.spwlyrics.domain.ProviderSearchStatus
+import dev.gaboron.spwlyrics.domain.LyricsPreferences
 import dev.gaboron.spwlyrics.provider.LyricsProvider
 import dev.gaboron.spwlyrics.storage.CachedLyrics
 import java.time.Clock
@@ -17,6 +18,7 @@ import java.util.concurrent.TimeUnit
 data class ResolvedLyrics(
     val candidate: LyricsCandidate,
     val document: LyricsDocument,
+    val selectionKey: String = "",
 )
 
 internal data class FetchedLyrics(
@@ -27,9 +29,9 @@ internal data class FetchedLyrics(
 class LyricsResolver(
     providers: List<LyricsProvider>,
     private val clock: Clock = Clock.systemUTC(),
+    private val preferences: () -> LyricsPreferences = { LyricsPreferences() },
 ) : AutoCloseable {
     private val providers = providers.associateBy(LyricsProvider::source)
-    private val orderedSources = LyricsSource.entries.sortedBy(LyricsSource::priority)
     private val manualCandidateInspector = ManualCandidateInspector()
     private val providerTasks = ProviderTaskPool()
 
@@ -62,7 +64,8 @@ class LyricsResolver(
         onProgress: (LyricsResolutionProgress) -> Unit = {},
         completionDeadlineNanos: Long = Long.MAX_VALUE,
     ): ResolvedLyrics? {
-        val selected = orderedSources.filter { it != LyricsSource.LOCAL }.mapNotNull(providers::get)
+        val order = preferences()
+        val selected = order.sources.filter { it != LyricsSource.LOCAL && it.hasLyrics }.mapNotNull(providers::get)
         onProgress(LyricsResolutionProgress(LyricsResolutionStage.SEARCHING, 0.04, "开始并行搜索 ${selected.size} 个歌词来源"))
         val completed = providerTasks.collectProgressively(
             tasks = selected.map { provider ->
@@ -77,13 +80,13 @@ class LyricsResolver(
             },
             snapshotDeadlineNanos = snapshotDeadlineNanos,
             completionDeadlineNanos = completionDeadlineNanos,
-            snapshotWhen = { results, pending -> hasHighestAvailableSource(results, pending) },
-            stopWhen = { results, pending -> hasUnbeatableKaraokeResult(results, pending) },
+            snapshotWhen = { results, pending -> unbeatable(results, pending, selected, order) },
+            stopWhen = { results, pending -> unbeatable(results, pending, selected, order) },
             onProgress = { results, pending ->
                 val finished = selected.size - pending.size
                 val pendingNames = pending.joinToString("、") { selected[it].source.displayName }
                 val waiting = pendingNames.takeIf(String::isNotBlank)?.let { "；等待：$it" }.orEmpty()
-                val best = LyricsSelectionPolicy.select(results.map(IndexedValue<FetchedLyrics>::value))
+                val best = LyricsSelectionPolicy.select(results.map(IndexedValue<FetchedLyrics>::value), order)
                 val detail = best?.let {
                     "已检查 $finished/${selected.size} 个来源，当前最佳：${it.candidate.source.displayName}$waiting"
                 } ?: "已检查 $finished/${selected.size} 个来源$waiting"
@@ -96,9 +99,9 @@ class LyricsResolver(
                 )
             },
         ) { snapshot ->
-            selectResolved(snapshot)?.let(onSnapshot)
+            selectResolved(snapshot, order)?.let(onSnapshot)
         }
-        val resolved = selectResolved(completed)
+        val resolved = selectResolved(completed, order)
         onProgress(
             LyricsResolutionProgress(
                 LyricsResolutionStage.SELECTING,
@@ -112,11 +115,11 @@ class LyricsResolver(
     fun searchManual(query: TrackQuery, keywords: String, source: LyricsSource?,
         onStatus: (ProviderSearchStatus) -> Unit = {}): List<CandidateScore> {
         val selected = if (source == null) {
-            orderedSources.filter { it != LyricsSource.LOCAL }.mapNotNull(providers::get)
+            preferences().sources.filter { it != LyricsSource.LOCAL }.mapNotNull(providers::get)
         } else {
             listOfNotNull(providers[source])
         }
-        return ManualLyricsSearch(providerTasks, manualCandidateInspector).search(selected, query, keywords, onStatus)
+        return ManualLyricsSearch(providerTasks, manualCandidateInspector, preferences = preferences()).search(selected, query, keywords, onStatus)
     }
 
     fun fetchManual(candidate: LyricsCandidate): ResolvedLyrics? = providers[candidate.source]?.let { provider ->
@@ -128,6 +131,7 @@ class LyricsResolver(
         document = resolved.document,
         encoded = if (resolved.document.rawTtml == null) SpwLyricsEncoder.encode(resolved.document) else null,
         savedAtEpochMs = clock.millis(),
+        selectionKey = resolved.selectionKey,
     )
 
     private fun search(provider: LyricsProvider, query: TrackQuery, keywords: String): List<LyricsCandidate> =
@@ -137,24 +141,23 @@ class LyricsResolver(
         fetched.document.takeIf { it.lines.any { line -> line.text.isNotBlank() } }
             ?.let { ResolvedLyrics(fetched.candidate, it) }
 
-    private fun selectResolved(completed: List<IndexedValue<FetchedLyrics>>): ResolvedLyrics? =
-        LyricsSelectionPolicy.select(completed.map(IndexedValue<FetchedLyrics>::value))?.let(::resolved)
+    fun selectionPreferences(): LyricsPreferences = preferences()
+    fun metadata(candidate: LyricsCandidate): LyricsCandidate = providers[candidate.source]?.metadata(candidate) ?: candidate
+    fun selectionKey(): String = preferences().key
+    fun canReplace(current: LyricsDocument, replacement: LyricsDocument): Boolean = LyricsSelectionPolicy.canReplace(current, replacement, preferences())
+    fun shouldUpgrade(document: LyricsDocument): Boolean = preferences().canImprove(document)
 
-    private fun hasUnbeatableKaraokeResult(
+    private fun selectResolved(completed: List<IndexedValue<FetchedLyrics>>, order: LyricsPreferences): ResolvedLyrics? =
+        LyricsSelectionPolicy.select(completed.map(IndexedValue<FetchedLyrics>::value), order)?.let(::resolved)?.copy(selectionKey = order.key)
+
+    private fun unbeatable(
         completed: List<IndexedValue<FetchedLyrics>>,
         pending: Set<Int>,
+        selected: List<LyricsProvider>,
+        order: LyricsPreferences,
     ): Boolean {
-        val bestKaraoke = completed.filter { it.value.document.quality == LyricsQuality.KARAOKE_SYNCED }
-            .minByOrNull(IndexedValue<FetchedLyrics>::index)
-        return bestKaraoke != null && pending.none { it < bestKaraoke.index }
-    }
-
-    private fun hasHighestAvailableSource(
-        completed: List<IndexedValue<FetchedLyrics>>,
-        pending: Set<Int>,
-    ): Boolean {
-        val bestSource = completed.minByOrNull(IndexedValue<FetchedLyrics>::index) ?: return false
-        return pending.none { it < bestSource.index }
+        val best = LyricsSelectionPolicy.select(completed.map { it.value }, order) ?: return false
+        return pending.none { order.compare(selected[it].source, order.qualities.first(), best.candidate.source, best.document.quality) < 0 }
     }
 
     private fun resolveProvider(

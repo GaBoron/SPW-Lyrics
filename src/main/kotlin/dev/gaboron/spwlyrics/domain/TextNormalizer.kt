@@ -6,7 +6,7 @@ import kotlin.math.max
 
 object TextNormalizer {
     private val versionRegex = Regex(
-        """(?i)(official\s*(video|audio|mv)|lyrics?\s*video|live|现场版?|remix|remaster(?:ed)?|acoustic|cover|instrumental|inst\.?|off\s*vocal|karaoke|伴奏|纯音乐|翻唱|完整版|radio\s*edit|sped\s*up|slowed)""",
+        """(?i)(official\s*(video|audio|mv)|lyrics?\s*video|live|现场版?|remix|remaster(?:ed)?|acoustic|organic\s*version|cover|instrumental|inst\.?|off\s*vocal|karaoke|伴奏|纯音乐|翻唱|完整版|radio\s*edit|sped\s*up|slowed)""",
     )
     private val bracketRegex = Regex("""[\[【(（].*?[\]】)）]""")
     private val punctuationRegex = Regex("""[^\p{L}\p{N}]+""")

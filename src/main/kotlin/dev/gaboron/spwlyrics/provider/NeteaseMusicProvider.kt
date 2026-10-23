@@ -21,6 +21,18 @@ import kotlinx.serialization.json.put
 
 class NeteaseMusicProvider(private val http: ProviderHttp) : LyricsProvider {
     override val source = LyricsSource.NETEASE
+    private val details = MetadataEnrichment()
+
+    override fun metadata(candidate: LyricsCandidate) = details.apply(candidate) {
+        val id = candidate.context["albumId"]?.toLongOrNull()?.takeIf { it > 0 } ?: return@apply emptyMap()
+        val root = providerJson.parseToJsonElement(http.get("https://music.163.com/api/album/$id", HEADERS)) as JsonObject
+        check(root.long("code") == 200L)
+        val album = checkNotNull(root.obj("album"))
+        check(album.long("id") == id)
+        mapOf("album_artist" to CandidateMetadata.names(album.array("artists")).ifEmpty {
+            listOfNotNull(album.obj("artist")?.string("name"))
+        }) + CandidateMetadata.fields("date" to CandidateMetadata.date(album.long("publishTime")))
+    }
 
     override fun search(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> {
         var validResponse = false
@@ -58,6 +70,9 @@ class NeteaseMusicProvider(private val http: ProviderHttp) : LyricsProvider {
                 album = (song.obj("album") ?: song.obj("al"))?.string("name").orEmpty(),
                 durationMs = song.long("duration") ?: song.long("dt"),
                 qualityHint = LyricsQuality.KARAOKE_SYNCED,
+                context = mapOf("albumId" to (song.obj("album") ?: song.obj("al"))?.long("id").toString()),
+                metadata = CandidateMetadata.fields("date" to CandidateMetadata.date(song.long("publishTime") ?: song.obj("album")?.long("publishTime")),
+                    "track_number" to CandidateMetadata.number(song.string("no")), "disc_number" to CandidateMetadata.number(song.string("cd"))),
             )
         }.also { check(songs.isEmpty() || it.isNotEmpty()) { "网易云搜索候选格式无效" } }
     }

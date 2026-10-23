@@ -27,12 +27,12 @@ internal class LyricsWorkspace(private val createSession: () -> LyricsWorkspaceS
         active.select(page ?: active.page)
     }
 
-    fun importSearch(query: TrackQuery, document: LyricsDocument) = onEdt {
+    fun importSearch(query: TrackQuery, candidate: dev.gaboron.spwlyrics.domain.LyricsCandidate, document: LyricsDocument?) = onEdt {
         open()
         session?.let { active ->
             active.select(LyricsToolPage.METADATA, initialize = false)
             if (active.metadata.state.busy) onFailure("元数据正在读写，请完成后重试导入。")
-            else active.metadata.importSearch(query, document)
+            else active.metadata.importSearch(query, candidate, document)
         }
     }
 

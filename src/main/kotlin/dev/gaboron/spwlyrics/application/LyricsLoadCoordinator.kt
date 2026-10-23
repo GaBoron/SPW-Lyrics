@@ -41,6 +41,13 @@ class LyricsLoadCoordinator(
 
     fun currentQuery(): TrackQuery? = current.get()
 
+    fun selectionChanged() {
+        inFlight.values.forEach { it.cancel(true) }; inFlight.clear()
+        qualityUpgradeInFlight.values.forEach { it.cancel(true) }; qualityUpgradeInFlight.clear()
+        activeAutomaticLoads.clear()
+        current.get()?.takeUnless(::automaticWasSuperseded)?.let(::refreshOrNotify)
+    }
+
     fun onLoad(
         query: TrackQuery,
         phase: LyricsLoadPhase,
@@ -60,7 +67,7 @@ class LyricsLoadCoordinator(
         if (override?.local == true) return null
         val automaticLoadAllowed = replacementPolicy.allowsAutomaticLoad(phase)
         if (override?.candidate == null && !automaticLoadAllowed) return null
-        cache.getLyrics(query)?.let { cached ->
+        cache.getLyrics(query)?.takeIf { override?.candidate != null || it.selectionKey == resolver.selectionKey() }?.let { cached ->
             notifiedFailures.remove(query.key)
             if (override?.candidate == null && !activeAutomaticLoads.contains(query.key)) {
                 startQualityUpgradeIfNeeded(query, resolvedFromCache(query, cached))
@@ -175,8 +182,9 @@ class LyricsLoadCoordinator(
 
     private fun applyAutomaticResult(query: TrackQuery, result: ResolvedLyrics) {
         if (automaticWasSuperseded(query)) return
-        val cached = cache.getLyrics(query)
-        if (cached != null && !LyricsSelectionPolicy.canReplace(cached.document, result.document)) return
+        if (result.selectionKey != resolver.selectionKey()) return
+        val cached = cache.getLyrics(query)?.takeIf { it.selectionKey == result.selectionKey }
+        if (cached != null && !resolver.canReplace(cached.document, result.document)) return
         if (cached?.document == result.document) return
         cache.putLyrics(query, resolver.toCache(result))
         notifiedFailures.remove(query.key)
@@ -187,7 +195,7 @@ class LyricsLoadCoordinator(
     }
 
     private fun startQualityUpgradeIfNeeded(query: TrackQuery, resolved: ResolvedLyrics) {
-        if (!LyricsQualityUpgradePolicy.shouldUpgrade(resolved.document)) return
+        if (!resolver.shouldUpgrade(resolved.document)) return
         if (qualityUpgradeInFlight.containsKey(query.key) || !qualityUpgradeAttempts.allow(query.key, force = false)) return
         val future = CompletableFuture.runAsync({ upgradeQualityAndRefresh(query, resolved) }, executor)
         val previous = qualityUpgradeInFlight.putIfAbsent(query.key, future)
@@ -204,7 +212,7 @@ class LyricsLoadCoordinator(
         if (automaticWasSuperseded(query)) return
         val cached = cache.getLyrics(query) ?: return
         if (cached.document != fallback.document) return
-        if (upgraded != null && LyricsSelectionPolicy.canReplace(cached.document, upgraded.document)) {
+        if (upgraded != null && resolver.canReplace(cached.document, upgraded.document)) {
             applyAutomaticResult(query, upgraded)
         }
     }
@@ -232,7 +240,7 @@ class LyricsLoadCoordinator(
 
     private fun notifyAutomaticFailure(query: TrackQuery) {
         if (current.get()?.key == query.key && notifiedFailures.add(query.key)) {
-            notify("自动加载歌词失败；可在插件设置中打开手动搜索，或使用 SPW 中配置的歌词搜索快捷键。")
+            notify("自动加载歌词失败；可从播放器“更多 → 手动搜索歌词”重新搜索。")
         }
     }
 

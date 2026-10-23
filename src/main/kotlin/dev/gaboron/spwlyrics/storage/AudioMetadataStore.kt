@@ -64,7 +64,12 @@ internal class FileAudioMetadataStore : AudioMetadataStore {
             changed.forEach { field ->
                 val value = edited[field]
                 if (value.isEmpty()) tag.deleteField(field.key())
-                else tag.setField(field.key(), *value.split('\n').toTypedArray())
+                else {
+                    val values = value.split('\n')
+                    // Most jaudiotagger formats consume only the first vararg in setField.
+                    tag.setField(field.key(), values.first())
+                    values.drop(1).forEach { tag.addField(field.key(), it) }
+                }
             }
             val lyricsChanged = edited.lyrics != original.metadata.lyrics
             if (lyricsChanged) EmbeddedLyricsTags.write(tag, edited.lyrics)
@@ -110,6 +115,9 @@ internal class FileAudioMetadataStore : AudioMetadataStore {
         AudioMetadataField.TRACK -> FieldKey.TRACK
         AudioMetadataField.DISC -> FieldKey.DISC_NO
         AudioMetadataField.COMPOSER -> FieldKey.COMPOSER
+        AudioMetadataField.LYRICIST -> FieldKey.LYRICIST
+        AudioMetadataField.LANGUAGE -> FieldKey.LANGUAGE
+        AudioMetadataField.COPYRIGHT -> FieldKey.COPYRIGHT
         AudioMetadataField.COMMENT -> FieldKey.COMMENT
     }
 

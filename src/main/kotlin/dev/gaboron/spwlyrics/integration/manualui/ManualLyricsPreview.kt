@@ -19,7 +19,9 @@ internal fun ManualLyricsPreview(state: ManualSearchState, modifier: Modifier) {
             when (page) {
                 0 -> EmptyWorkspace("选择一份歌词预览", "在搜索结果中选择歌曲", glyph = DesktopGlyph.Lyrics)
                 1 -> EmptyWorkspace("正在加载歌词", loading = true)
-                2 -> EmptyWorkspace("这份歌词没有可预览内容", glyph = DesktopGlyph.Lyrics)
+                2 -> if (state.selected?.candidate?.source?.hasLyrics == false) {
+                    EmptyWorkspace("此来源提供歌曲元数据", "点击“导入元数据”查看并选择字段", glyph = DesktopGlyph.Lyrics)
+                } else EmptyWorkspace("这份歌词没有可预览内容", "仍可点击“导入元数据”读取歌曲信息", glyph = DesktopGlyph.Lyrics)
                 else -> LyricsDocumentPreview(lines, state.previewMainAgent, state.selected, Modifier.fillMaxSize())
             }
         }

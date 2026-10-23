@@ -10,10 +10,11 @@ data class CandidateScore(
     val albumScore: Double?,
     val durationScore: Double?,
     val versionConflict: Boolean,
+    val artistConflict: Boolean = false,
 ) {
     val passesAutomaticGate: Boolean
         get() {
-            if (versionConflict) return false
+            if (versionConflict || artistConflict) return false
             if (durationScore != null && durationScore < MatchEngine.MIN_DURATION) return false
             val titleAndArtist = titleScore >= MatchEngine.MIN_TITLE &&
                 artistScore != null && artistScore >= MatchEngine.MIN_ARTIST &&
@@ -66,11 +67,14 @@ object MatchEngine {
         val totalWeight = components.sumOf { it.second }
         val raw = components.sumOf { (value, weight) -> value * weight } / totalWeight
 
-        val localVersions = TextNormalizer.versionTokens(query.title)
-        val remoteVersions = TextNormalizer.versionTokens(candidate.title)
+        val localVersions = TextNormalizer.versionTokens(query.title) + TextNormalizer.versionTokens(query.album)
+        val remoteVersions = TextNormalizer.versionTokens(candidate.title) + TextNormalizer.versionTokens(candidate.album)
         val conflict = localVersions != remoteVersions && (localVersions.isNotEmpty() || remoteVersions.isNotEmpty())
 
-        return CandidateScore(candidate, if (conflict) raw - 0.25 else raw, title, artist, album, duration, conflict)
+        val artistConflict = query.artists.size >= 2 && candidate.artists.size >= 2 && query.artists.any { local ->
+            candidate.artists.none { remote -> TextNormalizer.similarity(local, remote) >= MIN_ARTIST }
+        }
+        return CandidateScore(candidate, if (conflict || artistConflict) raw - 0.25 else raw, title, artist, album, duration, conflict, artistConflict)
     }
 
     fun decide(

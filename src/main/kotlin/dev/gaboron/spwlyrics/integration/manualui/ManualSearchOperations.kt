@@ -19,5 +19,6 @@ internal interface ManualSearchOperations {
     fun useAutomatic(query: TrackQuery): Boolean
     fun delay(query: TrackQuery): Int
     fun setDelay(query: TrackQuery, delayMs: Int): Boolean
-    fun editMetadata(query: TrackQuery, document: LyricsDocument)
+    fun metadata(candidate: LyricsCandidate): LyricsCandidate
+    fun editMetadata(query: TrackQuery, candidate: LyricsCandidate, document: LyricsDocument?)
 }

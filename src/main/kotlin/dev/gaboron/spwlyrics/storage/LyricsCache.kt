@@ -25,6 +25,7 @@ data class CachedLyrics(
     val savedAtEpochMs: Long,
     val modelVersion: Int = LYRICS_CACHE_MODEL_VERSION,
     val encoderVersion: Int = SpwLyricsEncoder.VERSION,
+    val selectionKey: String = "",
 )
 
 @Serializable

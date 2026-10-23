@@ -105,6 +105,7 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
     fun apply() {
         val query = state.query ?: return
         val candidate = state.selected?.candidate ?: return
+        if (!candidate.source.hasLyrics || state.document == null || state.busy) return
         mutate("歌词已应用并保存为当前歌曲的手动选择。", action = { operations.apply(query, candidate) })
     }
 
@@ -131,8 +132,14 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
     fun editMetadata() {
         if (state.busy) return
         val query = state.query ?: return
-        val document = state.document ?: return
-        operations.editMetadata(query, document)
+        val candidate = state.selected?.candidate ?: return
+        val document = state.document
+        val generation = searchGeneration
+        state = state.copy(mutating = true, error = false, status = "正在获取在线元数据…")
+        submit({ searchGeneration == generation }, { operations.metadata(candidate) }, { enriched ->
+            state = state.copy(mutating = false, status = "在线元数据已读取。")
+            operations.editMetadata(query, enriched, document)
+        }, { state = state.copy(mutating = false); reportFailure(it) })
     }
 
     private fun mutate(message: String, action: () -> Boolean, success: () -> Unit = {}) {

@@ -56,4 +56,6 @@ data class LyricsCandidate(
     val qualityHint: LyricsQuality? = null,
     val externalIds: Map<String, String> = emptyMap(),
     val context: Map<String, String> = emptyMap(),
+    val metadata: Map<String, List<String>> = emptyMap(),
+    val metadataNotice: String? = null,
 )

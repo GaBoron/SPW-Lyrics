@@ -8,7 +8,7 @@ import dev.gaboron.spwlyrics.domain.MatchEngine
 internal object PreferredSourceMatchPolicy {
     fun accepts(candidate: CandidateScore): Boolean {
         if (candidate.passesAutomaticGate) return true
-        if (candidate.versionConflict) return false
+        if (candidate.versionConflict || candidate.artistConflict) return false
         if (candidate.durationScore != null && candidate.durationScore < MatchEngine.MIN_DURATION) return false
         return when (candidate.candidate.source) {
             LyricsSource.AMLL -> candidate.titleScore >= 0.76 &&

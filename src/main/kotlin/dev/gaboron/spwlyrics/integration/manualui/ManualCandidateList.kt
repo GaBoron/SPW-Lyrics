@@ -20,9 +20,9 @@ import dev.gaboron.spwlyrics.integration.workspace.*
 
 @Composable
 internal fun ManualCandidateList(state: ManualSearchState, select: (CandidateScore) -> Unit, modifier: Modifier) {
-    var sort by rememberSaveable { mutableStateOf(CandidateColumn.SCORE) }
+    var sort by rememberSaveable { mutableStateOf(CandidateColumn.PREFERENCE) }
     val rows = remember(state.candidates, sort) {
-        state.candidates.sortedWith(if (sort == CandidateColumn.SCORE) sort.comparator().reversed() else sort.comparator())
+        if (sort == CandidateColumn.PREFERENCE) state.candidates else state.candidates.sortedWith(if (sort == CandidateColumn.SCORE) sort.comparator().reversed() else sort.comparator())
     }
     val list = rememberLazyListState()
     val focus = remember { FocusRequester() }

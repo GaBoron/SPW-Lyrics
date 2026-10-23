@@ -176,14 +176,30 @@ internal class MetadataEditorController(
         })
     }
 
-    fun importSearch(query: TrackQuery, document: LyricsDocument) = requestDiscard {
+    fun importSearch(query: TrackQuery, candidate: dev.gaboron.spwlyrics.domain.LyricsCandidate, document: LyricsDocument?) = requestDiscard {
         val format = state.format
-        run({ store.read(Path.of(query.path)) to MetadataLyricsExport.encode(document, format) }, { (snapshot, text) ->
+        run({ store.read(Path.of(query.path)) to document?.let { MetadataLyricsExport.encode(it, format) } }, { (snapshot, text) ->
             loaded(snapshot)
-            lyrics(text)
-            state = state.copy(format = format, sourceDocument = document,
-                status = "已导入搜索结果并转换为 ${format.label}。请核对顶部文件路径和歌词，再写入歌曲文件。")
+            if (text != null) lyrics(text)
+            state = state.copy(format = format, sourceDocument = document, onlineImport = dev.gaboron.spwlyrics.domain.OnlineMetadataImport.from(candidate),
+                status = "已读取在线信息。请在左侧勾选字段并应用到草稿；核对后点击“写入歌曲文件”。")
         })
+    }
+
+    fun selectImport(field: AudioMetadataField, selected: Boolean) {
+        val pending = state.onlineImport ?: return
+        if (!state.busy) state = state.copy(onlineImport = pending.copy(selected = if (selected) pending.selected + field else pending.selected - field))
+    }
+
+    fun importMode(fillMissing: Boolean) {
+        if (!state.busy) state = state.copy(onlineImport = state.onlineImport?.copy(fillMissing = fillMissing))
+    }
+
+    fun applyImport() {
+        val pending = state.onlineImport ?: return
+        if (state.busy || state.loaded == null) return
+        state = state.copy(draft = pending.apply(state.draft), error = false,
+            status = "所选字段已应用到草稿。请核对后点击“写入歌曲文件”。")
     }
 
     fun openSearch() {

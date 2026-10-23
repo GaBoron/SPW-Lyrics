@@ -11,6 +11,9 @@ import dev.gaboron.spwlyrics.domain.TrackQuery
 class QqMusicProvider(private val http: ProviderHttp) : LyricsProvider, AutoCloseable {
     override val source = LyricsSource.QQ
     private val searchClient = QqSearchClient(http)
+    private val details = QqMetadataClient(http)
+
+    override fun metadata(candidate: LyricsCandidate) = details.load(candidate)
 
     override fun search(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> =
         searchClient.search(keywords, limit)

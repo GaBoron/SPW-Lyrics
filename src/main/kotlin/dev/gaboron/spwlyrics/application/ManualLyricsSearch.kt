@@ -11,6 +11,7 @@ internal class ManualLyricsSearch(
     private val tasks: ProviderTaskPool,
     private val inspector: ManualCandidateInspector,
     private val timeoutMillis: Long = 6_000,
+    private val preferences: LyricsPreferences = LyricsPreferences(),
 ) {
     fun search(providers: List<LyricsProvider>, query: TrackQuery, keywords: String,
         onStatus: (ProviderSearchStatus) -> Unit): List<CandidateScore> {
@@ -34,7 +35,9 @@ internal class ManualLyricsSearch(
         }
         val requests = results.flatMap { result -> result.value.map { ManualCandidateRequest(providers[result.index], it) } }
         return inspector.inspect(requests).map { MatchEngine.score(query, it) }.sortedWith(
-            compareByDescending<CandidateScore> { it.candidate.qualityHint?.rank ?: -1 }
-                .thenBy { it.candidate.source.priority }.thenByDescending(CandidateScore::score))
+            Comparator<CandidateScore> { left, right ->
+                preferences.compare(left.candidate.source, left.candidate.qualityHint ?: LyricsQuality.PLAIN,
+                    right.candidate.source, right.candidate.qualityHint ?: LyricsQuality.PLAIN)
+            }.thenByDescending(CandidateScore::score))
     }
 }

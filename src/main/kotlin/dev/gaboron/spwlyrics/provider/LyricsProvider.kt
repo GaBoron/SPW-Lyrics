@@ -20,6 +20,7 @@ interface LyricsProvider {
                 if (it.isEmpty()) "请求成功，没有匹配候选。" else "请求成功，找到 ${it.size} 个候选。"))
         }
     fun fetch(candidate: LyricsCandidate): LyricsDocument?
+    fun metadata(candidate: LyricsCandidate): LyricsCandidate = candidate
 }
 
 class LocalLyricsProvider : LyricsProvider {
