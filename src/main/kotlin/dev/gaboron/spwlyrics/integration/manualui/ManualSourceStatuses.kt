@@ -19,7 +19,7 @@ internal fun ManualSourceStatuses(statuses: Map<LyricsSource, ProviderSearchStat
     FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         statuses.values.sortedBy { it.source.priority }.forEach { status ->
             val color = when (status.phase) {
-                ProviderSearchPhase.NOT_CHECKED -> DesktopColors.Muted
+                ProviderSearchPhase.NOT_CHECKED, ProviderSearchPhase.NOT_CONFIGURED -> DesktopColors.Muted
                 ProviderSearchPhase.SEARCHING -> DesktopColors.Accent
                 ProviderSearchPhase.AVAILABLE -> Color(0xFF3C9B66)
                 ProviderSearchPhase.FAILED -> DesktopColors.Error

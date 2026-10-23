@@ -8,6 +8,9 @@ import kotlinx.serialization.json.JsonObject
 /** Uses the user's own API key and a catalog-issued session; no other application's key is bundled. */
 class LrcShareProvider(private val http: ProviderHttp, private val apiKey: () -> String) : LyricsProvider {
     override val source = LyricsSource.LRCSHARE
+    override fun configurationStatus(): ProviderSearchStatus? = if (apiKey().isBlank()) {
+        ProviderSearchStatus(source, ProviderSearchPhase.NOT_CONFIGURED, "未配置 API Key，请在插件设置填写 LrcShare API Key。")
+    } else null
     private val details = MetadataEnrichment()
     private var session = ""
     private var sessionKey = ""

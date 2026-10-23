@@ -14,9 +14,11 @@ import javax.net.ssl.SSLException
 internal object ProviderSearchFailure {
     fun status(source: LyricsSource, error: Throwable): ProviderSearchStatus {
         val causes = generateSequence(error) { it.cause }.take(12).toList()
+        causes.filterIsInstance<ProviderNotConfiguredException>().firstOrNull()?.let {
+            return ProviderSearchStatus(source, ProviderSearchPhase.NOT_CONFIGURED, it.message.orEmpty())
+        }
         val timeout = causes.any { it is SocketTimeoutException || it is HttpTimeoutException || it is TimeoutException }
         val detail = when {
-            causes.any { it is ProviderNotConfiguredException } -> causes.filterIsInstance<ProviderNotConfiguredException>().first().message.orEmpty()
             timeout -> "请求超时，请稍后重试。"
             causes.any { it is SSLException } -> "TLS 握手失败，请检查网络或代理。"
             causes.any { it is UnknownHostException } -> "域名解析失败，请检查网络。"

@@ -9,6 +9,8 @@ import dev.gaboron.spwlyrics.domain.ProviderSearchPhase
 
 interface LyricsProvider {
     val source: LyricsSource
+    /** Local configuration only; this check must never wait for network work. */
+    fun configurationStatus(): ProviderSearchStatus? = null
     fun automaticSearchQueries(query: TrackQuery): List<String> = query.searchQueries()
     fun search(query: TrackQuery, keywords: String, limit: Int = 20): List<LyricsCandidate>
     fun searchManual(query: TrackQuery, keywords: String, limit: Int = 20): List<LyricsCandidate> =
