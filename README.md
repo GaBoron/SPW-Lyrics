@@ -34,7 +34,7 @@ SPW Lyrics 是 [Salt Player for Windows（SPW）](https://github.com/Moriafly/SP
 
 Windows 和 Linux 使用同一个 `.spmod` 安装包。安装包包含 Salt UI 等插件依赖，界面复用 SPW 自带的 Compose/Skiko 和 JVM，普通用户不需要另外安装运行时。
 
-自 `2.0.0` 起已取消独立工具窗口，歌词管理需要“类变换”权限及主窗口 Hook 接入成功。动态发现不能保证适应宿主结构变化；Linux 主窗口嵌入尚未实机验证。
+自 `2.0.0` 起已取消独立工具窗口，歌词管理需要“类变换”权限及主窗口 Hook 接入成功。动态发现不能保证适应宿主结构变化。
 
 ## 使用
 
