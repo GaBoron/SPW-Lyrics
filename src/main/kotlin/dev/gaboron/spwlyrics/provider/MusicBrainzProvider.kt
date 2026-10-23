@@ -13,7 +13,7 @@ class MusicBrainzProvider(private val http: ProviderHttp) : LyricsProvider {
         if (pause > 0) Thread.sleep(pause)
         lastRequest = System.currentTimeMillis()
         return providerJson.parseToJsonElement(http.get("https://musicbrainz.org/ws/2/$path", mapOf(
-            "Accept" to "application/json", "User-Agent" to "SPW-Lyrics/2.0.0 (https://github.com/GaBoron/SPW-Lyrics)"))) as JsonObject
+            "Accept" to "application/json", "User-Agent" to "SPW-Lyrics/3.0.0 (https://github.com/GaBoron/SPW-Lyrics)"))) as JsonObject
     }
     override fun search(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> {
         val phrase = keywords.replace("\\", "\\\\").replace("\"", "\\\"")
