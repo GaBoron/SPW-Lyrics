@@ -10,8 +10,8 @@ import javax.xml.XMLConstants
 internal object TtmlEditCodec {
     private const val TT = "http://www.w3.org/ns/ttml"
     private const val TTM = "http://www.w3.org/ns/ttml#metadata"
-    private val translations = setOf("translation", "x-translation")
-    private val romanizations = setOf("romanization", "transliteration", "x-roman")
+    private val translations = TtmlSecondaryText.TRANSLATIONS
+    private val romanizations = TtmlSecondaryText.ROMANIZATIONS
     private val backgrounds = setOf("background", "x-bg")
 
     fun open(document: LyricsDocument): EditableLyrics {
@@ -21,6 +21,7 @@ internal object TtmlEditCodec {
 
     fun openRaw(raw: String): EditableLyrics {
         val xml = TtmlXmlDocument.parse(raw)
+        val secondary = TtmlSecondaryText(xml)
         val rows = mutableListOf<EditableLyricLine>()
         fun row(element: Element) {
             val wordNodes = mutableListOf<Element>()
@@ -37,8 +38,8 @@ internal object TtmlEditCodec {
                 text, generateSequence(element as Node?) { it.parentNode }.filterIsInstance<Element>()
                     .map { it.attribute("agent") }.firstOrNull(String::isNotBlank).orEmpty(),
                 element.role() in backgrounds,
-                element.elements().firstOrNull { it.role() in translations }?.textContent.orEmpty(),
-                element.elements().firstOrNull { it.role() in romanizations }?.textContent.orEmpty(),
+                secondary.read(element, translations),
+                secondary.read(element, romanizations),
                 wordNodes.map { word -> EditableLyricWord(word.path(), LyricEditTime.format(word.time("begin")),
                     LyricEditTime.format(word.endTime()), word.lyricText(trim = false), word.elements().isNotEmpty()) })
         }
@@ -59,6 +60,7 @@ internal object TtmlEditCodec {
     fun apply(base: EditableLyrics, edits: Map<Int, EditableLyricLine>,
         transform: (Document, Map<Int, Element>) -> Unit = { _, _ -> }): String {
         val xml = TtmlXmlDocument.parse(base.raw)
+        val secondary = TtmlSecondaryText(xml)
         xml.documentElement.setAttributeNS(XMLConstants.XMLNS_ATTRIBUTE_NS_URI, "xmlns:ttm", TTM)
         val targets = base.lines.associate { it.id to resolve(xml.documentElement, it.path) }.toMutableMap()
         val wordTargets = base.lines.flatMap { it.words }.associate { it.path to resolve(xml.documentElement, it.path) }
@@ -128,20 +130,13 @@ internal object TtmlEditCodec {
                     target.textContent = word.text
                 }
             }
-            element.secondary(translations, "x-translation", original.translation, edited.translation)
-            element.secondary(romanizations, "x-roman", original.romanization, edited.romanization)
+            secondary.write(element, translations, "x-translation", original.translation, edited.translation)
+            secondary.write(element, romanizations, "x-roman", original.romanization, edited.romanization)
         }
         transform(xml, targets)
         return TtmlXmlDocument.write(xml)
     }
 
-    private fun Element.secondary(roles: Set<String>, role: String, before: String, after: String) {
-        if (before == after) return
-        val existing = elements().firstOrNull { it.role() in roles }
-        if (after.isEmpty()) { existing?.let(::removeChild); return }
-        val target = existing ?: ownerDocument.createElementNS(TT, "span").also { it.setAttributeNS(TTM, "ttm:role", role); appendChild(it) }
-        target.textContent = after
-    }
     private fun Element.setTime(name: String, time: Long?) {
         if (time == null) removeLocalAttribute(name) else setAttribute(name, LyricEditTime.format(time))
     }

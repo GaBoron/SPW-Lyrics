@@ -63,8 +63,9 @@ class LyricsOutputRouter(
             if (selection != expected) {
                 selection = expected
                 revision++
-                delivery = if (document.rawTtml == null) Delivery.FALLBACK else Delivery.PENDING
-                fallback = if (delayMs == 0) encoded else null
+                val empty = document.isInstrumental || document.lines.isEmpty()
+                delivery = if (empty || document.rawTtml == null) Delivery.FALLBACK else Delivery.PENDING
+                fallback = if (empty) "" else if (delayMs == 0) encoded else null
                 worker.execute(::reconcileSafely)
             }
         }
@@ -107,7 +108,7 @@ class LyricsOutputRouter(
             if (closed || revision != expectedRevision) return
             if (processedRevision == expectedRevision && receiverState == state) return
         }
-        val raw = selected.document.rawTtml
+        val raw = selected.document.rawTtml?.takeUnless { selected.document.isInstrumental || selected.document.lines.isEmpty() }
         val accepted = raw != null && state != null && runCatching {
             receiver.submit(selected.query, raw, selected.delayMs.toLong())
         }.getOrDefault(false)

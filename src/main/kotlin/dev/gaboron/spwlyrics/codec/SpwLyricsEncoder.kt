@@ -7,9 +7,10 @@ import dev.gaboron.spwlyrics.domain.LyricsQuality
 import kotlin.math.max
 
 object SpwLyricsEncoder {
-    const val VERSION = 8
+    const val VERSION = 9
 
     fun encode(source: LyricsDocument, delayMs: Int = 0): String {
+        if (source.isInstrumental) return ""
         val document = LyricsTimingOffset.shift(source, delayMs)
         if (document.lines.isEmpty()) return ""
         if (document.quality == LyricsQuality.PLAIN) {
@@ -33,7 +34,7 @@ object SpwLyricsEncoder {
 
                     val secondary = line.translation?.takeIf(String::isNotBlank)
                         ?: line.romanization?.takeIf(String::isNotBlank)
-                    secondary?.let { add(timestamp(start) + it) }
+                    secondary?.lineSequence()?.filter(String::isNotBlank)?.forEach { add(timestamp(start) + it) }
                 }
         }.joinToString("\n")
     }

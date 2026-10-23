@@ -220,7 +220,7 @@ internal class MetadataEditorController(
         val original = state.loaded ?: return
         val edited = state.draft
         run({
-            if (edited.lyrics != original.metadata.lyrics) MetadataLyricsImport.preview(edited.lyrics)
+            if (edited.lyrics.isNotBlank() && edited.lyrics != original.metadata.lyrics) MetadataLyricsImport.preview(edited.lyrics)
             store.save(original, edited)
         }, { saved ->
             loaded(saved.snapshot)

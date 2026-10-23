@@ -251,6 +251,7 @@ class LyricsLoadCoordinator(
     private fun render(query: TrackQuery, document: LyricsDocument, encoded: String? = null): String? {
         val delay = delays?.get(query) ?: 0
         if (output != null) return output.render(query, document, delay, encoded)
+        if (document.isInstrumental) return ""
         return if (delay == 0 && encoded != null) encoded else SpwLyricsEncoder.encode(document, delay)
     }
 

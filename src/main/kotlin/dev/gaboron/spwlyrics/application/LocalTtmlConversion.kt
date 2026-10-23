@@ -9,8 +9,7 @@ internal class LocalTtmlConversion(private val codec: TtmlCodec = TtmlCodec()) {
     fun parse(raw: String): LyricsDocument? {
         if (raw.length > MAX_TTML_CHARS || !looksLikeTtml(raw)) return null
         return runCatching {
-            val document = codec.parse(raw, LyricsSource.LOCAL)
-            document.takeIf { it.lines.isNotEmpty() }
+            codec.parse(raw, LyricsSource.LOCAL)
         }.getOrNull()
     }
 

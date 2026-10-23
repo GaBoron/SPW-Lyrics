@@ -1,6 +1,6 @@
 package dev.gaboron.spwlyrics.integration
 
-import dev.gaboron.spwlyrics.application.LocalTtmlConversion
+import dev.gaboron.spwlyrics.application.LocalLyricsConversion
 import dev.gaboron.spwlyrics.domain.LyricsDocument
 import java.nio.file.Files
 import java.nio.file.Path
@@ -9,7 +9,7 @@ import dev.gaboron.spwlyrics.storage.EmbeddedLyricsTags
 
 /** Reads local content in the playback callback without involving online providers. */
 internal class LocalTtmlLyricsLoader(
-    private val conversion: LocalTtmlConversion = LocalTtmlConversion(),
+    private val conversion: LocalLyricsConversion = LocalLyricsConversion(),
 ) {
     fun load(audioPath: String): LyricsDocument? = runCatching {
         val audio = Path.of(audioPath)

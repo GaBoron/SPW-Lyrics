@@ -47,6 +47,9 @@ data class LyricsDocument(
     val metadata: Map<String, List<String>> = emptyMap(),
     val rawTtml: String? = null,
 ) {
+    val isInstrumental: Boolean
+        get() = InstrumentalLyricsClassifier.matches(lines)
+
     val quality: LyricsQuality
         get() = LyricsGranularityClassifier.classify(lines)
 }

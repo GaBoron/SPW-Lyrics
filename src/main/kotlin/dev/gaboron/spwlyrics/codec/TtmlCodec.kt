@@ -23,6 +23,9 @@ class TtmlCodec : LyricCodec {
             setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "")
         }
         val document = factory.newDocumentBuilder().parse(InputSource(StringReader(raw)))
+        require(document.documentElement.localName == "tt" &&
+            document.documentElement.namespaceURI in setOf(null, "", "http://www.w3.org/ns/ttml")) { "XML 歌词必须使用 TTML 的 tt 根元素。" }
+        val secondary = TtmlSecondaryText(document)
         val paragraphs = document.getElementsByTagNameNS("*", "p")
         val primary = mutableListOf<LyricLine>()
         val backgrounds = mutableListOf<LyricLine>()
@@ -31,7 +34,7 @@ class TtmlCodec : LyricCodec {
 
         for (index in 0 until paragraphs.length) {
             val paragraph = paragraphs.item(index) as? Element ?: continue
-            val parsed = parseParagraph(paragraph)
+            val parsed = parseParagraph(paragraph, secondary)
             when (paragraph.role()) {
                 "translation", "x-translation" -> parsed.main?.let(translations::add)
                 "romanization", "transliteration", "x-roman" -> parsed.main?.let(romanizations::add)
@@ -55,7 +58,7 @@ class TtmlCodec : LyricCodec {
         )
     }
 
-    private fun parseParagraph(element: Element): ParsedParagraph {
+    private fun parseParagraph(element: Element, secondary: TtmlSecondaryText): ParsedParagraph {
         val backgrounds = mutableListOf<LyricLine>()
         val paragraphIsBackground = element.role() in BACKGROUND_ROLES
         val line = parseLine(
@@ -63,6 +66,7 @@ class TtmlCodec : LyricCodec {
             background = paragraphIsBackground,
             inheritedAgent = element.attribute("agent").takeIf(String::isNotBlank),
             backgrounds = backgrounds,
+            secondary = secondary,
         )
         return if (paragraphIsBackground) {
             ParsedParagraph(main = null, backgrounds = listOfNotNull(line) + backgrounds)
@@ -76,13 +80,12 @@ class TtmlCodec : LyricCodec {
         background: Boolean,
         inheritedAgent: String?,
         backgrounds: MutableList<LyricLine>,
+        secondary: TtmlSecondaryText,
     ): LyricLine? {
         val lineStart = parseTime(element.attribute("begin"))
         val lineEnd = parseEnd(element, lineStart)
         val words = mutableListOf<LyricWord>()
         val text = StringBuilder()
-        var translation: String? = null
-        var romanization: String? = null
         val agent = element.attribute("agent").takeIf(String::isNotBlank) ?: inheritedAgent
 
         fun walk(node: Node) {
@@ -96,16 +99,14 @@ class TtmlCodec : LyricCodec {
                     }
                     when (child.role()) {
                         "translation", "x-translation" -> {
-                            translation = child.textContent.orEmpty().trim().takeIf(String::isNotBlank)
                             return
                         }
                         "romanization", "transliteration", "x-roman" -> {
-                            romanization = child.textContent.orEmpty().trim().takeIf(String::isNotBlank)
                             return
                         }
                     }
                     if (child.role() in BACKGROUND_ROLES) {
-                        parseLine(child, background = true, inheritedAgent = agent, backgrounds = backgrounds)
+                        parseLine(child, background = true, inheritedAgent = agent, backgrounds = backgrounds, secondary = secondary)
                             ?.let(backgrounds::add)
                         return
                     }
@@ -132,8 +133,8 @@ class TtmlCodec : LyricCodec {
             endMs = lineEnd ?: words.lastOrNull()?.endMs,
             text = normalizedText,
             words = words.sortedBy(LyricWord::startMs),
-            translation = translation,
-            romanization = romanization,
+            translation = secondary.read(element, TtmlSecondaryText.TRANSLATIONS).takeIf(String::isNotBlank),
+            romanization = secondary.read(element, TtmlSecondaryText.ROMANIZATIONS).takeIf(String::isNotBlank),
             background = background,
             agent = agent,
         )

@@ -32,7 +32,7 @@ internal object MetadataLyricsImport {
             require(TT_ROOT.containsMatchIn(root)) { "XML 歌词必须使用 TTML 的 tt 根元素。" }
             TtmlCodec().parse(raw, LyricsSource.LOCAL)
         } else MetadataTimedLyricsReader.parse(raw)
-        require(document.lines.isNotEmpty()) { "未找到歌词正文，请检查 TTML、LRC、增强 LRC 或 SPL 格式。" }
+        require(document.rawTtml != null || document.lines.isNotEmpty()) { "未找到歌词正文，请检查 TTML、LRC、增强 LRC 或 SPL 格式。" }
         return document
     }
 
