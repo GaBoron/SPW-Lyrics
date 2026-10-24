@@ -48,6 +48,7 @@ internal fun ManualSearchToolbar(controller: ManualSearchController, searchFocus
             }
         }
         ManualSourceStatuses(state.sourceStatuses)
+        if (state.metadataOnly) LyricsStatus("正在匹配编辑中的文件：${state.query?.path}。选择候选后点击“导入元数据”返回草稿；“刷新歌曲”会切回当前播放歌曲。")
         if (state.status.isNotBlank()) LyricsStatus(state.status, state.error)
     }
 }

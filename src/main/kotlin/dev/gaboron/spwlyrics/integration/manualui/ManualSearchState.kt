@@ -9,6 +9,7 @@ import dev.gaboron.spwlyrics.storage.LyricsDelaySettings
 
 internal data class ManualSearchState(
     val query: TrackQuery? = null,
+    val metadataOnly: Boolean = false,
     val keywords: String = "",
     val source: LyricsSource? = null,
     val candidates: List<CandidateScore> = emptyList(),
@@ -31,5 +32,5 @@ internal data class ManualSearchState(
     }
     val busy: Boolean get() = readingTrack || searching || previewing || mutating
     val canSearch: Boolean get() = query != null && !readingTrack && !searching && !mutating
-    val canMutate: Boolean get() = query != null && !busy
+    val canMutate: Boolean get() = query != null && !busy && !metadataOnly
 }

@@ -10,6 +10,14 @@ internal enum class AudioMetadataField(val label: String, val onlineKey: String)
 internal data class AudioMetadata(
     val fields: Map<AudioMetadataField, String> = emptyMap(),
     val lyrics: String = "",
+    val artwork: List<AudioArtwork> = emptyList(),
 ) {
     operator fun get(field: AudioMetadataField): String = fields[field].orEmpty()
+    val cover: AudioArtwork? get() = artwork.firstOrNull { it.pictureType == 3 } ?: artwork.firstOrNull()
+
+    fun withCover(image: AudioArtwork): AudioMetadata {
+        // Untyped images (such as MP4 covr) use their first image as the cover.
+        val replaced = cover?.takeIf { it.pictureType <= 0 }
+        return copy(artwork = listOf(image) + artwork.filter { it.pictureType != 3 && it !== replaced })
+    }
 }

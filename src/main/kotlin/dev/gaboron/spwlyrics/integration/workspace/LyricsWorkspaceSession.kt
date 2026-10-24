@@ -32,7 +32,7 @@ internal class LyricsWorkspaceSession(
 
     fun select(value: LyricsToolPage, initialize: Boolean = true) {
         page = value
-        if (!initialize || !initialized.add(value)) return
+        if (!initialized.add(value) || !initialize) return
         when (value) {
             LyricsToolPage.SEARCH -> manual.refreshTrack()
             LyricsToolPage.BATCH -> batch.load()

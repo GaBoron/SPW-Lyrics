@@ -28,12 +28,20 @@ class SodaMusicProvider(private val http: ProviderHttp) : LyricsProvider {
         val album = track.obj("album")
         val team = track.obj("song_maker_team") ?: track.obj("makerTeam")
         val base = CandidateMetadata.fields("date" to CandidateMetadata.date(track.long("publish_time") ?: album?.long("release_date")),
+            "cover_url" to coverUrl(album?.obj("url_cover")),
             "comment" to (track.string("relation_media") ?: track.string("relationMedia"))) + mapOf(
             "composer" to CandidateMetadata.names(team?.array("composers")), "lyricist" to CandidateMetadata.names(team?.array("lyricists")))
         val tags = track.array("tags").orEmpty().mapNotNull { it.asObject() }.groupBy { it.obj("category")?.string("name").orEmpty().lowercase() }
         return base + tags.filterKeys { it in setOf("genre", "language", "copyright") }.mapValues { (_, rows) ->
             rows.flatMap { listOfNotNull(it.obj("first")?.string("name"), it.obj("second")?.string("name")) }.distinct()
         }
+    }
+    private fun coverUrl(cover: JsonObject?): String? {
+        val base = (cover?.array("urls")?.firstOrNull() as? kotlinx.serialization.json.JsonPrimitive)?.content ?: return null
+        if (!base.endsWith('/')) return base
+        val uri = cover.string("uri")?.takeIf(String::isNotBlank) ?: return null
+        val template = cover.string("template_prefix")?.takeIf { it.matches(Regex("[A-Za-z0-9-]+")) } ?: return null
+        return "$base$uri~$template-image.image"
     }
     private fun seo(candidate: LyricsCandidate): JsonObject {
         val root = json(http.get("https://beta-luna.douyin.com/luna/h5/seo_track?track_id=${ProviderHttpClient.encode(candidate.remoteId)}&device_platform=web", PAGE_HEADERS))

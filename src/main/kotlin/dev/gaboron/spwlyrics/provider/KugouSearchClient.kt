@@ -33,7 +33,8 @@ internal class KugouSearchClient(private val http: ProviderHttp) {
                 artists = CandidateMetadata.names(song.array("Singers")).ifEmpty { TrackQuery.splitArtists(song.string("SingerName").orEmpty()) },
                 album = song.string("AlbumName").orEmpty(), durationMs = song.long("Duration")?.times(1000), qualityHint = LyricsQuality.KARAOKE_SYNCED,
                 context = mapOf("hash" to hash, "albumAudioId" to song.string("ID").orEmpty(), "albumId" to song.string("AlbumID").orEmpty()),
-                metadata = CandidateMetadata.fields("date" to song.string("PublishDate"), "language" to song.obj("trans_param")?.string("language")))
+                metadata = CandidateMetadata.fields("date" to song.string("PublishDate"), "language" to song.obj("trans_param")?.string("language"),
+                    "cover_url" to (song.obj("trans_param")?.string("union_cover") ?: song.string("Image"))?.replace("{size}", "800")))
         }.distinctBy { it.remoteId }.also { check(rows.isEmpty() || it.isNotEmpty()) { "酷狗候选格式无效" } }
     }
 

@@ -9,6 +9,8 @@ import dev.gaboron.spwlyrics.codec.MetadataLyricsFormat
 import dev.gaboron.spwlyrics.codec.TtmlEditCodec
 import dev.gaboron.spwlyrics.codec.TtmlLyricRows
 import dev.gaboron.spwlyrics.codec.LyricEditTime
+import dev.gaboron.spwlyrics.codec.AudioArtworkImages
+import dev.gaboron.spwlyrics.application.OnlineArtworkImport
 import dev.gaboron.spwlyrics.domain.EditableLyricLine
 import dev.gaboron.spwlyrics.domain.EditableLyrics
 import dev.gaboron.spwlyrics.domain.LyricsDocument
@@ -26,14 +28,16 @@ internal interface MetadataEditorOperations {
     fun currentAudioPath(): String?
     fun chooseAudioFile(): Path?
     fun chooseLyricsFile(): Path?
+    fun chooseCoverFile(): Path?
     fun afterSave(path: Path)
-    fun openSearch()
+    fun openSearch(query: TrackQuery)
 }
 
 /** All state transitions occur on the event thread; file IO and parsing run on dedicated workers. */
 internal class MetadataEditorController(
     private val store: AudioMetadataStore,
     private val operations: MetadataEditorOperations,
+    private val artworkImport: OnlineArtworkImport = OnlineArtworkImport(),
 ) : AutoCloseable {
     var state by mutableStateOf(MetadataEditorState())
         private set
@@ -176,12 +180,24 @@ internal class MetadataEditorController(
         })
     }
 
-    fun importSearch(query: TrackQuery, candidate: dev.gaboron.spwlyrics.domain.LyricsCandidate, document: LyricsDocument?) = requestDiscard {
+    fun importSearch(query: TrackQuery, candidate: dev.gaboron.spwlyrics.domain.LyricsCandidate, document: LyricsDocument?, preserveDraft: Boolean = false) {
+        if (closed || state.busy) return
+        val sameFile = state.loaded?.path?.let { path ->
+            runCatching { java.nio.file.Files.isSameFile(path, Path.of(query.path)) }.getOrDefault(false)
+        } == true
+        if (preserveDraft && sameFile) {
+            run({ artworkImport.prepare(candidate) }, { pending ->
+                state = state.copy(onlineImport = pending, status = "已读取在线信息和可用封面，原草稿已保留。请勾选并应用。")
+            })
+        } else requestDiscard { loadSearch(query, candidate, document) }
+    }
+
+    private fun loadSearch(query: TrackQuery, candidate: dev.gaboron.spwlyrics.domain.LyricsCandidate, document: LyricsDocument?) {
         val format = state.format
-        run({ store.read(Path.of(query.path)) to document?.let { MetadataLyricsExport.encode(it, format) } }, { (snapshot, text) ->
+        run({ Triple(store.read(Path.of(query.path)), document?.let { MetadataLyricsExport.encode(it, format) }, artworkImport.prepare(candidate)) }, { (snapshot, text, pending) ->
             loaded(snapshot)
             if (text != null) lyrics(text)
-            state = state.copy(format = format, sourceDocument = document, onlineImport = dev.gaboron.spwlyrics.domain.OnlineMetadataImport.from(candidate),
+            state = state.copy(format = format, sourceDocument = document, onlineImport = pending,
                 status = "已读取在线信息。请在左侧勾选字段并应用到草稿；核对后点击“写入歌曲文件”。")
         })
     }
@@ -195,15 +211,49 @@ internal class MetadataEditorController(
         if (!state.busy) state = state.copy(onlineImport = state.onlineImport?.copy(fillMissing = fillMissing))
     }
 
+    fun selectCoverImport() {
+        val pending = state.onlineImport ?: return
+        if (!closed && !state.busy) state = state.copy(onlineImport = pending.copy(coverSelected = !pending.coverSelected))
+    }
+
+    fun retryCoverImport() {
+        val pending = state.onlineImport ?: return
+        run({ artworkImport.retry(pending) }, { state = state.copy(onlineImport = it, status = "在线封面已重新读取，请核对后应用。") })
+    }
+
+    fun importCover() {
+        if (closed || state.busy || state.loaded == null) return
+        val path = operations.chooseCoverFile() ?: return
+        run({ AudioArtworkImages.read(path) }, { image ->
+            state = state.copy(draft = state.draft.withCover(image), status = "封面已替换到草稿。点击“写入歌曲文件”保存。")
+        })
+    }
+
+    fun removeCover() {
+        if (!closed && !state.busy && state.loaded != null) state = state.copy(draft = state.draft.copy(artwork = emptyList()),
+            error = false, status = "草稿中的全部内嵌图片已移除。点击“写入歌曲文件”保存。")
+    }
+
+    fun restoreCover() {
+        val original = state.loaded ?: return
+        if (!closed && !state.busy) state = state.copy(draft = state.draft.copy(artwork = original.metadata.artwork),
+            error = false, status = "已恢复本次读取时的封面，其他草稿保留。")
+    }
+
     fun applyImport() {
         val pending = state.onlineImport ?: return
         if (state.busy || state.loaded == null) return
         state = state.copy(draft = pending.apply(state.draft), error = false,
-            status = "所选字段已应用到草稿。请核对后点击“写入歌曲文件”。")
+            status = "所选字段和封面已按导入模式应用到草稿。请核对后点击“写入歌曲文件”。")
     }
 
     fun openSearch() {
-        if (!closed && !state.busy) operations.openSearch()
+        val loaded = state.loaded ?: return
+        if (!closed && !state.busy) operations.openSearch(TrackQuery(
+            title = state.draft[AudioMetadataField.TITLE].ifBlank { loaded.path.fileName.toString().substringBeforeLast('.') },
+            artists = state.draft[AudioMetadataField.ARTIST].lineSequence().filter(String::isNotBlank).toList(),
+            album = state.draft[AudioMetadataField.ALBUM], path = loaded.path.toString(),
+        ))
     }
 
     fun importLyrics() {

@@ -38,13 +38,14 @@ class LrcShareProvider(private val http: ProviderHttp, private val apiKey: () ->
             val id = song.string("id") ?: return@mapNotNull null
             val album = song.obj("album")
             LyricsCandidate(source, id, song.string("title").orEmpty(), CandidateMetadata.names(song.array("artists")), album?.string("name").orEmpty(),
-                metadata = CandidateMetadata.fields("date" to album?.string("year")) + mapOf(
+                metadata = CandidateMetadata.fields("date" to album?.string("year"), "cover_url" to album?.string("cover_url")) + mapOf(
                     "album_artist" to CandidateMetadata.names(album?.array("artists")), "genre" to song.array("genres").orEmpty().mapNotNull { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }))
         }.filter { it.title.isNotBlank() }.take(limit)
     }
     override fun metadata(candidate: LyricsCandidate): LyricsCandidate = details.apply(candidate) {
         val detail = get("/song/${ProviderHttpClient.encode(candidate.remoteId)}")
-        CandidateMetadata.fields("track_number" to detail.string("track"), "disc_number" to detail.string("disc"), "comment" to detail.string("comment")) + mapOf(
+        CandidateMetadata.fields("track_number" to detail.string("track"), "disc_number" to detail.string("disc"), "comment" to detail.string("comment"),
+            "cover_url" to detail.obj("album")?.string("cover_url")) + mapOf(
             "album_artist" to CandidateMetadata.names(detail.obj("album")?.array("artists")),
             "composer" to strings(detail, "composer"), "lyricist" to strings(detail, "lyricist"))
     }

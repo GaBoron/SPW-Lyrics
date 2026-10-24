@@ -66,7 +66,9 @@ internal class QqSearchProtocol(private val http: ProviderHttp) {
             context = mapOf("musicId" to musicId.toString(), "albumMid" to (song.obj("album")?.string("mid") ?: song.string("albummid")).orEmpty()),
             metadata = CandidateMetadata.fields("date" to song.string("time_public"),
                 "track_number" to CandidateMetadata.number(song.string("index_album")),
-                "disc_number" to song.long("index_cd")?.plus(1)?.toString()))
+                "disc_number" to song.long("index_cd")?.plus(1)?.toString(),
+                "cover_url" to (song.obj("album")?.string("mid") ?: song.string("albummid"))
+                    ?.takeIf { it.matches(Regex("[A-Za-z0-9]+")) }?.let { "https://y.gtimg.cn/music/photo_new/T002R800x800M000$it.jpg" }))
     }
 
     private fun clean(value: String): String = value.replace("<em>", "").replace("</em>", "")

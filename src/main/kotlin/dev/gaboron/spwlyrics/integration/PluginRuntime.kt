@@ -108,7 +108,8 @@ object PluginRuntime {
             override fun currentAudioPath() = currentQuery()?.path
             override fun chooseAudioFile() = MetadataFilePicker.audio()
             override fun chooseLyricsFile() = MetadataFilePicker.lyrics()
-            override fun openSearch() = openManualSearch()
+            override fun chooseCoverFile() = MetadataFilePicker.cover()
+            override fun openSearch(query: TrackQuery) { workspace?.searchMetadata(query) }
             override fun afterSave(path: java.nio.file.Path) {
                 val currentPath = WorkshopApi.playback.getCurrentMediaItem()?.path
                 if (currentPath != null && runCatching { java.nio.file.Path.of(currentPath).toRealPath() == path }.getOrDefault(false)) {
@@ -129,8 +130,8 @@ object PluginRuntime {
             override fun setDelay(query: TrackQuery, delayMs: Int) =
                 isCurrentTrack(query) && coordinator?.setDelay(query, delayMs) == true
             override fun metadata(candidate: LyricsCandidate) = resolver.metadata(candidate)
-            override fun editMetadata(query: TrackQuery, candidate: LyricsCandidate, document: LyricsDocument?) {
-                workspace?.importSearch(query, candidate, document)
+            override fun editMetadata(query: TrackQuery, candidate: LyricsCandidate, document: LyricsDocument?, preserveDraft: Boolean) {
+                workspace?.importSearch(query, candidate, document, preserveDraft)
             }
         }
         workspace = LyricsWorkspace({ LyricsWorkspaceSession(manualOperations, metadataOperations, batch, describeBatchFailure) }, ::toastWarning)

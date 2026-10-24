@@ -7,6 +7,7 @@ import dev.gaboron.spwlyrics.domain.CandidateScore
 import dev.gaboron.spwlyrics.domain.LyricsSource
 import dev.gaboron.spwlyrics.domain.ProviderSearchStatus
 import dev.gaboron.spwlyrics.domain.ProviderSearchPhase
+import dev.gaboron.spwlyrics.domain.TrackQuery
 import dev.gaboron.spwlyrics.codec.TtmlVocalParts
 import dev.gaboron.spwlyrics.storage.LyricsDelaySettings
 import java.awt.EventQueue
@@ -23,6 +24,17 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
     private var trackGeneration = 0
     private var searchGeneration = 0
     private var previewGeneration = 0
+
+    fun searchMetadata(query: TrackQuery) {
+        if (closed || state.mutating) return
+        trackGeneration++
+        searchGeneration++
+        previewGeneration++
+        state = ManualSearchState(query = query, metadataOnly = true, readingTrack = false,
+            keywords = listOf(query.title, query.artists.joinToString(" ")).filter(String::isNotBlank).joinToString(" "),
+            status = "正在为编辑中的歌曲匹配在线信息与封面…")
+        search()
+    }
 
     fun refreshTrack() {
         if (closed || state.mutating || state.readingTrack && trackGeneration > 0) return
@@ -133,12 +145,13 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
         if (state.busy) return
         val query = state.query ?: return
         val candidate = state.selected?.candidate ?: return
-        val document = state.document
+        val document = state.document.takeUnless { state.metadataOnly }
+        val preserveDraft = state.metadataOnly
         val generation = searchGeneration
         state = state.copy(mutating = true, error = false, status = "正在获取在线元数据…")
         submit({ searchGeneration == generation }, { operations.metadata(candidate) }, { enriched ->
             state = state.copy(mutating = false, status = "在线元数据已读取。")
-            operations.editMetadata(query, enriched, document)
+            operations.editMetadata(query, enriched, document, preserveDraft)
         }, { state = state.copy(mutating = false); reportFailure(it) })
     }
 

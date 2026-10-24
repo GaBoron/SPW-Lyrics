@@ -15,7 +15,8 @@ class AppleMusicProvider(private val http: ProviderHttp) : LyricsProvider {
                 song.string("collectionName").orEmpty(), song.long("trackTimeMillis"), metadata = CandidateMetadata.fields(
                     "date" to song.string("releaseDate")?.substringBefore('T'), "genre" to song.string("primaryGenreName"),
                     "track_number" to song.long("trackNumber")?.toString(), "disc_number" to song.long("discNumber")?.toString(),
-                    "composer" to song.string("composerName")))
+                    "composer" to song.string("composerName"),
+                    "cover_url" to song.string("artworkUrl100")?.replace("/100x100bb.", "/1200x1200bb.")))
         }.filter { it.title.isNotBlank() }.distinctBy { it.remoteId }.take(limit)
     }
     override fun fetch(candidate: LyricsCandidate): LyricsDocument? = runCatching {

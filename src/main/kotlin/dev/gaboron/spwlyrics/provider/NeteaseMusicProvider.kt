@@ -31,7 +31,7 @@ class NeteaseMusicProvider(private val http: ProviderHttp) : LyricsProvider {
         check(album.long("id") == id)
         mapOf("album_artist" to CandidateMetadata.names(album.array("artists")).ifEmpty {
             listOfNotNull(album.obj("artist")?.string("name"))
-        }) + CandidateMetadata.fields("date" to CandidateMetadata.date(album.long("publishTime")))
+        }) + CandidateMetadata.fields("date" to CandidateMetadata.date(album.long("publishTime")), "cover_url" to album.string("picUrl"))
     }
 
     override fun search(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> {
@@ -72,7 +72,8 @@ class NeteaseMusicProvider(private val http: ProviderHttp) : LyricsProvider {
                 qualityHint = LyricsQuality.KARAOKE_SYNCED,
                 context = mapOf("albumId" to (song.obj("album") ?: song.obj("al"))?.long("id").toString()),
                 metadata = CandidateMetadata.fields("date" to CandidateMetadata.date(song.long("publishTime") ?: song.obj("album")?.long("publishTime")),
-                    "track_number" to CandidateMetadata.number(song.string("no")), "disc_number" to CandidateMetadata.number(song.string("cd"))),
+                    "track_number" to CandidateMetadata.number(song.string("no")), "disc_number" to CandidateMetadata.number(song.string("cd")),
+                    "cover_url" to (song.obj("album") ?: song.obj("al"))?.string("picUrl")),
             )
         }.also { check(songs.isEmpty() || it.isNotEmpty()) { "网易云搜索候选格式无效" } }
     }

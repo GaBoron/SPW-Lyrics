@@ -37,7 +37,7 @@ internal class FileAudioMetadataStore : AudioMetadataStore {
             // Unsupported fields must be visible as empty, but are never written unless edited.
             runCatching { tag?.getAll(field.key())?.joinToString("\n").orEmpty() }.getOrDefault("")
         }
-        val metadata = AudioMetadata(values, tag?.let(EmbeddedLyricsTags::read).orEmpty())
+        val metadata = AudioMetadata(values, tag?.let(EmbeddedLyricsTags::read).orEmpty(), AudioArtworkTags.read(tag))
         check(before == revision(target)) { "歌曲文件在读取期间发生变化，请重新读取。" }
         return AudioMetadataSnapshot(target, before, metadata)
     }
@@ -73,9 +73,11 @@ internal class FileAudioMetadataStore : AudioMetadataStore {
             }
             val lyricsChanged = edited.lyrics != original.metadata.lyrics
             if (lyricsChanged) EmbeddedLyricsTags.write(tag, edited.lyrics)
+            if (edited.artwork != original.metadata.artwork) AudioArtworkTags.write(tag, edited.artwork)
             audio.commit()
             val verified = read(stage).metadata
-            check(changed.all { verified[it] == edited[it] } && (!lyricsChanged || verified.lyrics == edited.lyrics)) {
+            check(changed.all { verified[it] == edited[it] } && verified.lyrics == edited.lyrics &&
+                AudioArtworkTags.matches(edited.artwork, verified.artwork)) {
                 "写入后的标签校验失败，原歌曲未修改。"
             }
             ensureUnchanged(original)
@@ -83,7 +85,8 @@ internal class FileAudioMetadataStore : AudioMetadataStore {
             ensureUnchanged(original)
             val saved = AudioTagFileCommit.commit(stage, target, workspace.recovery, { ensureUnchanged(original) }) {
                 read(target).also { snapshot ->
-                    check(changed.all { snapshot.metadata[it] == edited[it] } && (!lyricsChanged || snapshot.metadata.lyrics == edited.lyrics)) {
+                    check(changed.all { snapshot.metadata[it] == edited[it] } && snapshot.metadata.lyrics == edited.lyrics &&
+                        AudioArtworkTags.matches(edited.artwork, snapshot.metadata.artwork)) {
                         "歌曲标签读回校验失败。"
                     }
                 }

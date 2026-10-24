@@ -20,5 +20,5 @@ internal interface ManualSearchOperations {
     fun delay(query: TrackQuery): Int
     fun setDelay(query: TrackQuery, delayMs: Int): Boolean
     fun metadata(candidate: LyricsCandidate): LyricsCandidate
-    fun editMetadata(query: TrackQuery, candidate: LyricsCandidate, document: LyricsDocument?)
+    fun editMetadata(query: TrackQuery, candidate: LyricsCandidate, document: LyricsDocument?, preserveDraft: Boolean)
 }

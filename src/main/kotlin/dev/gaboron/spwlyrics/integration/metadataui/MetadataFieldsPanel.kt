@@ -14,6 +14,7 @@ internal fun MetadataFieldsPanel(controller: MetadataEditorController, modifier:
     val state = controller.state
     val inputModifier = Modifier.fillMaxWidth().heightIn(min = 40.dp)
     LyricsScroll(modifier) {
+        MetadataCoverPanel(controller)
         MetadataImportPanel(controller)
         AudioMetadataField.entries.forEach { field ->
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -26,7 +27,7 @@ internal fun MetadataFieldsPanel(controller: MetadataEditorController, modifier:
                     enabled = state.loaded != null && !state.busy, placeholder = "填写${field.label}")
             }
         }
-        LyricsStatus("多值标签每行一个值。保存时保留封面和其他未编辑标签；失败时恢复原文件。")
+        LyricsStatus("多值标签每行一个值。保存时保留未编辑的封面和其他标签；失败时恢复原文件。")
         state.loaded?.path?.let { LyricsStatus(it.toString()) }
     }
 }

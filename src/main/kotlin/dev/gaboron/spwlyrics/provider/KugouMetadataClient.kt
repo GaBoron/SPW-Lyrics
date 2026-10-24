@@ -18,9 +18,10 @@ internal class KugouMetadataClient(private val http: ProviderHttp) {
             fields["lyricist"] = CandidateMetadata.people(extra?.string("lyrics"))
         }
         candidate.context["albumId"]?.toLongOrNull()?.takeIf { it > 0 }?.let { id ->
-            val album = request("albums", "255", "album_id", id, "album_id,authors").firstOrNull { it.long("album_id") == id }
+            val album = request("albums", "255", "album_id", id, "album_id,authors,img").firstOrNull { it.long("album_id") == id }
                 ?: error("酷狗专辑详情不匹配")
             fields["album_artist"] = CandidateMetadata.names(album.array("authors"), "author_name")
+            fields += CandidateMetadata.fields("cover_url" to album.string("img")?.replace("{size}", "800"))
         }
         fields
     }

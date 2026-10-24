@@ -26,7 +26,9 @@ class MusicBrainzProvider(private val http: ProviderHttp) : LyricsProvider {
             LyricsCandidate(source, id, recording.string("title").orEmpty(), credits(recording), release?.string("title").orEmpty(), recording.long("length"),
                 context = mapOf("releaseId" to release?.string("id").orEmpty()),
                 metadata = CandidateMetadata.fields("date" to (release?.string("date") ?: recording.string("first-release-date")),
-                    "track_number" to track?.string("number"), "disc_number" to medium?.long("position")?.toString()) + mapOf("album_artist" to release?.let(::credits).orEmpty()))
+                    "track_number" to track?.string("number"), "disc_number" to medium?.long("position")?.toString(),
+                    "cover_url" to release?.string("id")?.takeIf { it.matches(Regex("[a-fA-F0-9-]{36}")) }
+                        ?.let { "https://coverartarchive.org/release/$it/front-500" }) + mapOf("album_artist" to release?.let(::credits).orEmpty()))
         }.filter { it.title.isNotBlank() }.take(limit)
     }
     private fun credits(item: JsonObject): List<String> = item.array("artist-credit").orEmpty().mapNotNull {

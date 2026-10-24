@@ -22,6 +22,15 @@ internal fun MetadataImportPanel(controller: MetadataEditorController) {
             DesktopCheck(field in pending.selected, { controller.selectImport(field, field !in pending.selected) }, !state.busy,
                 "${field.label}：${value.replace('\n', '、')}")
         }
-        DesktopButton("将所选字段应用到草稿", controller::applyImport, enabled = !state.busy && pending.selected.isNotEmpty())
+        pending.cover?.let { cover ->
+            MetadataCoverPreview(cover, "在线候选封面")
+            DesktopCheck(pending.coverSelected, controller::selectCoverImport, !state.busy, "导入此候选封面")
+        }
+        pending.coverNotice?.let { LyricsStatus(it) }
+        if (pending.coverUrl != null && pending.cover == null) {
+            DesktopButton("重试封面", controller::retryCoverImport, enabled = !state.busy)
+        }
+        DesktopButton("将所选字段应用到草稿", controller::applyImport,
+            enabled = !state.busy && (pending.selected.isNotEmpty() || pending.coverSelected && pending.cover != null))
     }
 }
