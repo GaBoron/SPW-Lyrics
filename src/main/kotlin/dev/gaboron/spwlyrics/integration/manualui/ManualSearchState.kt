@@ -16,6 +16,7 @@ internal data class ManualSearchState(
     val sourceStatuses: Map<LyricsSource, ProviderSearchStatus> = ProviderSearchStatus.unchecked(),
     val selected: CandidateScore? = null,
     val document: LyricsDocument? = null,
+    val lyricsMetadata: Map<String, List<String>> = emptyMap(),
     val previewMainAgent: String = "v1",
     val delayText: String = "0",
     val savedDelay: Int = 0,

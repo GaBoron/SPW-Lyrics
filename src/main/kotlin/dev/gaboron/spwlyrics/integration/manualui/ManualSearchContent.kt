@@ -50,8 +50,12 @@ internal fun ManualSearchContent(controller: ManualSearchController) {
 @Composable
 private fun ManualPreviewContent(controller: ManualSearchController, modifier: Modifier) {
     val state = controller.state
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        ManualLyricsPreview(state, Modifier.weight(1f).fillMaxWidth())
-        ManualDelayEditor(state, controller)
+    BoxWithConstraints(modifier) {
+        val metadataHeight = ((maxHeight - 160.dp) / 2).coerceIn(48.dp, 240.dp)
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            ManualLyricsPreview(state, Modifier.weight(1f).fillMaxWidth())
+            ManualMetadataViewer(state, metadataHeight)
+            ManualDelayEditor(state, controller)
+        }
     }
 }

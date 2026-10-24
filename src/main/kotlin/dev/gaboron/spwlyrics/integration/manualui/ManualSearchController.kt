@@ -9,6 +9,7 @@ import dev.gaboron.spwlyrics.domain.ProviderSearchStatus
 import dev.gaboron.spwlyrics.domain.ProviderSearchPhase
 import dev.gaboron.spwlyrics.domain.TrackQuery
 import dev.gaboron.spwlyrics.codec.TtmlVocalParts
+import dev.gaboron.spwlyrics.codec.LyricsMetadataReader
 import dev.gaboron.spwlyrics.storage.LyricsDelaySettings
 import java.awt.EventQueue
 import java.util.concurrent.Executors
@@ -64,7 +65,7 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
     private fun invalidateSearch() {
         searchGeneration++
         previewGeneration++
-        state = state.copy(candidates = emptyList(), selected = null, document = null,
+        state = state.copy(candidates = emptyList(), selected = null, document = null, lyricsMetadata = emptyMap(),
             searching = false, previewing = false, searched = false, sourceStatuses = ProviderSearchStatus.unchecked(),
             status = "搜索条件已更改，请点击搜索。", error = false)
     }
@@ -85,7 +86,7 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
         val source = state.source
         val generation = ++searchGeneration
         previewGeneration++
-        state = state.copy(candidates = emptyList(), selected = null, document = null,
+        state = state.copy(candidates = emptyList(), selected = null, document = null, lyricsMetadata = emptyMap(),
             sourceStatuses = ProviderSearchStatus.unchecked(),
             searching = true, previewing = false, searched = false, status = "正在搜索…", error = false)
         submit({ searchGeneration == generation }, { operations.search(query, keywords, source) { update ->
@@ -106,11 +107,12 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
     fun select(row: CandidateScore) {
         if (closed || state.mutating || row !in state.candidates || state.selected == row) return
         val generation = ++previewGeneration
-        state = state.copy(selected = row, document = null, previewing = true)
+        state = state.copy(selected = row, document = null, lyricsMetadata = emptyMap(), previewing = true)
         submit({ previewGeneration == generation }, {
-            operations.preview(row.candidate)?.document?.let { it to TtmlVocalParts.mainAgent(it) }
+            operations.preview(row.candidate)?.document?.let { Triple(it, TtmlVocalParts.mainAgent(it), LyricsMetadataReader.read(it)) }
         }, { resolved ->
-            state = state.copy(document = resolved?.first, previewMainAgent = resolved?.second ?: "v1", previewing = false)
+            state = state.copy(document = resolved?.first, lyricsMetadata = resolved?.third.orEmpty(),
+                previewMainAgent = resolved?.second ?: "v1", previewing = false)
         }, { state = state.copy(previewing = false); reportFailure(it) })
     }
 
