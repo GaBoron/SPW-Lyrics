@@ -10,11 +10,14 @@ internal data class OnlineMetadataImport(
     val cover: AudioArtwork? = null,
     val coverSelected: Boolean = true,
     val coverNotice: String? = null,
+    val lyricsText: String? = null,
+    val lyricsDocument: LyricsDocument? = null,
+    val lyricsSelected: Boolean = true,
 ) {
     fun apply(draft: AudioMetadata): AudioMetadata {
         val updated = draft.copy(fields = draft.fields + fields.filter { (field, value) ->
             field in selected && value.isNotBlank() && (!fillMissing || draft[field].isBlank())
-        })
+        }, lyrics = if (lyricsSelected && lyricsText != null && (!fillMissing || draft.lyrics.isBlank())) lyricsText else draft.lyrics)
         return if (coverSelected && cover != null && (!fillMissing || draft.cover == null)) updated.withCover(cover) else updated
     }
     companion object {

@@ -145,7 +145,7 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
         if (state.busy) return
         val query = state.query ?: return
         val candidate = state.selected?.candidate ?: return
-        val document = state.document.takeUnless { state.metadataOnly }
+        val document = state.document
         val preserveDraft = state.metadataOnly
         val generation = searchGeneration
         state = state.copy(mutating = true, error = false, status = "正在获取在线元数据…")

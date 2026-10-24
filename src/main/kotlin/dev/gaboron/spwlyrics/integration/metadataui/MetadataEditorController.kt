@@ -214,21 +214,24 @@ internal class MetadataEditorController(
             runCatching { java.nio.file.Files.isSameFile(path, Path.of(query.path)) }.getOrDefault(false)
         } == true
         if (preserveDraft && sameFile) {
-            run({ artworkImport.prepare(candidate) }, { pending ->
-                state = state.copy(onlineImport = pending, status = "已读取在线信息和可用封面，原草稿已保留。请勾选并应用。")
+            val format = state.format
+            run({ prepareOnlineImport(candidate, document, format) }, { pending ->
+                state = state.copy(onlineImport = pending, status = "已读取在线信息、封面与可用歌词，原草稿已保留。请勾选并应用。")
             })
         } else requestDiscard { loadSearch(query, candidate, document) }
     }
 
     private fun loadSearch(query: TrackQuery, candidate: dev.gaboron.spwlyrics.domain.LyricsCandidate, document: LyricsDocument?) {
         val format = state.format
-        run({ Triple(store.read(Path.of(query.path)), document?.let { MetadataLyricsExport.encode(it, format) }, artworkImport.prepare(candidate)) }, { (snapshot, text, pending) ->
+        run({ store.read(Path.of(query.path)) to prepareOnlineImport(candidate, document, format) }, { (snapshot, pending) ->
             loaded(snapshot)
-            if (text != null) lyrics(text)
-            state = state.copy(format = format, sourceDocument = document, onlineImport = pending,
-                status = "已读取在线信息。请在左侧勾选字段并应用到草稿；核对后点击“写入歌曲文件”。")
+            state = state.copy(format = format, onlineImport = pending,
+                status = "已读取在线信息。请勾选字段、封面或歌词并应用到草稿；核对后写入歌曲文件。")
         })
     }
+
+    private fun prepareOnlineImport(candidate: dev.gaboron.spwlyrics.domain.LyricsCandidate, document: LyricsDocument?, format: MetadataLyricsFormat) =
+        artworkImport.prepare(candidate).copy(lyricsText = document?.let { MetadataLyricsExport.encode(it, format) }, lyricsDocument = document)
 
     fun selectImport(field: AudioMetadataField, selected: Boolean) {
         val pending = state.onlineImport ?: return
@@ -242,6 +245,11 @@ internal class MetadataEditorController(
     fun selectCoverImport() {
         val pending = state.onlineImport ?: return
         if (!closed && !state.busy) state = state.copy(onlineImport = pending.copy(coverSelected = !pending.coverSelected))
+    }
+
+    fun selectLyricsImport() {
+        val pending = state.onlineImport ?: return
+        if (!closed && !state.busy) state = state.copy(onlineImport = pending.copy(lyricsSelected = !pending.lyricsSelected))
     }
 
     fun retryCoverImport() {
@@ -271,8 +279,11 @@ internal class MetadataEditorController(
     fun applyImport() {
         val pending = state.onlineImport ?: return
         if (state.busy || state.loaded == null) return
-        state = state.copy(draft = pending.apply(state.draft), error = false,
-            status = "所选字段和封面已按导入模式应用到草稿。请核对后点击“写入歌曲文件”。")
+        val updated = pending.apply(state.draft)
+        val replacingLyrics = pending.lyricsSelected && pending.lyricsText != null && (!pending.fillMissing || state.draft.lyrics.isBlank())
+        if (replacingLyrics) lyrics(updated.lyrics)
+        state = state.copy(draft = updated, sourceDocument = if (replacingLyrics) pending.lyricsDocument else state.sourceDocument, error = false,
+            status = "所选字段、封面和歌词已按导入模式应用到草稿。请核对后写入歌曲文件。")
     }
 
     fun openSearch() {
