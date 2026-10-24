@@ -12,6 +12,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
@@ -28,9 +29,8 @@ import dev.gaboron.spwlyrics.integration.workspace.LyricsStatus
 
 @Composable
 internal fun TimingWordGrid(controller: LyricsTimingController, playing: PlayingTimingWords, follow: Boolean,
-    focus: () -> Unit, modifier: Modifier) {
+    focus: () -> Unit, modifier: Modifier, list: LazyListState = rememberLazyListState()) {
     val state = controller.state
-    val list = rememberLazyListState()
     val target = if (follow && playing.follow != null) playing.follow else state.cursor
     LaunchedEffect(target?.lineId) {
         val index = state.lines.indexOfFirst { it.id == target?.lineId }
@@ -40,8 +40,11 @@ internal fun TimingWordGrid(controller: LyricsTimingController, playing: Playing
         LazyColumn(Modifier.fillMaxSize().padding(end = 12.dp), state = list,
             verticalArrangement = Arrangement.spacedBy(4.dp)) {
             itemsIndexed(state.lines, key = { _, line -> line.id }) { row, line ->
-                val fill by animateColorAsState(if (playing.cursors.any { it.lineId == line.id })
-                    SaltTheme.colors.highlight.copy(alpha = .045f) else Color.Transparent, tween(160), label = "playing line")
+                val fill by animateColorAsState(when {
+                    state.cursor?.lineId == line.id -> SaltTheme.colors.highlight.copy(alpha = .13f)
+                    playing.cursors.any { it.lineId == line.id } -> SaltTheme.colors.highlight.copy(alpha = .035f)
+                    else -> Color.Transparent
+                }, tween(160), label = "timing line")
                 RoundedColumn(Modifier.animateItem().animateContentSize(tween(180)), paddingValues = PaddingValues(0.dp)) {
                     Row(Modifier.fillMaxWidth().background(fill).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text((row + 1).toString(), Modifier.width(40.dp).padding(start = 12.dp),

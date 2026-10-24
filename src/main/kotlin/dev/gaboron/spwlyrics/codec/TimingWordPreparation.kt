@@ -4,8 +4,6 @@ import dev.gaboron.spwlyrics.domain.EditableLyrics
 import dev.gaboron.spwlyrics.domain.TimingSplit
 import org.w3c.dom.Element
 import org.w3c.dom.Node
-import java.text.BreakIterator
-import java.util.Locale
 
 internal data class TimingPreparation(val raw: String, val prepared: Int, val skipped: Int)
 
@@ -49,15 +47,14 @@ internal object TimingWordPreparation {
 
     fun tokens(text: String, mode: TimingSplit): List<String> {
         if (mode == TimingSplit.WHITESPACE) return Regex("(?U)\\s+|\\S+").findAll(text).map { it.value }.toList()
-        val iterator = BreakIterator.getCharacterInstance(Locale.ROOT).apply { setText(text) }
         val result = mutableListOf<String>()
-        var start = iterator.first()
-        var end = iterator.next()
-        while (end != BreakIterator.DONE) {
-            val value = text.substring(start, end)
+        val units = Regex("[A-Za-z]+(?:['’][A-Za-z]+)*|\\d+|(?U)\\s+|\\X").findAll(text).flatMap { match ->
+            if (match.value.firstOrNull()?.let { it in 'A'..'Z' || it in 'a'..'z' } == true) EnglishSyllables.split(match.value)
+            else listOf(match.value)
+        }
+        for (value in units) {
             if (value.matches(Regex("[\\p{P}]+")) && result.lastOrNull()?.isNotBlank() == true) result[result.lastIndex] += value
             else result += value
-            start = end; end = iterator.next()
         }
         return result
     }

@@ -12,6 +12,7 @@ import java.util.ArrayDeque
 internal class LyricsTimingController(private val editor: MetadataEditorController, private val transport: TimingPlayback) {
     var state by mutableStateOf(TimingEditorState()); private set
     var playback by mutableStateOf<TimingPlaybackSnapshot?>(null); private set
+    var selectionRevision by mutableIntStateOf(0); private set
     private var loaded: Any? = null
     private var raw: String? = null
     private var observedEdits: Any? = null
@@ -69,6 +70,7 @@ internal class LyricsTimingController(private val editor: MetadataEditorControll
         pressing.clear()
         state = state.copy(progress = TimingProgress(cursor), skipped = state.skipped - cursor.lineId, error = false)
         editor.selectLine(cursor.lineId)
+        selectionRevision++
     }
 
     fun move(delta: Int, seek: Boolean = false) = perform {
@@ -132,6 +134,7 @@ internal class LyricsTimingController(private val editor: MetadataEditorControll
             else if (change.lines.isEmpty()) "空拍 ${change.progress.emptyBeat} / ${state.emptyBeats[state.cursor] ?: 0}"
             else "已记录 ${LyricEditTime.format((time + state.options.offsetMs).coerceAtLeast(0))}。", error = false)
         change.progress.cursor?.let { editor.selectLine(it.lineId) }
+        selectionRevision++
         syncDraft()
     }
 
@@ -150,6 +153,7 @@ internal class LyricsTimingController(private val editor: MetadataEditorControll
         check(apply(if (redoing) edit.after else edit.before)) { "草稿已变化，无法恢复这一步。" }
         source.removeLast(); target.addLast(edit); pressing.clear()
         state = state.copy(progress = if (redoing) edit.next else edit.previous, message = if (redoing) "已重做上一步打轴。" else "已撤销上一步打轴。", error = false)
+        selectionRevision++
         syncDraft()
     }
 
@@ -169,6 +173,7 @@ internal class LyricsTimingController(private val editor: MetadataEditorControll
         val remaining = LyricTiming.cursors(state.lines, skipped)
         val next = remaining.firstOrNull { it.lineId > id } ?: remaining.firstOrNull()
         pressing.clear(); state = state.copy(skipped = skipped, progress = TimingProgress(next), message = "已跳过本句；点击本句中的词可恢复参与打轴。")
+        selectionRevision++
     }
 
     fun playPause() = perform { val sample = read(); val path = editor.state.loaded!!.path; if (sample.playing) transport.pause(path) else transport.play(path); cancelPress() }

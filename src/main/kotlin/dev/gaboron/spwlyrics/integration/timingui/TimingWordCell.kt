@@ -26,12 +26,13 @@ import dev.gaboron.spwlyrics.integration.workspace.LyricsTransition
 @Composable
 internal fun TimingWordCell(word: EditableLyricWord, selected: Boolean, playing: Boolean, enabled: Boolean,
     choose: () -> Unit, modifier: Modifier = Modifier) {
-    val fill by animateColorAsState(if (playing) SaltTheme.colors.highlight.copy(alpha = .22f) else Color.Transparent,
+    val fill by animateColorAsState(when { selected -> SaltTheme.colors.highlight.copy(alpha = .27f)
+        playing -> SaltTheme.colors.highlight.copy(alpha = .09f); else -> Color.Transparent },
         tween(120), label = "playing word")
     val edge by animateColorAsState(if (selected) SaltTheme.colors.highlight else SaltTheme.colors.stroke,
         tween(160), label = "timing cursor")
     Column(modifier.widthIn(min = 94.dp, max = 220.dp).width(IntrinsicSize.Max)
-        .clip(SaltTheme.shapes.small).background(fill).border(1.dp, edge, SaltTheme.shapes.small)
+        .clip(SaltTheme.shapes.small).background(fill).border(if (selected) 2.dp else 1.dp, edge, SaltTheme.shapes.small)
         .desktopControlMotion(enabled).selectable(selected, enabled = enabled, role = Role.Button, onClick = choose)
         .padding(horizontal = 8.dp, vertical = 7.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp)) {

@@ -31,7 +31,7 @@ internal fun TimingCaptureControls(controller: LyricsTimingController, keyboard:
             }
             val options: @Composable () -> Unit = {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    DesktopButton(if (follow) "跟随中" else "跟随播放", toggleFollow, primary = follow)
+                    DesktopButton(if (follow) "跟随播放" else "跟随所选", toggleFollow, primary = !follow)
                     Box {
                         DesktopButton("更多", { expanded = true })
                         PopupMenu(expanded, { expanded = false }) {

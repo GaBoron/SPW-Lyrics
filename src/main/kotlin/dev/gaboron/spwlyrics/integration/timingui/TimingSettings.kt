@@ -17,7 +17,7 @@ import dev.gaboron.spwlyrics.integration.workspace.*
 internal fun TimingSettings(controller: LyricsTimingController) {
     val state = controller.state
     var offset by rememberSaveable { mutableStateOf(state.options.offsetMs.toString()) }
-    LyricsScroll(Modifier.fillMaxWidth().heightIn(max = 230.dp)) {
+    LyricsScroll(Modifier.fillMaxSize()) {
         RoundedColumn(paddingValues = PaddingValues(0.dp)) {
             ItemSwitcher(state.options.smartFirst, { controller.options(state.options.copy(smartFirst = it)) },
                 "智能首词", enabled = !state.busy, sub = "首词的第一次 G 只记录词首")
