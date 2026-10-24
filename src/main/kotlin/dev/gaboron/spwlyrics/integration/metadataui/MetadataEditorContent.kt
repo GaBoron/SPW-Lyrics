@@ -16,6 +16,7 @@ import dev.gaboron.spwlyrics.integration.workspace.*
 internal fun MetadataEditorContent(controller: MetadataEditorController) {
     val state = controller.state
     var page by rememberSaveable { mutableStateOf(0) }
+    var metadataExpanded by rememberSaveable { mutableStateOf(true) }
     Column(Modifier.fillMaxSize().onPreviewKeyEvent {
         if (it.type == KeyEventType.KeyDown && it.isCtrlPressed && it.key == Key.S) { controller.save(); true }
         else if (it.type == KeyEventType.KeyDown && it.key == Key.F5) { controller.reload(); true }
@@ -33,7 +34,7 @@ internal fun MetadataEditorContent(controller: MetadataEditorController) {
         }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             if (maxWidth >= 1000.dp) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                MetadataFieldsPanel(controller, Modifier.width(250.dp).fillMaxHeight())
+                MetadataSidebar(controller, metadataExpanded, { metadataExpanded = it }, Modifier.fillMaxHeight())
                 MetadataLyricsPanel(controller, Modifier.weight(1f).fillMaxHeight())
             } else Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 LyricsTabs(listOf("歌曲信息", "内嵌歌词"), page, { page = it })
