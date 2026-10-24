@@ -10,20 +10,21 @@ import androidx.compose.ui.unit.dp
 import com.moriafly.salt.ui.*
 import com.moriafly.salt.ui.popup.*
 import dev.gaboron.spwlyrics.domain.TimingMark
+import dev.gaboron.spwlyrics.domain.TimingSplit
 import dev.gaboron.spwlyrics.integration.composeui.DesktopButton
 
 @OptIn(UnstableSaltUiApi::class)
 @Composable
 internal fun TimingCaptureControls(controller: LyricsTimingController, keyboard: Boolean, focus: () -> Unit,
-    settings: Boolean, toggleSettings: () -> Unit, follow: Boolean, toggleFollow: () -> Unit,
+    openSettings: () -> Unit, follow: Boolean, toggleFollow: () -> Unit,
     spectrum: Boolean, toggleSpectrum: () -> Unit) {
     val state = controller.state
     var expanded by remember { mutableStateOf(false) }
+    var splitting by remember { mutableStateOf(false) }
     ItemContainer {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val capture: @Composable () -> Unit = {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    DesktopButton("频谱", toggleSpectrum, primary = spectrum, enabled = controller.audioPath != null)
                     TimingMarkButton("F 词首", TimingMark.START, controller)
                     TimingMarkButton("G 连续轴", TimingMark.CONNECT, controller)
                     TimingMarkButton("H 词尾", TimingMark.END, controller)
@@ -33,6 +34,15 @@ internal fun TimingCaptureControls(controller: LyricsTimingController, keyboard:
             }
             val options: @Composable () -> Unit = {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Box {
+                        DesktopButton("自动分词", { splitting = true }, enabled = state.lines.isNotEmpty() && !state.busy && !state.preparing)
+                        PopupMenu(splitting, { splitting = false }) {
+                            TimingSplit.entries.forEach { mode ->
+                                ItemButton({ controller.prepare(mode); splitting = false }, mode.label)
+                            }
+                        }
+                    }
+                    DesktopButton("频谱", toggleSpectrum, primary = spectrum, enabled = controller.audioPath != null)
                     DesktopButton(if (follow) "跟随播放" else "跟随所选", toggleFollow, primary = !follow)
                     Box {
                         DesktopButton("更多", { expanded = true })
@@ -44,10 +54,10 @@ internal fun TimingCaptureControls(controller: LyricsTimingController, keyboard:
                             ItemButton({ controller.rate(1f); expanded = false }, "恢复 1×", enabled = state.available && !state.busy)
                         }
                     }
-                    DesktopButton(if (settings) "收起设置" else "打轴设置", toggleSettings, primary = settings)
+                    DesktopButton("打轴设置", openSettings)
                 }
             }
-            dev.gaboron.spwlyrics.integration.workspace.LyricsLayoutTransition(maxWidth >= 680.dp) { wide ->
+            dev.gaboron.spwlyrics.integration.workspace.LyricsLayoutTransition(maxWidth >= 900.dp) { wide ->
                 if (wide) JustifiedRow(startContent = capture, endContent = options, verticalAlignment = Alignment.CenterVertically)
                 else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     capture()

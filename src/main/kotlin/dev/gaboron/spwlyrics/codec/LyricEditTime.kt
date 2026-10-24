@@ -1,6 +1,7 @@
 package dev.gaboron.spwlyrics.codec
 
 import java.util.Locale
+import kotlin.math.roundToLong
 
 internal object LyricEditTime {
     fun parse(value: String): Long? {
@@ -22,7 +23,7 @@ internal object LyricEditTime {
             else -> text.toDoubleOrNull() // Bare values are milliseconds in the editor.
         }
         require(result != null && result.isFinite() && result >= 0 && result <= Long.MAX_VALUE / 2.0) { "时间必须是非负数：$value" }
-        return result.toLong()
+        return result.roundToLong()
     }
 
     fun format(time: Long?): String = time?.let { String.format(Locale.ROOT, "%02d:%02d.%03d", it / 60000, it / 1000 % 60, it % 1000) }.orEmpty()

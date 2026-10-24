@@ -3,6 +3,7 @@ package dev.gaboron.spwlyrics.integration.timingui
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -24,17 +25,16 @@ import com.moriafly.salt.ui.Text
 import dev.gaboron.spwlyrics.codec.LyricEditTime
 import dev.gaboron.spwlyrics.domain.EditableLyricWord
 import dev.gaboron.spwlyrics.integration.composeui.desktopControlMotion
-import dev.gaboron.spwlyrics.integration.workspace.LyricsTransition
 
 @Composable
 internal fun TimingWordCell(word: EditableLyricWord, selected: Boolean, playing: Boolean, enabled: Boolean,
     choose: () -> Unit, modifier: Modifier = Modifier) {
-    val fill by animateColorAsState(when { selected -> SaltTheme.colors.highlight.copy(alpha = .27f)
-        playing -> SaltTheme.colors.highlight.copy(alpha = .09f); else -> Color.Transparent },
-        tween(120), label = "playing word")
+    val selection by animateFloatAsState(if (selected) .27f else 0f, tween(if (selected) 20 else 90), label = "selected word")
+    val activity by animateFloatAsState(if (playing) .11f else 0f, tween(if (playing) 20 else 90), label = "playing word")
+    val fill = SaltTheme.colors.highlight.copy(alpha = maxOf(selection, activity))
     val edge by animateColorAsState(if (selected) SaltTheme.colors.highlight else SaltTheme.colors.stroke,
-        tween(160), label = "timing cursor")
-    val edgeWidth by animateDpAsState(if (selected) 2.dp else 1.dp, tween(160), label = "timing cursor width")
+        tween(if (selected) 30 else 120), label = "timing cursor")
+    val edgeWidth by animateDpAsState(if (selected) 2.dp else 1.dp, tween(if (selected) 40 else 120), label = "timing cursor width")
     Column(modifier.widthIn(min = 94.dp, max = 220.dp).width(IntrinsicSize.Max)
         .clip(SaltTheme.shapes.small).background(fill).border(edgeWidth, edge, SaltTheme.shapes.small)
         .desktopControlMotion(enabled).selectable(selected, enabled = enabled, role = Role.Button, onClick = choose)
@@ -54,9 +54,7 @@ internal fun TimingTimeLabel(value: String, start: Boolean) {
     val dark = SaltTheme.configs.isDarkTheme
     val ink = if (start) { if (dark) Color(0xFF88D9B8) else Color(0xFF176847) }
         else { if (dark) Color(0xFFF0A2B3) else Color(0xFF992E49) }
-    LyricsTransition(text) { label ->
-        Text(label, color = ink, style = SaltTheme.textStyles.sub.copy(fontFamily = FontFamily.Monospace, fontSize = 12.sp),
+    Text(text, color = ink, style = SaltTheme.textStyles.sub.copy(fontFamily = FontFamily.Monospace, fontSize = 12.sp),
             maxLines = 1, modifier = Modifier.clip(SaltTheme.shapes.small).background(ink.copy(alpha = .13f))
                 .padding(horizontal = 4.dp, vertical = 2.dp))
-    }
 }

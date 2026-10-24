@@ -11,7 +11,8 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Analysis only: lease the Runtime's FFmpeg and decode a bounded PCM window without audio output. */
-internal class SpwTimingAudioDecoder(private val runtime: TimingMediaRuntime) : TimingAudioDecoder {
+internal class SpwTimingAudioDecoder(private val runtime: TimingMediaRuntime, private val install: TimingRuntimeInstall) : TimingAudioDecoder {
+    override fun dependency() = install.dependency()
     private val process = AtomicReference<Process?>()
     @Volatile private var closed = false
     private val watchdog = Executors.newSingleThreadScheduledExecutor { Thread(it, "spw-lyrics-decode-timeout").apply { isDaemon = true } }

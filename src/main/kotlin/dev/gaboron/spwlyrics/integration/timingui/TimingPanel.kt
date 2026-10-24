@@ -13,7 +13,6 @@ import androidx.compose.ui.unit.dp
 import com.moriafly.salt.ui.*
 import dev.gaboron.spwlyrics.application.TimingPlaybackIndex
 import dev.gaboron.spwlyrics.integration.workspace.*
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
 private enum class TimingToolView { LYRICS, SETTINGS, CALIBRATION }
@@ -32,7 +31,7 @@ internal fun TimingPanel(controller: LyricsTimingController) {
     LaunchedEffect(tool) { if (tool == TimingToolView.LYRICS) { withFrameNanos { }; focus.requestFocus() } }
     val index = remember(state.lines) { TimingPlaybackIndex(state.lines) }
     val playing = controller.playback?.let { index.at(it.positionMs) } ?: dev.gaboron.spwlyrics.application.PlayingTimingWords()
-    LaunchedEffect(controller) { controller.enter(); while (isActive) { controller.poll(); controller.calibration.poll(); delay(40) } }
+    LaunchedEffect(controller) { while (isActive) { controller.poll(); controller.calibration.poll(); withFrameNanos { } } }
     DisposableEffect(controller) { onDispose { keyboard.clear(); controller.cancelPress(); controller.spectrum.cancel(); controller.calibration.stop() } }
     ProvideControlSize(ControlSize.Small) {
         Column(Modifier.fillMaxSize().onPreviewKeyEvent {
@@ -45,7 +44,7 @@ internal fun TimingPanel(controller: LyricsTimingController) {
                     TimingTransport(controller)
                     ItemDivider()
                     TimingCaptureControls(controller, keyboardActive, { if (tool == TimingToolView.LYRICS) focus.requestFocus() },
-                        tool != TimingToolView.LYRICS, { controller.calibration.stop(); tool = if (tool == TimingToolView.LYRICS) TimingToolView.SETTINGS else TimingToolView.LYRICS },
+                        { tool = TimingToolView.SETTINGS },
                         follow, { follow = !follow }, spectrum, { spectrum = !spectrum })
                 }
             }
@@ -58,7 +57,7 @@ internal fun TimingPanel(controller: LyricsTimingController) {
             }
             LyricsLayoutTransition(tool, Modifier.weight(1f).fillMaxWidth()) { page ->
                 when (page) {
-                    TimingToolView.SETTINGS -> TimingSettingsPage(controller, spectrum, { spectrum = !spectrum },
+                    TimingToolView.SETTINGS -> TimingSettingsPage(controller,
                         { tool = TimingToolView.CALIBRATION }, { tool = TimingToolView.LYRICS })
                     TimingToolView.CALIBRATION -> TimingCalibrationPanel(controller) { controller.calibration.stop(); tool = TimingToolView.SETTINGS }
                     TimingToolView.LYRICS -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -66,7 +65,7 @@ internal fun TimingPanel(controller: LyricsTimingController) {
                             .focusRequester(focus).onFocusChanged { keyboardActive = it.hasFocus; if (!it.hasFocus) keyboard.clear() }
                             .onPreviewKeyEvent(keyboard::event).focusable(), list)
                         AnimatedVisibility(spectrum, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
-                            TimingSpectrumPanel(controller, follow, playing, Modifier.fillMaxWidth().height(240.dp))
+                            TimingSpectrumPanel(controller, follow, playing, { focus.requestFocus() }, Modifier.fillMaxWidth().height(240.dp))
                         }
                     }
                 }

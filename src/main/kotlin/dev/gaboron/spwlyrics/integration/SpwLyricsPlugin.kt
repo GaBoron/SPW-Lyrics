@@ -5,6 +5,7 @@ import com.xuncorp.spw.workshop.api.SpwPlugin
 
 class SpwLyricsPlugin(pluginContext: PluginContext) : SpwPlugin(pluginContext) {
     private val ownerId = pluginContext.pluginId
-    override fun start() = PluginRuntime.install(ownerId)
+    private val channel = pluginContext.spwChannel
+    override fun start() = PluginRuntime.install(ownerId, channel)
     override fun stop() = PluginRuntime.close()
 }

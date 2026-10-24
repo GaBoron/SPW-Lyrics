@@ -52,7 +52,7 @@ object PluginRuntime {
 
     @Synchronized
     @OptIn(UnstableSpwWorkshopApi::class)
-    fun install(pluginId: String) {
+    fun install(pluginId: String, channel: com.xuncorp.spw.workshop.api.Channel) {
         if (coordinator != null) return
         timingMedia?.close()
         timingMedia = null
@@ -143,7 +143,7 @@ object PluginRuntime {
         val timingRuntime = TimingMediaRuntime(pluginId).also { timingMedia = it }
         val calibration = FileTimingCalibrationStore(root.resolve("打轴输入校准.properties"))
         workspace = LyricsWorkspace({ LyricsWorkspaceSession(manualOperations, metadataOperations, batch, describeBatchFailure,
-            timingTransport, calibration, SpwTimingAudioDecoder(timingRuntime)) }, ::toastWarning)
+            timingTransport, calibration, SpwTimingAudioDecoder(timingRuntime, TimingRuntimeInstall(channel))) }, ::toastWarning)
         hostUi = HostUiIntegration(checkNotNull(workspace), ::toastWarning).also { it.start() }
     }
 

@@ -30,7 +30,7 @@
 | 🔎 手动搜索与预览 | 自定义关键词、筛选来源、查看匹配信息与歌词预览，按歌曲保存选择 |
 | ✍️ 歌词与元数据编辑 | 编辑歌曲标签和封面，在线匹配并导入信息；逐句、逐字编辑、转换并写入内嵌歌词 |
 | ⌨️ 跟随播放打轴 | F/G/H 记录词首、连续轴和词尾，支持智能首尾词、空拍和撤销；调用宿主播放、暂停、定位与倍速；CJK 按字符、英语按音节分词 |
-| 🔬 频谱打轴辅助 | 频谱、波形、时间缩放和点击定位；需要同时安装并启用 [SPW Media Runtime](https://github.com/GaBoron/SPW-Media-Runtime/releases/latest) |
+| 🔬 频谱打轴辅助 | 频谱、波形、滚轮横移与拖动逐字区间；需要同时安装并启用 SPW Media Runtime |
 | 🥁 输入延迟校准 | 跟随鼓点敲击，保存输入补偿并在下次打轴时自动使用 |
 | ⏱️ 歌词延迟 | 按歌曲保存延迟，同时调整逐行与逐字时间，不修改原始歌词文件 |
 | 📚 批量预缓存 | 提前为音乐库搜索歌词，支持选择歌曲、查看进度与重新处理 |
@@ -54,7 +54,7 @@
 2. 根据需要授予“读取曲库”和“类变换”权限；歌词管理页与播放器菜单入口需要类变换权限。
 3. 正常播放歌曲即可自动加载歌词。需要调整结果时，可在主窗口内打开歌词管理工具。
 
-**频谱编辑需要同时安装并启用 [SPW Media Runtime](https://github.com/GaBoron/SPW-Media-Runtime/releases/latest)**。在“元数据编辑 → 打轴”中打开“频谱”；Runtime 启用后可点击“重新分析”。
+在“元数据编辑 → 打轴”中可手动分词、打开频谱。频谱需要启用 SPW Media Runtime；缺少依赖时会按宿主渠道提供安装入口：微软商店版前往 [GitHub](https://github.com/GaBoron/SPW-Media-Runtime/releases/latest)，Steam 版前往 [Steam 创意工坊](https://steamcommunity.com/workshop/browse/?appid=3009140&searchtext=SPW+Media+Runtime)。
 
 ### 🧭 从哪里进入？
 

@@ -30,7 +30,7 @@ internal class LyricsTimingController(private val editor: MetadataEditorControll
     private var raw: String? = null
     private var observedEdits: Any? = null
     private var retryAfter = 0L
-    private var prepareOnEntry = true
+    private var dependencyCheck = 0L
     private data class Press(val snapshot: TimingPlaybackSnapshot, val cursor: TimingCursor?, val at: Long)
     private val pressing = mutableMapOf<TimingMark, Press>()
     private data class Edit(val before: Map<Int, EditableLyricLine>, val after: Map<Int, EditableLyricLine>,
@@ -38,14 +38,9 @@ internal class LyricsTimingController(private val editor: MetadataEditorControll
     private val undo = ArrayDeque<Edit>()
     private val redo = ArrayDeque<Edit>()
 
-    fun enter() { prepareOnEntry = true }
-
     fun poll() {
         syncDraft()
-        if (prepareOnEntry && !state.busy && !state.preparing && editor.state.structured != null) {
-            prepareOnEntry = false
-            if (state.lines.any { it.words.isEmpty() && it.text.isNotBlank() }) prepare(TimingSplit.CHARACTERS)
-        }
+        if (System.nanoTime() >= dependencyCheck) { spectrum.refreshDependency(); dependencyCheck = System.nanoTime() + 1_000_000_000 }
         val path = editor.state.loaded?.path ?: return
         if (System.nanoTime() < retryAfter) return
         try {
@@ -64,17 +59,18 @@ internal class LyricsTimingController(private val editor: MetadataEditorControll
     private fun syncDraft() {
         val current = editor.state
         val base = current.structured
-        if (loaded !== current.loaded) { prepareOnEntry = true; spectrum.reset() }
+        if (loaded !== current.loaded) spectrum.reset()
         if (loaded !== current.loaded || raw != base?.raw || observedEdits !== current.lineEdits) {
             loaded = current.loaded; raw = base?.raw; observedEdits = current.lineEdits
             undo.clear(); redo.clear(); pressing.clear()
             val lines = base?.lines?.map { current.line(it.id) ?: it }.orEmpty()
             val cursor = LyricTiming.cursors(lines).firstOrNull { it.lineId == current.selectedLineId }
                 ?: LyricTiming.cursors(lines).firstOrNull()
-            state = state.copy(progress = TimingProgress(cursor), skipped = emptySet(), emptyBeats = emptyMap())
+            state = state.copy(lines = lines, progress = TimingProgress(cursor), skipped = emptySet(), emptyBeats = emptyMap())
         }
-        state = state.copy(lines = base?.lines?.map { current.line(it.id) ?: it }.orEmpty(), busy = current.busy,
-            preparing = current.validating || current.loaded == null, canUndo = undo.isNotEmpty(), canRedo = redo.isNotEmpty())
+        state = state.copy(busy = current.busy,
+            preparing = current.structured == null && current.validating || current.loaded == null,
+            canUndo = undo.isNotEmpty(), canRedo = redo.isNotEmpty())
     }
 
     fun choose(cursor: TimingCursor) {
@@ -156,6 +152,7 @@ internal class LyricsTimingController(private val editor: MetadataEditorControll
         val expected = raw ?: return false
         if (lines.isNotEmpty() && !editor.applyTimingLines(expected, lines)) return false
         observedEdits = editor.state.lineEdits
+        if (lines.isNotEmpty()) state = state.copy(lines = state.lines.map { lines[it.id] ?: it })
         return true
     }
 
@@ -172,6 +169,24 @@ internal class LyricsTimingController(private val editor: MetadataEditorControll
     }
 
     fun prepare(mode: TimingSplit) { pressing.clear(); editor.prepareTimingWords(mode) }
+    fun editRange(cursor: TimingCursor, start: Long, end: Long) = perform {
+        syncDraft()
+        check(!state.busy && !state.preparing) { "请等待歌词读取完成。" }
+        val before = state.lines.first { it.id == cursor.lineId }
+        val maximum = playback?.durationMs?.takeIf { it > 0 } ?: Long.MAX_VALUE
+        val after = TimingRangeEdit.change(state.lines, cursor, start, end.coerceAtMost(maximum))
+        if (before == after) return@perform
+        val previous = state.progress
+        check(apply(mapOf(before.id to after))) { "歌词草稿已变化，请重新拖动。" }
+        val next = TimingProgress(cursor)
+        undo.addLast(Edit(mapOf(before.id to before), mapOf(after.id to after), previous, next))
+        while (undo.size > 100) undo.removeFirst()
+        redo.clear(); pressing.clear()
+        state = state.copy(progress = next, error = false, message = "已调整区间，可用 Ctrl+Z 撤销。")
+        editor.selectLine(cursor.lineId)
+        selectionRevision++
+        syncDraft()
+    }
     fun judge(value: TimingJudge) { pressing.clear(); state = state.copy(judge = value) }
     fun options(value: TimingOptions) {
         require(value.offsetMs in -2000..2000)

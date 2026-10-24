@@ -5,7 +5,6 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.focusGroup
@@ -19,54 +18,34 @@ import dev.gaboron.spwlyrics.integration.workspace.*
 
 @OptIn(UnstableSaltUiApi::class)
 @Composable
-internal fun TimingSettingsPage(controller: LyricsTimingController, spectrum: Boolean, toggleSpectrum: () -> Unit,
+internal fun TimingSettingsPage(controller: LyricsTimingController,
     openCalibration: () -> Unit, close: () -> Unit) {
     val focus = remember { FocusRequester() }
     LaunchedEffect(controller.state.busy, controller.calibration.saving) { focus.requestFocus() }
     Column(Modifier.fillMaxSize().focusRequester(focus).focusGroup().focusable(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         JustifiedRow(startContent = { Text("打轴设置") }, endContent = { DesktopButton("关闭设置", close) },
             verticalAlignment = Alignment.CenterVertically)
-        Box(Modifier.weight(1f).fillMaxWidth()) { TimingSettings(controller, spectrum, toggleSpectrum, openCalibration) }
+        Box(Modifier.weight(1f).fillMaxWidth()) { TimingSettings(controller, openCalibration) }
     }
 }
 
 /** Salt item groups keep advanced options out of the transport and capture bars. */
 @Composable
 @OptIn(UnstableSaltUiApi::class)
-internal fun TimingSettings(controller: LyricsTimingController, spectrum: Boolean, toggleSpectrum: () -> Unit, openCalibration: () -> Unit) {
+internal fun TimingSettings(controller: LyricsTimingController, openCalibration: () -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= 900.dp
         LyricsScroll(Modifier.fillMaxSize()) {
             if (wide) Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    TimingAnalysisSettings(controller, spectrum, toggleSpectrum, openCalibration)
+                    TimingInputLatencySettings(controller, openCalibration)
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) { TimingCaptureSettings(controller) }
             } else {
-                TimingAnalysisSettings(controller, spectrum, toggleSpectrum, openCalibration)
+                TimingInputLatencySettings(controller, openCalibration)
                 TimingCaptureSettings(controller)
             }
         }
-    }
-}
-
-@OptIn(UnstableSaltUiApi::class)
-@Composable
-private fun TimingAnalysisSettings(controller: LyricsTimingController, spectrum: Boolean, toggleSpectrum: () -> Unit, openCalibration: () -> Unit) {
-    val state = controller.state
-    val uri = LocalUriHandler.current
-    TimingInputLatencySettings(controller, openCalibration)
-    RoundedColumn(paddingValues = PaddingValues(0.dp)) {
-        ItemSwitcher(spectrum, { toggleSpectrum() }, "频谱编辑辅助", sub = "查看频谱、波形和歌词边界，点击频谱定位宿主")
-        ItemTip("频谱编辑需要同时安装并启用 SPW Media Runtime。")
-        ItemButton({ uri.openUri("https://github.com/GaBoron/SPW-Media-Runtime/releases/latest") }, "下载 SPW Media Runtime")
-    }
-    RoundedColumn(paddingValues = PaddingValues(0.dp)) {
-        TimingSplit.entries.forEach { mode ->
-            ItemButton({ controller.prepare(mode) }, "${mode.label}自动分词",
-                enabled = state.lines.isNotEmpty() && !state.busy && !state.preparing)
-        }
-        ItemTip("进入打轴时自动准备未分词的纯文本行；复用同一套分词逻辑，保留已有逐字时间和扩展标记。")
     }
 }
 

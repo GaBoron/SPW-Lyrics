@@ -1,6 +1,6 @@
 package dev.gaboron.spwlyrics.integration.timingui
 
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -9,24 +9,17 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.moriafly.salt.ui.*
 import dev.gaboron.spwlyrics.application.PlayingTimingWords
-import dev.gaboron.spwlyrics.domain.TimingCursor
-import dev.gaboron.spwlyrics.integration.workspace.LyricsStatus
-import kotlinx.coroutines.delay
 
 @Composable
 internal fun TimingWordGrid(controller: LyricsTimingController, playing: PlayingTimingWords, follow: Boolean,
@@ -35,45 +28,28 @@ internal fun TimingWordGrid(controller: LyricsTimingController, playing: Playing
     val target = if (follow && playing.follow != null) playing.follow else state.cursor
     val height = list.layoutInfo.viewportSize.height
     LaunchedEffect(target?.lineId, height) {
-        delay(100) // Let the spectrum/settings size transition settle before keeping the target visible.
         val index = state.lines.indexOfFirst { it.id == target?.lineId }
-        if (index >= 0) {
+        if (index >= 0 && height > 0) {
             val viewport = list.layoutInfo
             val visible = viewport.visibleItemsInfo.firstOrNull { it.index == index }
-            if (visible == null || visible.offset < viewport.viewportStartOffset || visible.offset + visible.size > viewport.viewportEndOffset) {
-                list.animateScrollToItem(index, -(viewport.viewportSize.height / 3))
-            }
+            val rowHeight = visible?.size ?: viewport.visibleItemsInfo.firstOrNull()?.size ?: 100
+            list.animateScrollToItem(index, -((height - rowHeight) / 2).coerceAtLeast(0))
         }
     }
     Box(modifier) {
         LazyColumn(Modifier.fillMaxSize().padding(end = 12.dp), state = list,
             verticalArrangement = Arrangement.spacedBy(4.dp)) {
             itemsIndexed(state.lines, key = { _, line -> line.id }) { row, line ->
-                val fill by animateColorAsState(when {
-                    state.cursor?.lineId == line.id -> SaltTheme.colors.highlight.copy(alpha = .13f)
-                    playing.cursors.any { it.lineId == line.id } -> SaltTheme.colors.highlight.copy(alpha = .035f)
-                    else -> Color.Transparent
-                }, tween(160), label = "timing line")
+                val selected = state.cursor?.lineId == line.id
+                val active = playing.cursors.any { it.lineId == line.id }
+                val selection by animateFloatAsState(if (selected) .13f else 0f, tween(if (selected) 24 else 100), label = "selected line")
+                val activity by animateFloatAsState(if (active) .035f else 0f, tween(if (active) 20 else 90), label = "playing line")
+                val fill = SaltTheme.colors.highlight.copy(alpha = maxOf(selection, activity))
                 RoundedColumn(Modifier.animateItem().animateContentSize(tween(180)), paddingValues = PaddingValues(0.dp)) {
                     Row(Modifier.fillMaxWidth().background(fill).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text((row + 1).toString(), Modifier.width(40.dp).padding(start = 12.dp),
                             style = SaltTheme.textStyles.sub, color = SaltTheme.colors.subText)
-                        Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()).padding(vertical = 2.dp),
-                            horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-                            if (line.words.isEmpty()) Column(Modifier.padding(12.dp)) {
-                                Text(line.text)
-                                LyricsStatus(if (state.busy || state.preparing) "正在准备逐字内容…" else "打开打轴设置，准备自动分词。")
-                            }
-                            line.words.forEachIndexed { index, word ->
-                                if (word.text.isNotBlank()) key(line.id, index) {
-                                    val cursor = TimingCursor(line.id, index)
-                                    val bring = remember { BringIntoViewRequester() }
-                                    LaunchedEffect(target == cursor) { if (target == cursor) bring.bringIntoView() }
-                                    TimingWordCell(word, state.cursor == cursor, cursor in playing.cursors, !state.busy,
-                                        { controller.choose(cursor); focus() }, Modifier.bringIntoViewRequester(bring))
-                                }
-                            }
-                        }
+                        TimingWordRow(line, state, target, playing, { controller.choose(it); focus() }, Modifier.weight(1f))
                         Column(Modifier.width(108.dp).padding(horizontal = 8.dp), horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             TimingTimeLabel(line.start, start = true)
