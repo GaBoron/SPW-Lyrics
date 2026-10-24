@@ -10,6 +10,8 @@ import dev.gaboron.spwlyrics.integration.manualui.ManualSearchOperations
 import dev.gaboron.spwlyrics.integration.metadataui.MetadataEditorController
 import dev.gaboron.spwlyrics.integration.metadataui.MetadataEditorOperations
 import dev.gaboron.spwlyrics.storage.FileAudioMetadataStore
+import dev.gaboron.spwlyrics.application.TimingPlayback
+import dev.gaboron.spwlyrics.integration.timingui.LyricsTimingController
 
 internal enum class LyricsToolPage(val title: String) {
     SEARCH("手动搜索"), METADATA("元数据编辑"), BATCH("批量处理")
@@ -21,9 +23,11 @@ internal class LyricsWorkspaceSession(
     metadataOperations: MetadataEditorOperations,
     processor: LyricsBatchProcessor,
     describeFailure: (Throwable) -> String,
+    timingPlayback: TimingPlayback,
 ) : AutoCloseable {
     val manual = ManualSearchController(manualOperations)
     val metadata = MetadataEditorController(FileAudioMetadataStore(), metadataOperations)
+    val timing = LyricsTimingController(metadata, timingPlayback)
     val batch = BatchProcessingController(processor, describeFailure)
     var page by mutableStateOf(LyricsToolPage.SEARCH)
         private set

@@ -41,6 +41,7 @@ object PluginRuntime {
     @Volatile private var coordinator: LyricsLoadCoordinator? = null
     @Volatile private var batchProcessor: LyricsBatchProcessor? = null
     @Volatile private var workspace: LyricsWorkspace? = null
+    @Volatile private var timingPlayback: SpwTimingPlayback? = null
     @Volatile private var hostUi: HostUiIntegration? = null
     @Volatile private var settings: PluginSettings? = null
     @Volatile private var cacheFolderOpener: CacheFolderOpener? = null
@@ -134,7 +135,8 @@ object PluginRuntime {
                 workspace?.importSearch(query, candidate, document, preserveDraft)
             }
         }
-        workspace = LyricsWorkspace({ LyricsWorkspaceSession(manualOperations, metadataOperations, batch, describeBatchFailure) }, ::toastWarning)
+        val timingTransport = SpwTimingPlayback().also { timingPlayback = it }
+        workspace = LyricsWorkspace({ LyricsWorkspaceSession(manualOperations, metadataOperations, batch, describeBatchFailure, timingTransport) }, ::toastWarning)
         hostUi = HostUiIntegration(checkNotNull(workspace), ::toastWarning).also { it.start() }
     }
 
@@ -165,6 +167,7 @@ object PluginRuntime {
         workspace?.open(LyricsToolPage.METADATA)
     }
     fun openWorkspace() = workspace?.open(LyricsToolPage.BATCH)
+    fun timingSeeked() { timingPlayback?.seeked() }
     fun openCacheFolder() {
         if (cacheFolderOpener?.open() != true) toastWarning("无法打开 SPW Lyrics 本地缓存文件夹。")
     }
@@ -178,6 +181,7 @@ object PluginRuntime {
         hostUi = null
         workspace?.close()
         workspace = null
+        timingPlayback = null
         cacheFolderOpener = null
         settings?.close()
         settings = null

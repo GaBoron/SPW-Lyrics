@@ -5,6 +5,8 @@ import org.pf4j.Extension
 
 @Extension
 class SpwLyricsExtension : PlaybackExtensionPoint {
+    override fun onSeekTo(position: Long) = PluginRuntime.timingSeeked()
+
     override fun onBeforeLoadLyrics(mediaItem: PlaybackExtensionPoint.MediaItem): String? =
         PluginRuntime.beforeLoad(mediaItem)
 

@@ -32,7 +32,7 @@ internal fun LyricsWorkspaceContent(session: LyricsWorkspaceSession, close: () -
                     LyricsViewport(Modifier.fillMaxSize()) {
                         when (page) {
                             LyricsToolPage.SEARCH -> ManualSearchContent(session.manual)
-                            LyricsToolPage.METADATA -> MetadataEditorContent(session.metadata)
+                            LyricsToolPage.METADATA -> MetadataEditorContent(session.metadata, session.timing)
                             LyricsToolPage.BATCH -> BatchProcessingContent(session.batch)
                         }
                     }

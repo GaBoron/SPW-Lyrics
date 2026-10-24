@@ -11,9 +11,10 @@ import com.moriafly.salt.ui.*
 import com.moriafly.salt.ui.dialog.BasicDialog
 import dev.gaboron.spwlyrics.integration.composeui.*
 import dev.gaboron.spwlyrics.integration.workspace.*
+import dev.gaboron.spwlyrics.integration.timingui.LyricsTimingController
 
 @Composable
-internal fun MetadataEditorContent(controller: MetadataEditorController) {
+internal fun MetadataEditorContent(controller: MetadataEditorController, timing: LyricsTimingController) {
     val state = controller.state
     var page by rememberSaveable { mutableStateOf(0) }
     var metadataExpanded by rememberSaveable { mutableStateOf(true) }
@@ -39,12 +40,12 @@ internal fun MetadataEditorContent(controller: MetadataEditorController) {
             LyricsTransition(maxWidth >= 1000.dp, Modifier.fillMaxSize()) { wide ->
                 if (wide) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                     MetadataSidebar(controller, metadataExpanded, { metadataExpanded = it }, Modifier.fillMaxHeight())
-                    MetadataLyricsPanel(controller, Modifier.weight(1f).fillMaxHeight())
+                    MetadataLyricsPanel(controller, timing, Modifier.weight(1f).fillMaxHeight())
                 } else Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     LyricsTabs(listOf("歌曲信息", "内嵌歌词"), page, { page = it })
                     LyricsTransition(page, Modifier.weight(1f).fillMaxWidth()) { section ->
                         if (section == 0) MetadataFieldsPanel(controller, Modifier.fillMaxSize())
-                        else MetadataLyricsPanel(controller, Modifier.fillMaxSize())
+                        else MetadataLyricsPanel(controller, timing, Modifier.fillMaxSize())
                     }
                 }
             }

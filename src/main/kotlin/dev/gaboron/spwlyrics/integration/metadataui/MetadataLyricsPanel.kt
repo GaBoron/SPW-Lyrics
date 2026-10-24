@@ -8,18 +8,21 @@ import androidx.compose.ui.unit.dp
 import com.moriafly.salt.ui.*
 import dev.gaboron.spwlyrics.integration.composeui.*
 import dev.gaboron.spwlyrics.integration.workspace.*
+import dev.gaboron.spwlyrics.integration.timingui.LyricsTimingController
+import dev.gaboron.spwlyrics.integration.timingui.TimingPanel
 
 @Composable
-internal fun MetadataLyricsPanel(controller: MetadataEditorController, modifier: Modifier) {
+internal fun MetadataLyricsPanel(controller: MetadataEditorController, timing: LyricsTimingController, modifier: Modifier) {
     val state = controller.state
     var view by rememberSaveable { mutableStateOf(0) }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        LyricsTabs(listOf("逐句编辑", "编辑原文", "歌词预览"), view, { view = it })
+        LyricsTabs(listOf("逐句编辑", "编辑原文", "歌词预览", "打轴"), view, { view = it })
         LyricsSection(Modifier.weight(1f)) {
             LyricsTransition(view, Modifier.fillMaxSize().padding(16.dp)) { section ->
                 when (section) {
                     0 -> MetadataStructuredEditor(controller)
                     2 -> MetadataLyricsPreview(state)
+                    3 -> TimingPanel(timing)
                     else -> MetadataTextArea(state.draft.lyrics, controller::lyrics, Modifier.fillMaxSize(),
                         enabled = state.loaded != null && !state.busy, invalid = state.previewError != null,
                         placeholder = "粘贴 TTML、LRC、增强 LRC 或 SPL，也可以从搜索结果或歌词文件导入。")

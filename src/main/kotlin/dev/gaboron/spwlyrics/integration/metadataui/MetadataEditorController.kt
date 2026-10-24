@@ -11,6 +11,8 @@ import dev.gaboron.spwlyrics.codec.TtmlLyricRows
 import dev.gaboron.spwlyrics.codec.LyricEditTime
 import dev.gaboron.spwlyrics.codec.AudioArtworkImages
 import dev.gaboron.spwlyrics.application.OnlineArtworkImport
+import dev.gaboron.spwlyrics.codec.TimingWordPreparation
+import dev.gaboron.spwlyrics.domain.TimingSplit
 import dev.gaboron.spwlyrics.domain.EditableLyricLine
 import dev.gaboron.spwlyrics.domain.EditableLyrics
 import dev.gaboron.spwlyrics.domain.LyricsDocument
@@ -93,6 +95,30 @@ internal class MetadataEditorController(
         if (ids.isEmpty()) return
         val changes = runCatching { ids.associateWith { change(state.line(it) ?: error("歌词行已失效。")) } }
         val updated = changes.getOrElse { state = state.copy(previewError = it.message); return }
+        stageLineEdits(updated)
+    }
+
+    fun applyTimingLines(expectedRaw: String, updated: Map<Int, EditableLyricLine>): Boolean {
+        val base = state.structured ?: return false
+        if (closed || state.busy || state.loaded == null || base.raw != expectedRaw) return false
+        if (updated.any { (id, line) -> base.lines.firstOrNull { it.id == id }?.path != line.path }) return false
+        stageLineEdits(updated)
+        return true
+    }
+
+    fun prepareTimingWords(mode: TimingSplit) {
+        val base = state.structured ?: return
+        if (closed || state.busy || state.validating || state.loaded == null) return
+        val edits = state.lineEdits
+        run({ TimingWordPreparation.prepare(TtmlEditCodec.openRaw(TtmlEditCodec.apply(base, edits)), mode) }, { result ->
+            lyrics(result.raw)
+            state = state.copy(structured = TtmlEditCodec.openRaw(result.raw),
+                status = "已为 ${result.prepared} 行准备逐字内容；${result.skipped} 行含扩展标记，保留原样。已有逐字内容未重新分词。")
+        })
+    }
+
+    private fun stageLineEdits(updated: Map<Int, EditableLyricLine>) {
+        val base = state.structured ?: return
         val edits = (state.lineEdits + updated).filter { (id, line) -> line != base.lines.first { it.id == id } }
         previewTask?.cancel(false)
         val generation = ++previewGeneration
