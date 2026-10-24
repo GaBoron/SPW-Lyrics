@@ -40,6 +40,8 @@ dependencies {
     implementation("io.github.gaboron.spwmedia:spw-media-sdk:0.2.0")
     // The host renders plugin pages with its Compose classes and platform-native Skiko.
     compileOnly("org.jetbrains.compose.desktop:desktop:1.12.2")
+    // Use the host's native bridge for protocol activation, without bundling JNA.
+    compileOnly("net.java.dev.jna:jna-platform:5.18.1")
     implementation("io.github.moriafly:salt-ui:3.0.0-beta03")
 }
 
