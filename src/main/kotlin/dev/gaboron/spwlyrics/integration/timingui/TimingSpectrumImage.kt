@@ -47,7 +47,7 @@ internal fun TimingSpectrumImage(data: TimingSpectrum, viewStart: Long, span: Lo
     Column(modifier.onSizeChanged { width = it.width.coerceAtLeast(1) }.onPointerEvent(PointerEventType.Scroll) { event ->
         if (preview == null) {
             val delta = event.changes.sumOf { (if (it.scrollDelta.x != 0f) it.scrollDelta.x else it.scrollDelta.y).toDouble() }
-            if (delta != 0.0) { pan((span * delta / width).toLong()); event.changes.forEach { it.consume() } }
+            if (delta != 0.0) { pan((span * delta * 30 / width).toLong()); event.changes.forEach { it.consume() } }
         }
     }, verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
