@@ -54,7 +54,7 @@
 2. 根据需要授予“读取曲库”和“类变换”权限；歌词管理页与播放器菜单入口需要类变换权限。
 3. 正常播放歌曲即可自动加载歌词。需要调整结果时，可在主窗口内打开歌词管理工具。
 
-在“元数据编辑 → 打轴”中可手动分词、打开频谱。频谱需要启用 SPW Media Runtime；缺少依赖时会按宿主渠道提供安装入口：微软商店版前往 [GitHub](https://github.com/GaBoron/SPW-Media-Runtime/releases/latest)，Steam 版前往 [Steam 创意工坊](https://steamcommunity.com/workshop/browse/?appid=3009140&searchtext=SPW+Media+Runtime)。
+在“元数据编辑 → 打轴”中可手动分词、打开频谱。频谱需要启用 SPW Media Runtime；缺少依赖时会按宿主渠道提供安装入口：微软商店版前往 [GitHub](https://github.com/GaBoron/SPW-Media-Runtime/releases/latest)，Steam 版前往 [Steam 创意工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3824060316)。
 
 ### 🧭 从哪里进入？
 
