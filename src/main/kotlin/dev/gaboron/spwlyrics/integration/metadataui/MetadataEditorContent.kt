@@ -28,19 +28,24 @@ internal fun MetadataEditorContent(controller: MetadataEditorController) {
             DesktopButton("重新读取", controller::reload, enabled = state.loaded != null && !state.busy, glyph = DesktopGlyph.Refresh)
         }
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(state.loaded?.path?.toString() ?: "打开歌曲，编辑信息与内嵌歌词", maxLines = 2,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-            LyricsStatus(if (state.dirty) "有未保存的修改。${state.status}" else state.status, state.error)
+            MetadataContentTransition(state.loaded?.path?.toString() ?: "打开歌曲，编辑信息与内嵌歌词") { path ->
+                Text(path, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            }
+            MetadataContentTransition((if (state.dirty) "有未保存的修改。${state.status}" else state.status) to state.error) { (message, error) ->
+                LyricsStatus(message, error)
+            }
         }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-            if (maxWidth >= 1000.dp) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                MetadataSidebar(controller, metadataExpanded, { metadataExpanded = it }, Modifier.fillMaxHeight())
-                MetadataLyricsPanel(controller, Modifier.weight(1f).fillMaxHeight())
-            } else Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                LyricsTabs(listOf("歌曲信息", "内嵌歌词"), page, { page = it })
-                LyricsTransition(page, Modifier.weight(1f).fillMaxWidth()) { section ->
-                    if (section == 0) MetadataFieldsPanel(controller, Modifier.fillMaxSize())
-                    else MetadataLyricsPanel(controller, Modifier.fillMaxSize())
+            LyricsTransition(maxWidth >= 1000.dp, Modifier.fillMaxSize()) { wide ->
+                if (wide) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                    MetadataSidebar(controller, metadataExpanded, { metadataExpanded = it }, Modifier.fillMaxHeight())
+                    MetadataLyricsPanel(controller, Modifier.weight(1f).fillMaxHeight())
+                } else Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    LyricsTabs(listOf("歌曲信息", "内嵌歌词"), page, { page = it })
+                    LyricsTransition(page, Modifier.weight(1f).fillMaxWidth()) { section ->
+                        if (section == 0) MetadataFieldsPanel(controller, Modifier.fillMaxSize())
+                        else MetadataLyricsPanel(controller, Modifier.fillMaxSize())
+                    }
                 }
             }
         }

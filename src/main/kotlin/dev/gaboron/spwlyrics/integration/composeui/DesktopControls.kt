@@ -22,8 +22,7 @@ internal fun DesktopButton(
     com.moriafly.salt.ui.Button(onClick, modifier = modifier.desktopControlMotion(enabled).animateContentSize(tween(160)), enabled = enabled,
         appearance = if (primary) com.moriafly.salt.ui.ButtonAppearance.Filled else com.moriafly.salt.ui.ButtonAppearance.Subtle) {
         val ink by animateColorAsState(com.moriafly.salt.ui.LocalContentColor.current, tween(150), label = "button ink")
-        if (loading) { CircularProgressIndicator(Modifier.size(14.dp), color = ink, strokeWidth = 1.5.dp); Spacer(Modifier.width(7.dp)) }
-        else if (glyph != null) { DesktopIcon(glyph, ink); Spacer(Modifier.width(7.dp)) }
+        DesktopButtonIndicator(loading, glyph, ink)
         Crossfade(text, animationSpec = tween(140), label = "button label") { Text(it, color = ink, maxLines = 1) }
     }
 }
