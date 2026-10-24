@@ -41,13 +41,13 @@
 | 歌曲元数据 | MusicBrainz，以及各歌词来源提供的可用元数据 |
 | 本地歌词 | 外置或内嵌 TTML；普通 LRC 与内嵌歌词可交由 SPW 原生处理 |
 
-默认优先选择逐字歌词，其次是逐行和普通歌词；也可以在设置中改成**来源优先**并自定义顺序。LrcShare 需要自行填写 API Key；MusicBrainz 不参与自动歌词选择。详细规则见 [使用说明](docs/使用说明.md#自动替换策略)。
+默认优先逐字，其次逐行和普通歌词；也可改成**来源优先**并自定义顺序。Apple Music 歌词取决于第三方服务可用性；LrcShare 需填写 API Key；MusicBrainz 仅提供元数据。详见 [使用说明](docs/使用说明.md)。
 
 ## 📦 安装与使用
 
-**适配 SPW 1.19.0 / Workshop API 0.1.0-dev23**，Windows 与 Linux 共用同一个 `.spmod` 安装包，无需单独安装 JVM。
+**适配 SPW 1.19.0 / Workshop API 0.1.0-dev23**，Windows 与 Linux 共用 `.spmod` 安装包，无需单独安装 JVM。SPW 1.18 请使用 [v0.4.0](https://github.com/GaBoron/SPW-Lyrics/releases/tag/v0.4.0)。
 
-1. 从 [Releases](https://github.com/GaBoron/SPW-Lyrics/releases/latest) 下载 `.spmod` 文件，在 SPW 的“设置 → 创意工坊”中导入并启用。
+1. 从 [Releases](https://github.com/GaBoron/SPW-Lyrics/releases/latest) 下载 `.spmod`，在 SPW 的“设置 → 创意工坊”中直接导入并启用，不要解压。
 2. 根据需要授予“读取曲库”和“类变换”权限；歌词管理页与播放器菜单入口需要类变换权限。
 3. 正常播放歌曲即可自动加载歌词。需要调整结果时，可在主窗口内打开歌词管理工具。
 
