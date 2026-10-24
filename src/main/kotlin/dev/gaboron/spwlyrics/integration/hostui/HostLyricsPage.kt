@@ -21,7 +21,7 @@ internal fun HostLyricsPage(workspace: LyricsWorkspace, isDarkTheme: Boolean, se
     val focus = remember { FocusRequester() }
     LaunchedEffect(session) { focus.requestFocus() }
     WorkspaceInputSurface(Modifier.fillMaxSize().padding(bottom = 96.dp).focusRequester(focus)
-        .onPreviewKeyEvent {
+        .onKeyEvent {
             if (it.type == KeyEventType.KeyDown && it.key == Key.Escape) {
                 workspace.requestLeave {}; true
             } else false

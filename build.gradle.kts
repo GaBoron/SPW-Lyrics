@@ -36,6 +36,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     implementation("com.github.houbb:opencc4j:1.14.0")
     implementation("net.jthink:jaudiotagger:3.0.1")
+    // Native decoding is leased from the separately installed SPW Media Runtime.
+    implementation("io.github.gaboron.spwmedia:spw-media-sdk:0.2.0")
     // The host renders plugin pages with its Compose classes and platform-native Skiko.
     compileOnly("org.jetbrains.compose.desktop:desktop:1.12.2")
     implementation("io.github.moriafly:salt-ui:3.0.0-beta03")

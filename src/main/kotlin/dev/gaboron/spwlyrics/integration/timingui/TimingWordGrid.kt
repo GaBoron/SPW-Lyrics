@@ -26,15 +26,24 @@ import com.moriafly.salt.ui.*
 import dev.gaboron.spwlyrics.application.PlayingTimingWords
 import dev.gaboron.spwlyrics.domain.TimingCursor
 import dev.gaboron.spwlyrics.integration.workspace.LyricsStatus
+import kotlinx.coroutines.delay
 
 @Composable
 internal fun TimingWordGrid(controller: LyricsTimingController, playing: PlayingTimingWords, follow: Boolean,
     focus: () -> Unit, modifier: Modifier, list: LazyListState = rememberLazyListState()) {
     val state = controller.state
     val target = if (follow && playing.follow != null) playing.follow else state.cursor
-    LaunchedEffect(target?.lineId) {
+    val height = list.layoutInfo.viewportSize.height
+    LaunchedEffect(target?.lineId, height) {
+        delay(100) // Let the spectrum/settings size transition settle before keeping the target visible.
         val index = state.lines.indexOfFirst { it.id == target?.lineId }
-        if (index >= 0) list.animateScrollToItem(index)
+        if (index >= 0) {
+            val viewport = list.layoutInfo
+            val visible = viewport.visibleItemsInfo.firstOrNull { it.index == index }
+            if (visible == null || visible.offset < viewport.viewportStartOffset || visible.offset + visible.size > viewport.viewportEndOffset) {
+                list.animateScrollToItem(index, -(viewport.viewportSize.height / 3))
+            }
+        }
     }
     Box(modifier) {
         LazyColumn(Modifier.fillMaxSize().padding(end = 12.dp), state = list,

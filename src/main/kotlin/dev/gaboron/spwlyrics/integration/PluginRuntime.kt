@@ -34,6 +34,7 @@ import dev.gaboron.spwlyrics.integration.workspace.LyricsWorkspaceSession
 import dev.gaboron.spwlyrics.integration.workspace.LyricsToolPage
 import dev.gaboron.spwlyrics.integration.hostui.HostUiIntegration
 import dev.gaboron.spwlyrics.storage.FileLyricsDelaySettings
+import dev.gaboron.spwlyrics.storage.FileTimingCalibrationStore
 import java.time.Duration
 import kotlin.io.path.Path
 
@@ -42,6 +43,7 @@ object PluginRuntime {
     @Volatile private var batchProcessor: LyricsBatchProcessor? = null
     @Volatile private var workspace: LyricsWorkspace? = null
     @Volatile private var timingPlayback: SpwTimingPlayback? = null
+    @Volatile private var timingMedia: TimingMediaRuntime? = null
     @Volatile private var hostUi: HostUiIntegration? = null
     @Volatile private var settings: PluginSettings? = null
     @Volatile private var cacheFolderOpener: CacheFolderOpener? = null
@@ -50,8 +52,10 @@ object PluginRuntime {
 
     @Synchronized
     @OptIn(UnstableSpwWorkshopApi::class)
-    fun install() {
+    fun install(pluginId: String) {
         if (coordinator != null) return
+        timingMedia?.close()
+        timingMedia = null
         val localData = System.getenv("LOCALAPPDATA")?.takeIf(String::isNotBlank)
             ?.let(::Path) ?: Path(System.getProperty("user.home"))
         val root = localData.resolve("SPW Lyrics")
@@ -136,7 +140,10 @@ object PluginRuntime {
             }
         }
         val timingTransport = SpwTimingPlayback().also { timingPlayback = it }
-        workspace = LyricsWorkspace({ LyricsWorkspaceSession(manualOperations, metadataOperations, batch, describeBatchFailure, timingTransport) }, ::toastWarning)
+        val timingRuntime = TimingMediaRuntime(pluginId).also { timingMedia = it }
+        val calibration = FileTimingCalibrationStore(root.resolve("打轴输入校准.properties"))
+        workspace = LyricsWorkspace({ LyricsWorkspaceSession(manualOperations, metadataOperations, batch, describeBatchFailure,
+            timingTransport, calibration, SpwTimingAudioDecoder(timingRuntime)) }, ::toastWarning)
         hostUi = HostUiIntegration(checkNotNull(workspace), ::toastWarning).also { it.start() }
     }
 
@@ -181,6 +188,8 @@ object PluginRuntime {
         hostUi = null
         workspace?.close()
         workspace = null
+        val mediaCleanup = runCatching { timingMedia?.close() }
+        if (mediaCleanup.isSuccess) timingMedia = null
         timingPlayback = null
         cacheFolderOpener = null
         settings?.close()
@@ -190,6 +199,7 @@ object PluginRuntime {
         coordinator?.close()
         coordinator = null
         libraryTracks.clear()
+        mediaCleanup.getOrThrow()
     }
 
     private fun load(

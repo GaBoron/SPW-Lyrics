@@ -8,7 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.*
-import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.dp
 import com.moriafly.salt.ui.*
 import dev.gaboron.spwlyrics.application.TimingPlaybackIndex
@@ -16,40 +16,65 @@ import dev.gaboron.spwlyrics.integration.workspace.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
+private enum class TimingToolView { LYRICS, SETTINGS, CALIBRATION }
+
 @Composable
 internal fun TimingPanel(controller: LyricsTimingController) {
     val state = controller.state
     val focus = remember { FocusRequester() }
     val keyboard = remember(controller) { TimingKeyboard(controller) }
     var keyboardActive by remember { mutableStateOf(false) }
-    var settings by remember { mutableStateOf(false) }
+    var tool by remember { mutableStateOf(TimingToolView.LYRICS) }
+    var spectrum by rememberSaveable { mutableStateOf(false) }
     var follow by rememberSaveable { mutableStateOf(false) }
     val list = rememberLazyListState()
     LaunchedEffect(controller.selectionRevision) { follow = false }
+    LaunchedEffect(tool) { if (tool == TimingToolView.LYRICS) { withFrameNanos { }; focus.requestFocus() } }
     val index = remember(state.lines) { TimingPlaybackIndex(state.lines) }
     val playing = controller.playback?.let { index.at(it.positionMs) } ?: dev.gaboron.spwlyrics.application.PlayingTimingWords()
-    LaunchedEffect(controller) { controller.enter(); while (isActive) { controller.poll(); delay(40) } }
-    DisposableEffect(controller) { onDispose { keyboard.clear(); controller.cancelPress() } }
+    LaunchedEffect(controller) { controller.enter(); while (isActive) { controller.poll(); controller.calibration.poll(); delay(40) } }
+    DisposableEffect(controller) { onDispose { keyboard.clear(); controller.cancelPress(); controller.spectrum.cancel(); controller.calibration.stop() } }
     ProvideControlSize(ControlSize.Small) {
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            RoundedColumn(paddingValues = PaddingValues(0.dp)) {
-                TimingTransport(controller)
-                ItemDivider()
-                TimingCaptureControls(controller, keyboardActive, { focus.requestFocus() }, settings, { settings = !settings }, follow, { follow = !follow })
+        Column(Modifier.fillMaxSize().onPreviewKeyEvent {
+            if (it.type == KeyEventType.KeyDown && it.key == Key.Escape && tool != TimingToolView.LYRICS) {
+                controller.calibration.stop(); tool = TimingToolView.LYRICS; true
+            } else false
+        }, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            AnimatedVisibility(tool == TimingToolView.LYRICS, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                RoundedColumn(paddingValues = PaddingValues(0.dp)) {
+                    TimingTransport(controller)
+                    ItemDivider()
+                    TimingCaptureControls(controller, keyboardActive, { if (tool == TimingToolView.LYRICS) focus.requestFocus() },
+                        tool != TimingToolView.LYRICS, { controller.calibration.stop(); tool = if (tool == TimingToolView.LYRICS) TimingToolView.SETTINGS else TimingToolView.LYRICS },
+                        follow, { follow = !follow }, spectrum, { spectrum = !spectrum })
+                }
             }
             val selected = state.cursor?.let { cursor -> state.lines.firstOrNull { it.id == cursor.lineId }?.words?.getOrNull(cursor.word) }
-            LyricsLayoutTransition(selected?.text to (state.cursor?.lineId to state.error), Modifier.fillMaxWidth()) { (word, _) ->
-                LyricsStatus(if (state.error) state.message else word?.let { "所选词：$it　　选中为主高亮，播放为次高亮（支持重叠）" }
-                    ?: "点击歌词选择打轴位置", state.error)
+            AnimatedVisibility(tool == TimingToolView.LYRICS, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                LyricsLayoutTransition(selected?.text to (state.cursor?.lineId to state.error), Modifier.fillMaxWidth()) { (word, _) ->
+                    LyricsStatus(if (state.error) state.message else word?.let { "所选词：$it　　选中为主高亮，播放为次高亮（支持重叠）" }
+                        ?: "点击歌词选择打轴位置", state.error)
+                }
             }
-            LyricsLayoutTransition(settings, Modifier.weight(1f).fillMaxWidth()) { expanded ->
-                if (expanded) TimingSettings(controller)
-                else TimingWordGrid(controller, playing, follow, { focus.requestFocus() }, Modifier.fillMaxSize()
-                    .focusRequester(focus).onFocusChanged { keyboardActive = it.hasFocus; if (!it.hasFocus) keyboard.clear() }
-                    .onPreviewKeyEvent(keyboard::event).focusable(), list)
+            LyricsLayoutTransition(tool, Modifier.weight(1f).fillMaxWidth()) { page ->
+                when (page) {
+                    TimingToolView.SETTINGS -> TimingSettingsPage(controller, spectrum, { spectrum = !spectrum },
+                        { tool = TimingToolView.CALIBRATION }, { tool = TimingToolView.LYRICS })
+                    TimingToolView.CALIBRATION -> TimingCalibrationPanel(controller) { controller.calibration.stop(); tool = TimingToolView.SETTINGS }
+                    TimingToolView.LYRICS -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TimingWordGrid(controller, playing, follow, { focus.requestFocus() }, Modifier.weight(1f).fillMaxWidth()
+                            .focusRequester(focus).onFocusChanged { keyboardActive = it.hasFocus; if (!it.hasFocus) keyboard.clear() }
+                            .onPreviewKeyEvent(keyboard::event).focusable(), list)
+                        AnimatedVisibility(spectrum, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                            TimingSpectrumPanel(controller, follow, playing, Modifier.fillMaxWidth().height(240.dp))
+                        }
+                    }
+                }
             }
-            LyricsStatus(if (state.error) state.message else if (!state.available) state.message
-                else "F 词首　G 连续轴　H 词尾　|　空格播放 / 暂停　|　其余操作与快捷键见打轴设置", state.error)
+            AnimatedVisibility(tool == TimingToolView.LYRICS, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                LyricsStatus(if (state.error) state.message else if (!state.available) state.message
+                    else "F 词首　G 连续轴　H 词尾　|　空格播放 / 暂停　|　其余操作与快捷键见打轴设置", state.error)
+            }
         }
     }
 }

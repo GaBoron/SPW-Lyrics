@@ -12,6 +12,8 @@ import dev.gaboron.spwlyrics.integration.metadataui.MetadataEditorOperations
 import dev.gaboron.spwlyrics.integration.metadataui.MetadataLyricsView
 import dev.gaboron.spwlyrics.storage.FileAudioMetadataStore
 import dev.gaboron.spwlyrics.application.TimingPlayback
+import dev.gaboron.spwlyrics.application.TimingAudioDecoder
+import dev.gaboron.spwlyrics.storage.TimingCalibrationStore
 import dev.gaboron.spwlyrics.integration.timingui.LyricsTimingController
 
 internal enum class LyricsToolPage(val title: String) {
@@ -25,10 +27,12 @@ internal class LyricsWorkspaceSession(
     processor: LyricsBatchProcessor,
     describeFailure: (Throwable) -> String,
     timingPlayback: TimingPlayback,
+    calibrationStore: TimingCalibrationStore,
+    timingAudio: TimingAudioDecoder,
 ) : AutoCloseable {
     val manual = ManualSearchController(manualOperations)
     val metadata = MetadataEditorController(FileAudioMetadataStore(), metadataOperations)
-    val timing = LyricsTimingController(metadata, timingPlayback)
+    val timing = LyricsTimingController(metadata, timingPlayback, calibrationStore, timingAudio)
     val batch = BatchProcessingController(processor, describeFailure)
     var page by mutableStateOf(LyricsToolPage.SEARCH)
         private set
@@ -48,5 +52,5 @@ internal class LyricsWorkspaceSession(
     }
 
     fun requestClose(close: () -> Unit) = metadata.requestDiscard(close)
-    override fun close() { manual.close(); metadata.close(); batch.close() }
+    override fun close() { timing.close(); manual.close(); metadata.close(); batch.close() }
 }

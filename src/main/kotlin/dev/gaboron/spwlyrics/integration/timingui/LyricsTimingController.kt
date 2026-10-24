@@ -5,11 +5,24 @@ import dev.gaboron.spwlyrics.application.*
 import dev.gaboron.spwlyrics.codec.LyricEditTime
 import dev.gaboron.spwlyrics.domain.*
 import dev.gaboron.spwlyrics.integration.metadataui.MetadataEditorController
+import dev.gaboron.spwlyrics.integration.JavaSoundCalibrationAudio
+import dev.gaboron.spwlyrics.storage.TimingCalibrationStore
+import dev.gaboron.spwlyrics.storage.MemoryTimingCalibrationStore
+import kotlin.math.roundToLong
 import java.lang.reflect.InvocationTargetException
 import java.util.ArrayDeque
 
 /** Coordinates the pure timing rules, draft edits and host transport; it owns no audio player. */
-internal class LyricsTimingController(private val editor: MetadataEditorController, private val transport: TimingPlayback) {
+internal class LyricsTimingController(private val editor: MetadataEditorController, private val transport: TimingPlayback,
+    calibrationStore: TimingCalibrationStore = MemoryTimingCalibrationStore(),
+    decoder: TimingAudioDecoder? = null, createBeatAudio: () -> CalibrationBeatAudio = ::JavaSoundCalibrationAudio,
+) : AutoCloseable {
+    val calibration = TimingCalibrationController(calibrationStore, createBeatAudio)
+    val spectrum = TimingSpectrumController(decoder ?: object : TimingAudioDecoder {
+        override fun decode(path: java.nio.file.Path, startMs: Long, durationMs: Long, cancelled: () -> Boolean): TimingPcm = error("频谱编辑需要同时安装并启用 SPW Media Runtime。")
+        override fun cancel() {}
+    })
+    val audioPath get() = editor.state.loaded?.path
     var state by mutableStateOf(TimingEditorState()); private set
     var playback by mutableStateOf<TimingPlaybackSnapshot?>(null); private set
     var selectionRevision by mutableIntStateOf(0); private set
@@ -51,7 +64,7 @@ internal class LyricsTimingController(private val editor: MetadataEditorControll
     private fun syncDraft() {
         val current = editor.state
         val base = current.structured
-        if (loaded !== current.loaded) prepareOnEntry = true
+        if (loaded !== current.loaded) { prepareOnEntry = true; spectrum.reset() }
         if (loaded !== current.loaded || raw != base?.raw || observedEdits !== current.lineEdits) {
             loaded = current.loaded; raw = base?.raw; observedEdits = current.lineEdits
             undo.clear(); redo.clear(); pressing.clear()
@@ -101,7 +114,7 @@ internal class LyricsTimingController(private val editor: MetadataEditorControll
         if (!state.canRecord || pressing.containsKey(mark) || state.judge != TimingJudge.DOWN && pressing.isNotEmpty()) return@perform
         val sample = read()
         pressing[mark] = Press(sample, state.cursor, System.nanoTime())
-        if (state.judge == TimingJudge.DOWN) record(mark, sample.positionMs)
+        if (state.judge == TimingJudge.DOWN) record(mark, sample.positionMs, sample.rate)
     }
 
     fun release(mark: TimingMark) = perform {
@@ -112,7 +125,7 @@ internal class LyricsTimingController(private val editor: MetadataEditorControll
         check(start.snapshot.trackId == end.trackId && start.snapshot.seekGeneration == end.seekGeneration && end.positionMs >= start.snapshot.positionMs &&
             end.positionMs - start.snapshot.positionMs <= elapsedMs * 2 + 500) { "按键期间发生切歌或跳转，本次按键未写入，请重试。" }
         val time = if (state.judge == TimingJudge.UP) end.positionMs else start.snapshot.positionMs + (end.positionMs - start.snapshot.positionMs) / 2
-        record(mark, time)
+        record(mark, time, end.rate)
     }
 
     fun click(mark: TimingMark) {
@@ -121,7 +134,8 @@ internal class LyricsTimingController(private val editor: MetadataEditorControll
     }
     fun cancelPress(mark: TimingMark? = null) { if (mark == null) pressing.clear() else pressing.remove(mark) }
 
-    private fun record(mark: TimingMark, time: Long) {
+    private fun record(mark: TimingMark, sampledTime: Long, rate: Float) {
+        val time = (sampledTime - (calibration.saved?.delayMs ?: 0) * rate.toDouble()).roundToLong().coerceAtLeast(0)
         val beforeProgress = state.progress
         val change = LyricTiming.mark(state.lines, beforeProgress, mark, time, state.options, state.skipped,
             state.emptyBeats[state.cursor] ?: 0)
@@ -183,6 +197,11 @@ internal class LyricsTimingController(private val editor: MetadataEditorControll
         val word = state.lines.first { it.id == cursor.lineId }.words[cursor.word]
         transport.seek(editor.state.loaded!!.path, LyricEditTime.parse(word.start) ?: 0); cancelPress()
     }
+    fun seekTo(positionMs: Long) = perform { transport.seek(editor.state.loaded?.path ?: error("请先读取歌曲。"), positionMs.coerceAtLeast(0)); cancelPress() }
+    fun startCalibration() = perform {
+        transport.pauseForCalibration()
+        cancelPress(); calibration.start(state.judge)
+    }
     fun rate(value: Float) = perform { read(); transport.rate(editor.state.loaded!!.path, value.coerceIn(.5f, 2f)); cancelPress() }
     fun stepRate(delta: Float) = perform { rate((read().rate + delta).coerceIn(.5f, 2f)) }
     private fun read(): TimingPlaybackSnapshot = transport.read(editor.state.loaded?.path ?: error("请先读取歌曲文件。")).also { playback = it }
@@ -191,4 +210,5 @@ internal class LyricsTimingController(private val editor: MetadataEditorControll
         val cause = if (error is InvocationTargetException) error.targetException else error
         state = state.copy(error = true, message = cause.message ?: "宿主操作未完成，请检查当前播放歌曲。")
     }
+    override fun close() { cancelPress(); spectrum.close(); calibration.close() }
 }

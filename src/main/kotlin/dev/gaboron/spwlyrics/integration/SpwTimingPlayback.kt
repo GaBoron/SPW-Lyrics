@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicLong
 
 /** Public playback commands plus the exact clock and speed used by the host's lyric renderer. */
 internal class SpwTimingPlayback : TimingPlayback {
+    override fun pauseForCalibration() { WorkshopApi.playback.pause() }
     private data class Access(val controller: Any, val service: Any, val position: Method, val playing: Method,
         val rate: Method, val changeRate: Method)
     private var access: Access? = null

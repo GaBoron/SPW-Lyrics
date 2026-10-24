@@ -6,6 +6,7 @@ internal data class TimingPlaybackSnapshot(val trackId: String, val path: String
     val durationMs: Long, val playing: Boolean, val rate: Float, val seekGeneration: Long = 0)
 
 internal interface TimingPlayback {
+    fun pauseForCalibration()
     fun read(expectedPath: Path): TimingPlaybackSnapshot
     fun play(expectedPath: Path)
     fun pause(expectedPath: Path)

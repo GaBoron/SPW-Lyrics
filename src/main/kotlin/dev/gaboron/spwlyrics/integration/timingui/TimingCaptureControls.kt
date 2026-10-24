@@ -15,13 +15,15 @@ import dev.gaboron.spwlyrics.integration.composeui.DesktopButton
 @OptIn(UnstableSaltUiApi::class)
 @Composable
 internal fun TimingCaptureControls(controller: LyricsTimingController, keyboard: Boolean, focus: () -> Unit,
-    settings: Boolean, toggleSettings: () -> Unit, follow: Boolean, toggleFollow: () -> Unit) {
+    settings: Boolean, toggleSettings: () -> Unit, follow: Boolean, toggleFollow: () -> Unit,
+    spectrum: Boolean, toggleSpectrum: () -> Unit) {
     val state = controller.state
     var expanded by remember { mutableStateOf(false) }
     ItemContainer {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val capture: @Composable () -> Unit = {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    DesktopButton("频谱", toggleSpectrum, primary = spectrum, enabled = controller.audioPath != null)
                     TimingMarkButton("F 词首", TimingMark.START, controller)
                     TimingMarkButton("G 连续轴", TimingMark.CONNECT, controller)
                     TimingMarkButton("H 词尾", TimingMark.END, controller)

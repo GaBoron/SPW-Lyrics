@@ -2,6 +2,7 @@ package dev.gaboron.spwlyrics.integration.timingui
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -12,6 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -31,9 +34,11 @@ internal fun TimingWordCell(word: EditableLyricWord, selected: Boolean, playing:
         tween(120), label = "playing word")
     val edge by animateColorAsState(if (selected) SaltTheme.colors.highlight else SaltTheme.colors.stroke,
         tween(160), label = "timing cursor")
+    val edgeWidth by animateDpAsState(if (selected) 2.dp else 1.dp, tween(160), label = "timing cursor width")
     Column(modifier.widthIn(min = 94.dp, max = 220.dp).width(IntrinsicSize.Max)
-        .clip(SaltTheme.shapes.small).background(fill).border(if (selected) 2.dp else 1.dp, edge, SaltTheme.shapes.small)
+        .clip(SaltTheme.shapes.small).background(fill).border(edgeWidth, edge, SaltTheme.shapes.small)
         .desktopControlMotion(enabled).selectable(selected, enabled = enabled, role = Role.Button, onClick = choose)
+        .semantics { stateDescription = when { selected && playing -> "已选中，正在播放"; selected -> "已选中"; playing -> "正在播放"; else -> "未选中" } }
         .padding(horizontal = 8.dp, vertical = 7.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
         TimingTimeLabel(word.start, start = true)
