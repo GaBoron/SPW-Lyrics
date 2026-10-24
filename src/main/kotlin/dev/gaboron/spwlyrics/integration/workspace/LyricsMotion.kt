@@ -1,6 +1,6 @@
 package dev.gaboron.spwlyrics.integration.workspace
 
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.*
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -14,6 +14,17 @@ import com.moriafly.salt.ui.SaltTheme
 @Composable
 internal fun <T> LyricsTransition(value: T, modifier: Modifier = Modifier, content: @Composable (T) -> Unit) {
     Crossfade(value, modifier, animationSpec = tween(180), label = "lyrics content", content = content)
+}
+
+/** Animate both replacement content and the space it occupies. */
+@Composable
+internal fun <T> LyricsLayoutTransition(value: T, modifier: Modifier = Modifier,
+    contentKey: (T) -> Any? = { it }, content: @Composable (T) -> Unit) {
+    AnimatedContent(value, modifier, contentKey = contentKey, label = "lyrics layout",
+        transitionSpec = {
+            (fadeIn(tween(160, delayMillis = 60)) togetherWith fadeOut(tween(120))).using(
+                SizeTransform(clip = true, sizeAnimationSpec = { _, _ -> tween(220) }))
+        }, content = { content(it) })
 }
 
 @Composable

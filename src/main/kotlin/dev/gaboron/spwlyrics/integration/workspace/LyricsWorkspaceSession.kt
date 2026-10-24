@@ -9,6 +9,7 @@ import dev.gaboron.spwlyrics.integration.manualui.ManualSearchController
 import dev.gaboron.spwlyrics.integration.manualui.ManualSearchOperations
 import dev.gaboron.spwlyrics.integration.metadataui.MetadataEditorController
 import dev.gaboron.spwlyrics.integration.metadataui.MetadataEditorOperations
+import dev.gaboron.spwlyrics.integration.metadataui.MetadataLyricsView
 import dev.gaboron.spwlyrics.storage.FileAudioMetadataStore
 import dev.gaboron.spwlyrics.application.TimingPlayback
 import dev.gaboron.spwlyrics.integration.timingui.LyricsTimingController
@@ -31,6 +32,8 @@ internal class LyricsWorkspaceSession(
     val batch = BatchProcessingController(processor, describeFailure)
     var page by mutableStateOf(LyricsToolPage.SEARCH)
         private set
+    var lyricsView by mutableStateOf(MetadataLyricsView.STRUCTURED)
+    val timingFocused get() = page == LyricsToolPage.METADATA && lyricsView == MetadataLyricsView.TIMING
 
     private val initialized = mutableSetOf<LyricsToolPage>()
 

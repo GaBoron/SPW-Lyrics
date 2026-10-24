@@ -111,9 +111,11 @@ internal class MetadataEditorController(
         if (closed || state.busy || state.validating || state.loaded == null) return
         val edits = state.lineEdits
         run({ TimingWordPreparation.prepare(TtmlEditCodec.openRaw(TtmlEditCodec.apply(base, edits)), mode) }, { result ->
-            lyrics(result.raw)
-            state = state.copy(structured = TtmlEditCodec.openRaw(result.raw),
-                status = "已为 ${result.prepared} 行准备逐字内容；${result.skipped} 行含扩展标记，保留原样。已有逐字内容未重新分词。")
+            if (result.prepared > 0) {
+                lyrics(result.raw)
+                state = state.copy(structured = TtmlEditCodec.openRaw(result.raw))
+            }
+            state = state.copy(status = "已为 ${result.prepared} 行准备逐字内容；${result.skipped} 行含扩展标记，保留原样。已有逐字内容未重新分词。")
         })
     }
 

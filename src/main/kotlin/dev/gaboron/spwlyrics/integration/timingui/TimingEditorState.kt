@@ -17,6 +17,6 @@ internal data class TimingEditorState(
     val message: String = "请先在 SPW 播放正在编辑的歌曲，再点击歌词区域使用打轴快捷键。",
     val error: Boolean = false,
 ) {
-    val canRecord get() = available && !busy && progress.cursor != null
+    val canRecord get() = available && !busy && !preparing && progress.cursor != null
     val cursor get() = progress.cursor
 }

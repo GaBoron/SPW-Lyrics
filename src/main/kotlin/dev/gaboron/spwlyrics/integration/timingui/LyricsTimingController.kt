@@ -16,6 +16,7 @@ internal class LyricsTimingController(private val editor: MetadataEditorControll
     private var raw: String? = null
     private var observedEdits: Any? = null
     private var retryAfter = 0L
+    private var prepareOnEntry = true
     private data class Press(val snapshot: TimingPlaybackSnapshot, val cursor: TimingCursor?, val at: Long)
     private val pressing = mutableMapOf<TimingMark, Press>()
     private data class Edit(val before: Map<Int, EditableLyricLine>, val after: Map<Int, EditableLyricLine>,
@@ -23,8 +24,14 @@ internal class LyricsTimingController(private val editor: MetadataEditorControll
     private val undo = ArrayDeque<Edit>()
     private val redo = ArrayDeque<Edit>()
 
+    fun enter() { prepareOnEntry = true }
+
     fun poll() {
         syncDraft()
+        if (prepareOnEntry && !state.busy && !state.preparing && editor.state.structured != null) {
+            prepareOnEntry = false
+            if (state.lines.any { it.words.isEmpty() && it.text.isNotBlank() }) prepare(TimingSplit.CHARACTERS)
+        }
         val path = editor.state.loaded?.path ?: return
         if (System.nanoTime() < retryAfter) return
         try {
@@ -43,6 +50,7 @@ internal class LyricsTimingController(private val editor: MetadataEditorControll
     private fun syncDraft() {
         val current = editor.state
         val base = current.structured
+        if (loaded !== current.loaded) prepareOnEntry = true
         if (loaded !== current.loaded || raw != base?.raw || observedEdits !== current.lineEdits) {
             loaded = current.loaded; raw = base?.raw; observedEdits = current.lineEdits
             undo.clear(); redo.clear(); pressing.clear()

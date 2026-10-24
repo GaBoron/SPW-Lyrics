@@ -1,13 +1,13 @@
 package dev.gaboron.spwlyrics.integration.workspace
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.runtime.Composable
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.moriafly.salt.ui.Text
-import com.moriafly.salt.ui.SaltTheme
 import dev.gaboron.spwlyrics.integration.batchui.BatchProcessingContent
 import dev.gaboron.spwlyrics.integration.composeui.*
 import dev.gaboron.spwlyrics.integration.manualui.ManualSearchContent
@@ -18,21 +18,19 @@ import dev.gaboron.spwlyrics.integration.metadataui.MetadataEditorContent
 internal fun LyricsWorkspaceContent(session: LyricsWorkspaceSession, close: () -> Unit) {
     val pages = rememberSaveableStateHolder()
     BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-        val gutter = if (maxWidth < 720.dp) 16.dp else 32.dp
-        Column(Modifier.widthIn(max = 1280.dp).fillMaxSize().padding(horizontal = gutter),
-            verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            Row(Modifier.fillMaxWidth().padding(top = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("歌词管理", style = SaltTheme.textStyles.largeTitle, modifier = Modifier.weight(1f))
-                DesktopButton("返回", { session.requestClose(close) }, glyph = DesktopGlyph.Back)
-            }
-            LyricsTabs(LyricsToolPage.entries.map { it.title }, session.page.ordinal,
-                { session.select(LyricsToolPage.entries[it]) })
+        val focused = session.timingFocused
+        val gutter by animateDpAsState(if (focused || maxWidth < 720.dp) 16.dp else 32.dp, tween(220), label = "workspace gutter")
+        val width by animateDpAsState(if (focused) maxWidth else minOf(maxWidth, 1280.dp), tween(220), label = "workspace width")
+        val gap by animateDpAsState(if (focused) 8.dp else 20.dp, tween(220), label = "workspace density")
+        Column(Modifier.width(width).fillMaxHeight().padding(horizontal = gutter).padding(top = gap),
+            verticalArrangement = Arrangement.spacedBy(gap)) {
+            LyricsWorkspaceHeader(session.page, focused, session::select) { session.requestClose(close) }
             LyricsTransition(session.page, Modifier.weight(1f).fillMaxWidth()) { page ->
                 pages.SaveableStateProvider(page.name) {
                     LyricsViewport(Modifier.fillMaxSize()) {
                         when (page) {
                             LyricsToolPage.SEARCH -> ManualSearchContent(session.manual)
-                            LyricsToolPage.METADATA -> MetadataEditorContent(session.metadata, session.timing)
+                            LyricsToolPage.METADATA -> MetadataEditorContent(session.metadata, session.timing, session.lyricsView, { session.lyricsView = it })
                             LyricsToolPage.BATCH -> BatchProcessingContent(session.batch)
                         }
                     }
