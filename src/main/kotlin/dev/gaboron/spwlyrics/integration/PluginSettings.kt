@@ -22,14 +22,15 @@ class PluginSettings(
     private val listener = Consumer<ConfigHelper> {
         // SPW saves settings through a separate helper; the callback can still hold cached values.
         if (!it.reload()) return@Consumer
-        replacementPolicy.set(readPolicy(it))
+        val nextPolicy = readPolicy(it)
+        val policyChanged = replacementPolicy.getAndSet(nextPolicy) != nextPolicy
         val next = readSelection(it)
         val changed = next.getOrNull()?.let { value -> selection.getAndSet(value) != value } ?: false
         val invalid = next.exceptionOrNull()?.message
         if (invalid != null && invalid != invalidInput) notify("排序未生效，已保留上一次有效设置。$invalid")
         invalidInput = invalid
         val key = it.get("lrcshare_api_key", "").trim()
-        if (shareKey.getAndSet(key) != key || changed) onSelectionChanged()
+        if (shareKey.getAndSet(key) != key || changed || policyChanged) onSelectionChanged()
     }
 
     init {

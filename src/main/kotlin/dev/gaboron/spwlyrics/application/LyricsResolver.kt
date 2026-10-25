@@ -34,12 +34,15 @@ class LyricsResolver(
     private val providers = providers.associateBy(LyricsProvider::source)
     private val manualCandidateInspector = ManualCandidateInspector()
     private val providerTasks = ProviderTaskPool()
+    private val precacheTasks = ProviderTaskPool(parallelism = 7)
 
     fun resolveAutomaticProgressively(
         query: TrackQuery,
         snapshotDeadlineNanos: Long,
+        background: Boolean = false,
         onSnapshot: (ResolvedLyrics) -> Unit,
-    ): ResolvedLyrics? = resolveAutomatic(query, snapshotDeadlineNanos, LyricsQuality.PLAIN, onSnapshot)
+    ): ResolvedLyrics? = resolveAutomatic(query, snapshotDeadlineNanos, LyricsQuality.PLAIN, onSnapshot,
+        taskPool = if (background) precacheTasks else providerTasks)
 
     fun resolveAutomaticFully(
         query: TrackQuery,
@@ -63,11 +66,12 @@ class LyricsResolver(
         onSnapshot: (ResolvedLyrics) -> Unit,
         onProgress: (LyricsResolutionProgress) -> Unit = {},
         completionDeadlineNanos: Long = Long.MAX_VALUE,
+        taskPool: ProviderTaskPool = providerTasks,
     ): ResolvedLyrics? {
         val order = preferences()
         val selected = order.sources.filter { it != LyricsSource.LOCAL && it.hasLyrics }.mapNotNull(providers::get)
         onProgress(LyricsResolutionProgress(LyricsResolutionStage.SEARCHING, 0.04, "开始并行搜索 ${selected.size} 个歌词来源"))
-        val completed = providerTasks.collectProgressively(
+        val completed = taskPool.collectProgressively(
             tasks = selected.map { provider ->
                 {
                     resolveProvider(
@@ -79,8 +83,9 @@ class LyricsResolver(
                 }
             },
             snapshotDeadlineNanos = snapshotDeadlineNanos,
-            completionDeadlineNanos = completionDeadlineNanos,
-            snapshotWhen = { results, pending -> unbeatable(results, pending, selected, order) },
+            completionDeadlineNanos = minOf(completionDeadlineNanos,
+                System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(FULL_SEARCH_TIMEOUT_MILLIS)),
+            snapshotWhen = { results, _ -> results.isNotEmpty() },
             stopWhen = { results, pending -> unbeatable(results, pending, selected, order) },
             onProgress = { results, pending ->
                 val finished = selected.size - pending.size
@@ -129,7 +134,7 @@ class LyricsResolver(
 
     fun toCache(resolved: ResolvedLyrics): CachedLyrics = CachedLyrics(
         document = resolved.document,
-        encoded = if (resolved.document.rawTtml == null) SpwLyricsEncoder.encode(resolved.document) else null,
+        encoded = SpwLyricsEncoder.encode(resolved.document),
         savedAtEpochMs = clock.millis(),
         selectionKey = resolved.selectionKey,
     )
@@ -176,6 +181,7 @@ class LyricsResolver(
 
     override fun close() {
         providerTasks.close()
+        precacheTasks.close()
         providers.values.filterIsInstance<AutoCloseable>().forEach { provider -> runCatching { provider.close() } }
     }
 

@@ -49,7 +49,7 @@ internal class ProviderTaskPool(
         return completed.sortedBy(IndexedValue<T>::index)
     }
 
-    /** Publishes a deadline snapshot without cancelling unfinished work, then waits for every task. */
+    /** Publishes usable results progressively while unfinished providers retain their deadline. */
     fun <T> collectProgressively(
         tasks: List<() -> T?>,
         snapshotDeadlineNanos: Long,
@@ -81,7 +81,7 @@ internal class ProviderTaskPool(
                 pending -= outcome.index
                 outcome.value?.let { completed += IndexedValue(outcome.index, it) }
                 onProgress(completed.sortedBy(IndexedValue<T>::index), pending.toSet())
-                if (!snapshotPublished && snapshotWhen(completed, pending)) {
+                if (outcome.value != null && snapshotWhen(completed, pending)) {
                     onSnapshot(completed.sortedBy(IndexedValue<T>::index))
                     snapshotPublished = true
                 }
@@ -100,6 +100,7 @@ internal class ProviderTaskPool(
                 pending -= outcome.index
                 outcome.value?.let { completed += IndexedValue(outcome.index, it) }
                 onProgress(completed.sortedBy(IndexedValue<T>::index), pending.toSet())
+                if (outcome.value != null) onSnapshot(completed.sortedBy(IndexedValue<T>::index))
             }
         } finally {
             futures.filterNot { it.isDone }.forEach { it.cancel(true) }

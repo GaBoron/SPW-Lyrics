@@ -7,16 +7,25 @@ import com.xuncorp.spw.workshop.api.WorkshopApi
 import dev.gaboron.spwlyrics.domain.TrackQuery
 import java.util.concurrent.CompletionException
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.TimeUnit
 
 /** Keeps library IDs only for the current plugin session; cache keys remain recording based. */
 internal class SpwLibraryTrackSource {
     private val byId = ConcurrentHashMap<String, MediaItem>()
 
-    fun load(): List<TrackQuery> {
+    fun load(): List<TrackQuery> = load(timeoutSeconds = null)
+
+    fun loadForPrecache(): List<TrackQuery> = load(timeoutSeconds = 5)
+
+    private fun load(timeoutSeconds: Long?): List<TrackQuery> {
         requirePermission()
         val tracks = try {
-            WorkshopApi.library.getAllTracks().toCompletableFuture().join()
+            val future = WorkshopApi.library.getAllTracks().toCompletableFuture()
+            if (timeoutSeconds == null) future.join() else future.get(timeoutSeconds, TimeUnit.SECONDS)
         } catch (error: CompletionException) {
+            throw error.cause ?: error
+        } catch (error: ExecutionException) {
             throw error.cause ?: error
         }
         byId.clear()
@@ -29,8 +38,15 @@ internal class SpwLibraryTrackSource {
 
     fun fromLyricsCallback(item: MediaItem): TrackQuery {
         val metadata = byId[item.id]?.takeIf { it.path == item.path && it.title == item.title }
-            ?: lookupCallbackMetadata(item)
         return item.toQuery(durationOverride = item.duration.takeIf { it > 0 } ?: metadata?.duration)
+    }
+
+    /** Only resolution workers may wait for library metadata; cache hits never need it. */
+    fun prepare(query: TrackQuery): TrackQuery {
+        if (query.durationMs != null || query.trackId.isBlank()) return query
+        val cached = byId[query.trackId]?.takeIf { it.path == query.path && it.title == query.title }
+        val found = cached ?: lookupMetadata(query) ?: return query
+        return query.copy(durationMs = found.duration.takeIf { it > 0 })
     }
 
     fun current(): TrackQuery? {
@@ -44,13 +60,13 @@ internal class SpwLibraryTrackSource {
         byId.clear()
     }
 
-    private fun lookupCallbackMetadata(item: MediaItem): MediaItem? {
-        if (item.id.isBlank() || item.duration > 0 ||
+    private fun lookupMetadata(query: TrackQuery): MediaItem? {
+        if (query.trackId.isBlank() ||
             !WorkshopApi.manager.isPermissionGranted(PluginPermission.LIBRARY_READ)) return null
         val found = runCatching {
-            WorkshopApi.library.getTrackById(item.id).toCompletableFuture().join()
-        }.getOrNull()?.takeIf { it.path == item.path && it.title == item.title } ?: return null
-        byId[item.id] = found
+            WorkshopApi.library.getTrackById(query.trackId).toCompletableFuture().get(2, TimeUnit.SECONDS)
+        }.getOrNull()?.takeIf { it.path == query.path && it.title == query.title } ?: return null
+        byId[query.trackId] = found
         return found
     }
 

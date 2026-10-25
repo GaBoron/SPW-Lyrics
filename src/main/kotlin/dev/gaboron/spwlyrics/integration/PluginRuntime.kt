@@ -9,6 +9,7 @@ import dev.gaboron.spwlyrics.application.LyricsLoadPhase
 import dev.gaboron.spwlyrics.application.LyricsLoadCoordinator
 import dev.gaboron.spwlyrics.application.LyricsBatchProcessor
 import dev.gaboron.spwlyrics.application.LyricsResolver
+import dev.gaboron.spwlyrics.application.LyricsPrecache
 import dev.gaboron.spwlyrics.application.LyricsOutputRouter
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsDocument
@@ -41,6 +42,7 @@ import kotlin.io.path.Path
 object PluginRuntime {
     @Volatile private var coordinator: LyricsLoadCoordinator? = null
     @Volatile private var batchProcessor: LyricsBatchProcessor? = null
+    @Volatile private var precache: LyricsPrecache? = null
     @Volatile private var workspace: LyricsWorkspace? = null
     @Volatile private var timingPlayback: SpwTimingPlayback? = null
     @Volatile private var timingMedia: TimingMediaRuntime? = null
@@ -63,7 +65,10 @@ object PluginRuntime {
         val cache = FileLyricsCache(cacheDirectory)
         val delays = FileLyricsDelaySettings(root.resolve("歌词延迟"))
         cacheFolderOpener = CacheFolderOpener(cacheDirectory)
-        settings = PluginSettings(WorkshopApi.manager.createConfigManager(), { coordinator?.selectionChanged() }, ::toastWarning)
+        settings = PluginSettings(WorkshopApi.manager.createConfigManager(), {
+            coordinator?.selectionChanged()
+            coordinator?.currentQuery()?.let { precache?.trackChanged(it, force = true) }
+        }, ::toastWarning)
         val http = ProviderHttpClient()
         val providers = listOf(
             AmllProvider(
@@ -98,6 +103,14 @@ object PluginRuntime {
             notify = ::toastWarning,
             delays = delays,
             output = output,
+            prepareQuery = libraryTracks::prepare,
+        )
+        precache = LyricsPrecache(
+            loadLibrary = libraryTracks::loadForPrecache,
+            prepare = { query ->
+                coordinator?.precache(query, hasLocalLyrics = localTtmlLyrics.load(query.path) != null)
+            },
+            enabled = { settings?.automaticReplacementPolicy() == AutomaticReplacementPolicy.ALWAYS },
         )
         val batch = LyricsBatchProcessor(
             loadLibrary = libraryTracks::load,
@@ -196,6 +209,8 @@ object PluginRuntime {
         settings = null
         batchProcessor?.close()
         batchProcessor = null
+        precache?.close()
+        precache = null
         coordinator?.close()
         coordinator = null
         libraryTracks.clear()
@@ -208,12 +223,14 @@ object PluginRuntime {
         localTtml: (() -> LyricsDocument?)? = null,
     ): String? {
         val query = libraryTracks.fromLyricsCallback(mediaItem)
-        return coordinator?.onLoad(
+        val result = coordinator?.onLoad(
             query,
             phase,
             settings?.automaticReplacementPolicy() ?: AutomaticReplacementPolicy.ALWAYS,
             localTtml,
         )
+        precache?.trackChanged(query)
+        return result
     }
 
     private fun isCurrentTrack(query: TrackQuery): Boolean = currentQuery()?.key == query.key
