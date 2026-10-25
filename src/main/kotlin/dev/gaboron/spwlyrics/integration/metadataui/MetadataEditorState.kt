@@ -37,6 +37,15 @@ internal data class MetadataEditorState(
     fun line(id: Int): EditableLyricLine? = lineEdits[id] ?: structured?.lines?.firstOrNull { it.id == id }
     fun vocalPart(line: EditableLyricLine): LyricVocalPart = TtmlVocalParts.part(line, structured?.mainAgent ?: "v1")
     val previewMainAgent get() = if (lineEdits.values.any { it.vocalPart != null }) "v1" else structured?.mainAgent ?: "v1"
+    val lineNumbers: Map<Int, Int> by lazy {
+        buildMap {
+            var number = 0
+            structured?.lines?.forEachIndexed { index, original ->
+                if (index == 0 || !(lineEdits[original.id] ?: original).background) number++
+                put(original.id, number)
+            }
+        }
+    }
     fun lineText(id: Int): String {
         val edited = line(id) ?: return ""
         val original = structured?.lines?.firstOrNull { it.id == id } ?: return edited.text

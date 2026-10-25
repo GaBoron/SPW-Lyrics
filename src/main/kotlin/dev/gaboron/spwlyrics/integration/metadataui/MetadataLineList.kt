@@ -38,7 +38,7 @@ internal fun MetadataLineList(controller: MetadataEditorController, modifier: Mo
                         focus.requestFocus()
                         controller.selectLine(line.id, window.keyboardModifiers.isCtrlPressed, window.keyboardModifiers.isShiftPressed)
                     }.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text("${line.id + 1}  ${line.start.ifBlank { "未定时" }}", color = SaltTheme.colors.subText, style = SaltTheme.textStyles.sub)
+                    Text("${state.lineNumbers[line.id]}  ${line.start.ifBlank { "未定时" }}", color = SaltTheme.colors.subText, style = SaltTheme.textStyles.sub)
                     Text(state.lineText(line.id), maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(lyricVoiceLabel(state.vocalPart(line) == LyricVocalPart.DUET, line.background),
                         color = SaltTheme.colors.subText, style = SaltTheme.textStyles.sub)

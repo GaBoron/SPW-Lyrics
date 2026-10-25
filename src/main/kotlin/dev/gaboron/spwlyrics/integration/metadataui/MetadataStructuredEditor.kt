@@ -27,10 +27,10 @@ internal fun MetadataStructuredEditor(controller: MetadataEditorController) {
             val selected = state.selectedLineId?.let(state::line)
             val listWidth = (maxWidth * .33f).coerceIn(240.dp, 320.dp)
             if (maxWidth < 760.dp) Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                LyricsMenu(selected?.let { "第 ${it.id + 1} 句 · ${lyricVoiceLabel(state.vocalPart(it) == LyricVocalPart.DUET, it.background)}  ${state.lineText(it.id).take(12)}" } ?: "选择歌词句子",
+                LyricsMenu(selected?.let { "第 ${state.lineNumbers[it.id]} 句 · ${lyricVoiceLabel(state.vocalPart(it) == LyricVocalPart.DUET, it.background)}  ${state.lineText(it.id).take(12)}" } ?: "选择歌词句子",
                     rows.map { it.id }, state.selectedLineId ?: rows.first().id, { id ->
                         val line = state.line(id)!!
-                        "第 ${id + 1} 句 · ${lyricVoiceLabel(state.vocalPart(line) == LyricVocalPart.DUET, line.background)}  ${state.lineText(id).take(24)}"
+                        "第 ${state.lineNumbers[id]} 句 · ${lyricVoiceLabel(state.vocalPart(line) == LyricVocalPart.DUET, line.background)}  ${state.lineText(id).take(24)}"
                     },
                     { controller.selectLine(it, window.keyboardModifiers.isCtrlPressed, window.keyboardModifiers.isShiftPressed) })
                 LyricsTransition(selected?.id, Modifier.weight(1f).fillMaxWidth()) { id ->

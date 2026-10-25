@@ -8,7 +8,6 @@ import javax.xml.XMLConstants
 
 /** Patches selected DOM nodes, leaving unrelated TTML extensions and lyric rows intact. */
 internal object TtmlEditCodec {
-    private const val TT = "http://www.w3.org/ns/ttml"
     private const val TTM = "http://www.w3.org/ns/ttml#metadata"
     private val translations = TtmlSecondaryText.TRANSLATIONS
     private val romanizations = TtmlSecondaryText.ROMANIZATIONS
@@ -68,7 +67,7 @@ internal object TtmlEditCodec {
         if (sidesChanged) TtmlVocalParts.normalize(xml.documentElement, base, edits, targets)
         edits.forEach { (id, edited) ->
             val original = base.lines.first { it.id == id }
-            var element = targets.getValue(id)
+            val element = targets.getValue(id)
             val start = LyricEditTime.parse(edited.start)
             val end = LyricEditTime.parse(edited.end)
             val lineTimeChanged = edited.start != original.start || edited.end != original.end
@@ -82,26 +81,6 @@ internal object TtmlEditCodec {
                     xml.documentElement.setAttributeNS(XMLConstants.XMLNS_ATTRIBUTE_NS_URI, "xmlns:ttm", TTM)
                     element.setAttributeNS(TTM, "ttm:agent", edited.agent)
                     TtmlVocalParts.ensureAgent(xml.documentElement, edited.agent)
-                }
-            }
-            if (edited.background != original.background) {
-                if (edited.background) element.setAttributeNS(TTM, "ttm:role", "x-bg")
-                else {
-                    element.removeLocalAttribute("role")
-                    if (element.localName != "p") {
-                        val paragraph = generateSequence(element.parentNode) { it.parentNode }.filterIsInstance<Element>().first { it.localName == "p" }
-                        val promoted = xml.createElementNS(TT, "p")
-                        (0 until element.attributes.length).map { element.attributes.item(it) }.forEach {
-                            promoted.setAttributeNS(it.namespaceURI, it.nodeName, it.nodeValue)
-                        }
-                        val agent = element.getAttributeNS(TTM, "agent").ifBlank { edited.agent }
-                        if (agent.isNotBlank()) promoted.setAttributeNS(TTM, "ttm:agent", agent)
-                        while (element.hasChildNodes()) promoted.appendChild(element.firstChild)
-                        paragraph.parentNode.insertBefore(promoted, paragraph.nextSibling)
-                        element.parentNode.removeChild(element)
-                        element = promoted
-                        targets[id] = promoted
-                    }
                 }
             }
             if (edited.text != original.text || original.words.isNotEmpty() && edited.words.isEmpty()) {
@@ -132,6 +111,12 @@ internal object TtmlEditCodec {
             }
             secondary.write(element, translations, "x-translation", original.translation, edited.translation)
             secondary.write(element, romanizations, "x-roman", original.romanization, edited.romanization)
+        }
+        if (base.lines.any { (edits[it.id] ?: it).background != it.background }) {
+            val grouped = TtmlBackgroundRows.arrange(base.lines.map { original ->
+                TtmlBackgroundRows.Row(targets.getValue(original.id), (edits[original.id] ?: original).background)
+            })
+            base.lines.zip(grouped).forEach { (line, element) -> targets[line.id] = element }
         }
         transform(xml, targets)
         return TtmlXmlDocument.write(xml)

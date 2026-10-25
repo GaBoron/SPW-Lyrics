@@ -21,7 +21,7 @@ internal fun MetadataLyricLineEditor(line: EditableLyricLine, controller: Metada
     val scroll = rememberScrollState()
     Box(modifier) {
         Column(Modifier.fillMaxSize().padding(end = 12.dp).verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("第 ${line.id + 1} 句", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text("第 ${controller.state.lineNumbers[line.id]} 句", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             MetadataLineVoice(controller, enabled)
             MetadataLineTiming(line, controller, enabled)
             Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {

@@ -30,11 +30,10 @@ internal object MetadataTtmlWriter {
             setAttributeNS(XMLConstants.XML_NS_URI, "xml:id", id); setAttribute("type", "person")
         } }
         val body = root.child("body").child("div")
-        source.lines.forEach { line ->
+        val rows = source.lines.map { line ->
             body.child("p").apply {
                 time("begin", line.startMs)
                 time("end", line.effectiveEndMs())
-                if (line.background) setAttributeNS(TTM, "ttm:role", "x-bg")
                 agents[line.agent]?.let { setAttributeNS(TTM, "ttm:agent", it) }
                 var cursor = 0
                 line.words.forEach { word ->
@@ -50,6 +49,9 @@ internal object MetadataTtmlWriter {
                 }
             }
         }
+        TtmlBackgroundRows.arrange(rows.zip(source.lines).map { (element, line) ->
+            TtmlBackgroundRows.Row(element, line.background)
+        })
         return TtmlXmlDocument.write(xml)
     }
 }
