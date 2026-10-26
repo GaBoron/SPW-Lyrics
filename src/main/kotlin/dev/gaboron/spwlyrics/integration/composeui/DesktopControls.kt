@@ -18,8 +18,10 @@ internal fun DesktopButton(
     text: String, onClick: () -> Unit, modifier: Modifier = Modifier,
     enabled: Boolean = true, primary: Boolean = false, loading: Boolean = false,
     glyph: DesktopGlyph? = null,
+    sizeAlignment: Alignment = Alignment.TopStart,
 ) {
-    com.moriafly.salt.ui.Button(onClick, modifier = modifier.desktopControlMotion(enabled).animateContentSize(tween(160)), enabled = enabled,
+    com.moriafly.salt.ui.Button(onClick, modifier = modifier.desktopControlMotion(enabled)
+        .animateContentSize(tween(160), alignment = sizeAlignment), enabled = enabled,
         appearance = if (primary) com.moriafly.salt.ui.ButtonAppearance.Filled else com.moriafly.salt.ui.ButtonAppearance.Subtle) {
         val ink by animateColorAsState(com.moriafly.salt.ui.LocalContentColor.current, tween(150), label = "button ink")
         DesktopButtonIndicator(loading, glyph, ink)
