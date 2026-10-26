@@ -12,7 +12,7 @@ internal class HostUiHooks(private val bridge: HostUiBridge, private val workspa
 
     fun install() {
         try {
-            for (key in bridge.targets.navigation() + bridge.targets.back()) {
+            for (key in bridge.targets.navigation() + bridge.targets.back() + bridge.targets.closeWindow()) {
                 val reflected = bridge.method(key)
                 handles += WorkshopApi.hookRegistrar.hookMethod(key.owner().replace('/', '.'), key.name(),
                     reflected.parameterTypes.map { it.name }, object : MethodHook(80) {
@@ -22,7 +22,7 @@ internal class HostUiHooks(private val bridge: HostUiBridge, private val workspa
                             if (key == bridge.targets.back() && bridge.playerExpanded()) return
                             val receiver = call.thisObject
                             val args = call.args.copyOf()
-                            call.setResult(null)
+                            call.setResult(if (key == bridge.targets.closeWindow()) Unit else null)
                             workspace.requestLeave {
                                 if (key != bridge.targets.back()) bridge.replay { reflected.invoke(receiver, *args) }
                             }

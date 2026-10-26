@@ -32,8 +32,10 @@ internal data class MetadataEditorState(
     val dirty get() = loaded != null && (draft != loaded.metadata || lineEdits.isNotEmpty())
     val lyricsChanged get() = loaded != null && draft.lyrics != loaded.metadata.lyrics
     val canEditRows get() = loaded != null && !busy && structuredError == null && (structured != null || draft.lyrics.isBlank())
-    val canSave get() = dirty && !busy && pendingDiscard == null &&
+    private val canWrite get() = dirty && !busy &&
         (!(lyricsChanged || lineEdits.isNotEmpty()) || draft.lyrics.isBlank() || !validating && previewError == null)
+    val canSave get() = canWrite && pendingDiscard == null
+    val canSaveAndContinue get() = canWrite && pendingDiscard != null
     fun line(id: Int): EditableLyricLine? = lineEdits[id] ?: structured?.lines?.firstOrNull { it.id == id }
     fun vocalPart(line: EditableLyricLine): LyricVocalPart = TtmlVocalParts.part(line, structured?.mainAgent ?: "v1")
     val previewMainAgent get() = if (lineEdits.values.any { it.vocalPart != null }) "v1" else structured?.mainAgent ?: "v1"

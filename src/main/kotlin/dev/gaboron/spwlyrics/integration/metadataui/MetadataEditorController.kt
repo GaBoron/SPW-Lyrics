@@ -321,8 +321,16 @@ internal class MetadataEditorController(
         })
     }
 
-    fun save() {
-        if (closed || !state.canSave) return
+    fun save() = save(null)
+
+    fun saveAndContinue() {
+        val action = state.pendingDiscard ?: return
+        save(action)
+    }
+
+    private fun save(continuation: (() -> Unit)?) {
+        val allowed = if (continuation == null) state.canSave else state.canSaveAndContinue
+        if (closed || !allowed) return
         val original = state.loaded ?: return
         val edited = state.draft
         run({
@@ -333,22 +341,24 @@ internal class MetadataEditorController(
             val refresh = runCatching { operations.afterSave(saved.snapshot.path) }.isSuccess
             state = state.copy(status = "已写入。" +
                 (if (refresh) "歌曲信息可重新扫描曲库后更新。" else "请切歌后重试歌词显示，并重新扫描曲库更新歌曲信息。") + saved.notice)
+            continuation?.invoke()
         })
     }
 
     fun requestDiscard(action: () -> Unit) {
-        if (closed || state.busy) return
+        if (closed || state.busy || state.pendingDiscard != null) return
         if (state.dirty) state = state.copy(pendingDiscard = action)
         else action()
     }
 
     fun discard() {
+        if (state.busy) return
         val action = state.pendingDiscard ?: return
         state = state.copy(pendingDiscard = null)
         action()
     }
 
-    fun cancelDiscard() { state = state.copy(pendingDiscard = null) }
+    fun cancelDiscard() { if (!state.busy) state = state.copy(pendingDiscard = null) }
 
     private fun loaded(snapshot: AudioMetadataSnapshot) {
         state = MetadataEditorState(loaded = snapshot, draft = snapshot.metadata, format = state.format,

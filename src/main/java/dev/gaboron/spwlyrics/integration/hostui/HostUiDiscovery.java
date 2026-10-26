@@ -10,7 +10,7 @@ public final class HostUiDiscovery {
     private static final String STACK = "Landroidx/navigation3/runtime/NavBackStack;";
     private static final String CAPTION = "(Lkotlin/jvm/functions/Function0;Ljava/lang/String;Landroidx/compose/ui/Modifier;ZLjava/lang/String;FLkotlin/jvm/functions/Function3;Landroidx/compose/runtime/Composer;II)V";
     public record Site(Method target, String caller) {}
-    public record Targets(Site page, Site captionEntry, Method captionControl, Method back,
+    public record Targets(Site page, Site captionEntry, Method captionControl, Method back, Method closeWindow,
                           Method navigate, Method collapsePlayer, Field playerState, Method playerExpanded,
                           List<Method> navigation, Field backStack, List<Field> locals,
                           HostThemeDiscovery.Targets theme) {}
@@ -30,6 +30,13 @@ public final class HostUiDiscovery {
         var entry = unique(bodies.stream().filter(b -> b.method().descriptor().equals(COMPOSE)
             && b.calls().contains(caption.method())).toList(), "caption entry");
         var captionSite = site(index, entry.method());
+
+        var closeWindow = unique(bodies.stream().filter(b -> Modifier.isStatic(b.flags())
+            && b.method().descriptor().equals("(Landroidx/compose/ui/window/ApplicationScope;)Lkotlin/Unit;")
+            && b.calls().stream().anyMatch(c -> c.owner().equals("com/xuncorp/voxzen/util/AppConfig")
+                && c.name().equals("getCloseMainWindowStrategy"))
+            && b.calls().stream().anyMatch(c -> c.owner().equals("androidx/compose/ui/window/ApplicationScope")
+                && c.name().equals("exitApplication"))).map(Body::method).toList(), "main window close action");
 
         var stackRead = unique(content.calls().stream().filter(c -> c.descriptor().equals("()" + STACK)).distinct().toList(), "navigation stack getter");
         var navClass = index.type(stackRead.owner());
@@ -64,7 +71,7 @@ public final class HostUiDiscovery {
                 && f.descriptor().equals("L" + c.owner() + ";"))).distinct().toList(), "player sheet state");
         var playerExpanded = unique(back.calls().stream().filter(c -> c.descriptor().equals("()Z")
             && playerState.descriptor().equals("L" + c.owner() + ";")).distinct().toList(), "player sheet expanded state");
-        return new Targets(page, captionSite, caption.method(), back.method(), navigate.method(), collapse, playerState, playerExpanded,
+        return new Targets(page, captionSite, caption.method(), back.method(), closeWindow, navigate.method(), collapse, playerState, playerExpanded,
             navigation, stack, locals,
             HostThemeDiscovery.discover(index, entry.method().owner()));
     }

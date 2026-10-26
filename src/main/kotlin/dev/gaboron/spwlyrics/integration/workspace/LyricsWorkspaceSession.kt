@@ -59,6 +59,9 @@ internal class LyricsWorkspaceSession(
         lyricsView = value
     }
 
-    fun requestClose(close: () -> Unit) = metadata.requestDiscard { batchMetadata.requestDiscard(close) }
+    fun requestClose(close: () -> Unit) {
+        if (metadata.state.pendingDiscard != null || batchMetadata.state.pendingDiscard != null) return
+        metadata.requestDiscard { batchMetadata.requestDiscard(close) }
+    }
     override fun close() { timing.close(); manual.close(); metadata.close(); batchMetadata.close(); batch.close() }
 }

@@ -75,14 +75,19 @@ internal fun MetadataEditorContent(controller: MetadataEditorController, timing:
 
 @Composable
 internal fun MetadataDiscardDialog(controller: MetadataEditorController) {
-    if (controller.state.pendingDiscard == null) return
+    val state = controller.state
+    if (state.pendingDiscard == null) return
     DesktopDialog(controller::cancelDiscard) {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("放弃未保存的修改？")
-            Text("修改尚未写入歌曲文件。返回后可点击“写入歌曲文件”保存。")
+            Text("有未保存的修改")
+            Text(state.loaded?.path?.fileName?.toString().orEmpty())
+            Text("保存后继续，或放弃本次修改；继续编辑会取消离开。")
+            (state.previewError ?: state.status.takeIf { state.error })?.let { LyricsStatus(it, true) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DesktopButton("放弃修改", controller::discard)
-                DesktopButton("继续编辑", controller::cancelDiscard, primary = true)
+                DesktopButton("保存并继续", controller::saveAndContinue, enabled = state.canSaveAndContinue,
+                    loading = state.busy, primary = true)
+                DesktopButton("放弃修改", controller::discard, enabled = !state.busy)
+                DesktopButton("继续编辑", controller::cancelDiscard, enabled = !state.busy)
             }
         }
     }
