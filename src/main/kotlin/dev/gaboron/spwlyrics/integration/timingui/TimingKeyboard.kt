@@ -9,6 +9,10 @@ internal class TimingKeyboard(private val controller: LyricsTimingController) {
     private fun mark(key: Key) = when (key) { Key.F -> TimingMark.START; Key.G -> TimingMark.CONNECT; Key.H -> TimingMark.END; else -> null }
 
     fun event(event: KeyEvent): Boolean {
+        // The host's window detector toggles playback on key-up after an unconsumed typed space.
+        // Windows sends KEY_TYPED separately, with an unknown key/type, even after key-down was handled.
+        if (event.type == KeyEventType.Unknown && event.utf16CodePoint == ' '.code &&
+            !event.isCtrlPressed && !event.isAltPressed && !event.isMetaPressed) return true
         val key = event.key
         if (event.type == KeyEventType.KeyUp) {
             if (!held.remove(key)) return key == Key.Spacebar

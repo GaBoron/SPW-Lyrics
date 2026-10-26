@@ -132,6 +132,12 @@ class LyricsResolver(
         resolved(FetchedLyrics(candidate, document))
     }
 
+    fun inspectManual(candidates: List<LyricsCandidate>, report: (LyricsCandidate) -> Unit) {
+        manualCandidateInspector.inspect(candidates.filter { it.source.hasLyrics }.mapNotNull { candidate ->
+            providers[candidate.source]?.let { ManualCandidateRequest(it, candidate) }
+        }, report)
+    }
+
     fun toCache(resolved: ResolvedLyrics): CachedLyrics = CachedLyrics(
         document = resolved.document,
         encoded = SpwLyricsEncoder.encode(resolved.document),

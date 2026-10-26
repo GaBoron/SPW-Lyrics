@@ -140,6 +140,7 @@ object PluginRuntime {
             override fun search(query: TrackQuery, keywords: String, source: LyricsSource?, onStatus: (ProviderSearchStatus) -> Unit) =
                 checkNotNull(coordinator) { "歌词搜索尚未启用。" }.searchManual(query, keywords, source, onStatus)
             override fun preview(candidate: LyricsCandidate) = coordinator?.preview(candidate)
+            override fun inspect(candidates: List<LyricsCandidate>, report: (LyricsCandidate) -> Unit) = resolver.inspectManual(candidates, report)
             override fun apply(query: TrackQuery, candidate: LyricsCandidate) =
                 isCurrentTrack(query) && coordinator?.applyManual(query, candidate) == true
             override fun useLocal(query: TrackQuery) = isCurrentTrack(query) && coordinator?.useLocal(query) == true

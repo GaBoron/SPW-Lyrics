@@ -14,6 +14,7 @@ internal interface ManualSearchOperations {
     fun search(query: TrackQuery, keywords: String, source: LyricsSource?,
         onStatus: (ProviderSearchStatus) -> Unit): List<CandidateScore>
     fun preview(candidate: LyricsCandidate): ResolvedLyrics?
+    fun inspect(candidates: List<LyricsCandidate>, report: (LyricsCandidate) -> Unit)
     fun apply(query: TrackQuery, candidate: LyricsCandidate): Boolean
     fun useLocal(query: TrackQuery): Boolean
     fun useAutomatic(query: TrackQuery): Boolean

@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.gaboron.spwlyrics.domain.CandidateScore
+import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsSource
 import dev.gaboron.spwlyrics.domain.ProviderSearchStatus
 import dev.gaboron.spwlyrics.domain.ProviderSearchPhase
@@ -13,6 +14,7 @@ import dev.gaboron.spwlyrics.codec.LyricsMetadataReader
 import dev.gaboron.spwlyrics.storage.LyricsDelaySettings
 import java.awt.EventQueue
 import java.util.concurrent.Executors
+import java.util.concurrent.Future
 
 /** Owns asynchronous requests and presentation state; domain rules stay behind operations. */
 internal class ManualSearchController(private val operations: ManualSearchOperations) : AutoCloseable {
@@ -25,9 +27,11 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
     private var trackGeneration = 0
     private var searchGeneration = 0
     private var previewGeneration = 0
+    private var inspection: Future<*>? = null
 
     fun searchMetadata(query: TrackQuery) {
         if (closed || state.mutating) return
+        inspection?.cancel(true)
         trackGeneration++
         searchGeneration++
         previewGeneration++
@@ -39,6 +43,7 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
 
     fun refreshTrack() {
         if (closed || state.mutating || state.readingTrack && trackGeneration > 0) return
+        inspection?.cancel(true)
         val generation = ++trackGeneration
         searchGeneration++
         previewGeneration++
@@ -63,6 +68,7 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
     }
 
     private fun invalidateSearch() {
+        inspection?.cancel(true)
         searchGeneration++
         previewGeneration++
         state = state.copy(candidates = emptyList(), selected = null, document = null, lyricsMetadata = emptyMap(),
@@ -85,6 +91,7 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
         if (keywords.isEmpty()) { status("请输入搜索关键词。", true); return }
         val source = state.source
         val generation = ++searchGeneration
+        inspection?.cancel(true)
         previewGeneration++
         state = state.copy(candidates = emptyList(), selected = null, document = null, lyricsMetadata = emptyMap(),
             sourceStatuses = ProviderSearchStatus.unchecked(),
@@ -96,6 +103,7 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
         } }, { rows ->
             state = state.copy(candidates = rows, searching = false, searched = true,
                 status = if (rows.isEmpty()) "没有找到候选，请缩短关键词或换一个来源。" else "")
+            inspect(rows, generation)
         }, { error ->
             state = state.copy(searching = false, searched = true, sourceStatuses = state.sourceStatuses.mapValues { (_, status) ->
                 if (status.phase == ProviderSearchPhase.SEARCHING) status.copy(phase = ProviderSearchPhase.FAILED, detail = "搜索未完成，请重试。") else status
@@ -104,15 +112,34 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
         })
     }
 
+    private fun inspect(rows: List<CandidateScore>, generation: Int) {
+        inspection = workers.submit {
+            runCatching {
+                operations.inspect(rows.map { it.candidate }) { candidate ->
+                    EventQueue.invokeLater {
+                        if (!closed && searchGeneration == generation) {
+                            fun updated(row: CandidateScore) = if (sameCandidate(row.candidate, candidate))
+                                row.copy(candidate = row.candidate.copy(qualityHint = candidate.qualityHint)) else row
+                            state = state.copy(candidates = state.candidates.map(::updated), selected = state.selected?.let(::updated))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun sameCandidate(left: LyricsCandidate, right: LyricsCandidate) = left.source == right.source && left.remoteId == right.remoteId
+
     fun select(row: CandidateScore) {
-        if (closed || state.mutating || row !in state.candidates || state.selected == row && (state.previewing || state.document != null)) return
+        if (closed || state.mutating || state.candidates.none { sameCandidate(it.candidate, row.candidate) } ||
+            state.selected?.candidate?.let { sameCandidate(it, row.candidate) } == true && (state.previewing || state.document != null)) return
         val generation = ++previewGeneration
         state = state.copy(selected = row, document = null, lyricsMetadata = emptyMap(), previewing = true)
         submit({ previewGeneration == generation }, {
             operations.preview(row.candidate)?.document?.let { Triple(it, TtmlVocalParts.mainAgent(it), LyricsMetadataReader.read(it)) }
         }, { resolved ->
             val inspected = row.copy(candidate = row.candidate.copy(qualityHint = resolved?.first?.quality))
-            state = state.copy(selected = inspected, candidates = state.candidates.map { if (it == row) inspected else it },
+            state = state.copy(selected = inspected, candidates = state.candidates.map { if (sameCandidate(it.candidate, row.candidate)) inspected else it },
                 document = resolved?.first, lyricsMetadata = resolved?.third.orEmpty(),
                 previewMainAgent = resolved?.second ?: "v1", previewing = false,
                 status = if (resolved == null && row.candidate.source.hasLyrics) "歌词读取失败，点击此项可重试，或选择其他候选。" else "",
@@ -189,5 +216,5 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
     }
 
     // A submitted apply/save may finish after the user closes the view, as before.
-    override fun close() { closed = true; workers.shutdown() }
+    override fun close() { closed = true; inspection?.cancel(true); workers.shutdown() }
 }
