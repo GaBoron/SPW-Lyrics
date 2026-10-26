@@ -3,6 +3,7 @@ package dev.gaboron.spwlyrics.integration.metadataui
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import com.moriafly.salt.ui.SaltTheme
 import com.moriafly.salt.ui.Text
@@ -31,15 +32,18 @@ internal fun MetadataLineVoice(controller: MetadataEditorController, enabled: Bo
 @Composable
 internal fun MetadataLineTiming(line: EditableLyricLine, controller: MetadataEditorController, enabled: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
             LyricEditField("开始时间", line.start, { value -> controller.editLine { it.copy(start = value) } }, enabled, Modifier.weight(1f))
             LyricEditField("结束时间", line.end, { value -> controller.editLine { it.copy(end = value) } }, enabled, Modifier.weight(1f))
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text("整句平移", color = DesktopColors.Muted, style = SaltTheme.textStyles.sub)
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    DesktopButton("−100", { controller.shiftLine(-100) }, Modifier.height(40.dp), enabled = enabled)
+                    DesktopButton("+100", { controller.shiftLine(100) }, Modifier.height(40.dp), enabled = enabled)
+                }
+            }
         }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            DesktopButton("−100 ms", { controller.shiftLine(-100) }, enabled = enabled)
-            DesktopButton("+100 ms", { controller.shiftLine(100) }, enabled = enabled)
-        }
-        Text("时间格式 mm:ss.mmm，或整数毫秒；平移同时调整整句和逐字时间。",
+        Text("时间格式 mm:ss.mmm，或整数毫秒；平移单位 ms，同时调整整句和逐字时间。",
             color = DesktopColors.Muted, style = SaltTheme.textStyles.sub)
     }
 }

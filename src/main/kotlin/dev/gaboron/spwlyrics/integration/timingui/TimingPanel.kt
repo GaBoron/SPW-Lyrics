@@ -59,7 +59,7 @@ internal fun TimingPanel(controller: LyricsTimingController) {
                         ?: "点击歌词选择打轴位置", state.error)
                 }
             }
-            LyricsLayoutTransition(tool, Modifier.weight(1f).fillMaxWidth()) { page ->
+            LyricsPageTransition(tool, { it.ordinal }, Modifier.weight(1f).fillMaxWidth()) { page ->
                 when (page) {
                     TimingToolView.SETTINGS -> TimingSettingsPage(controller,
                         { tool = TimingToolView.CALIBRATION }, { tool = TimingToolView.LYRICS })

@@ -21,7 +21,8 @@ import dev.gaboron.spwlyrics.integration.workspace.LyricsListDivider
 
 @OptIn(UnstableSaltUiApi::class)
 @Composable
-internal fun BatchTrackList(state: BatchProcessingState, select: (String) -> Unit, modifier: Modifier) {
+internal fun BatchTrackList(state: BatchProcessingState, select: (String) -> Unit,
+    edit: (dev.gaboron.spwlyrics.domain.TrackQuery) -> Unit, modifier: Modifier) {
     val list = rememberLazyListState()
     val focus = remember { FocusRequester() }
     val scrollbar = remember { MutableInteractionSource() }
@@ -47,9 +48,9 @@ internal fun BatchTrackList(state: BatchProcessingState, select: (String) -> Uni
             else {
                 LazyColumn(Modifier.fillMaxSize().padding(end = 12.dp), state = list, contentPadding = PaddingValues(4.dp)) {
                     itemsIndexed(state.snapshot.items, key = { index, _ -> "$index:${state.keys[index]}" }) { index, item ->
-                        Column {
+                        Column(Modifier.animateItem()) {
                             BatchTrackRow(item, state.keys[index] in state.selectedKeys,
-                                cursor == index || item.state == LyricsBatchItemState.SEARCHING, state.editable) {
+                                cursor == index || item.state == LyricsBatchItemState.SEARCHING, state.editable, { edit(item.query) }) {
                                 focus.requestFocus(); cursor = index; select(state.keys[index])
                             }
                             LyricsListDivider()

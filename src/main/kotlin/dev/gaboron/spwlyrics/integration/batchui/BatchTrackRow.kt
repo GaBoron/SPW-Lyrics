@@ -17,10 +17,13 @@ import com.moriafly.salt.ui.icons.Uncheck
 import dev.gaboron.spwlyrics.application.LyricsBatchItem
 import dev.gaboron.spwlyrics.application.LyricsBatchItemState
 import dev.gaboron.spwlyrics.integration.workspace.lyricsSelection
+import dev.gaboron.spwlyrics.integration.composeui.DesktopIconButton
+import dev.gaboron.spwlyrics.integration.composeui.DesktopGlyph
 
 /** One interaction surface includes the checkbox, metadata and status within the same rounded bounds. */
 @Composable
-internal fun BatchTrackRow(item: LyricsBatchItem, checked: Boolean, highlighted: Boolean, enabled: Boolean, select: () -> Unit) {
+internal fun BatchTrackRow(item: LyricsBatchItem, checked: Boolean, highlighted: Boolean, enabled: Boolean,
+    edit: () -> Unit, select: () -> Unit) {
     Row(Modifier.fillMaxWidth().lyricsSelection(highlighted)
         .toggleable(checked, enabled = enabled, role = Role.Checkbox, onValueChange = { select() })
         .heightIn(min = SaltTheme.dimens.item).alpha(if (enabled) 1f else .5f).padding(horizontal = 16.dp, vertical = 12.dp),
@@ -33,6 +36,7 @@ internal fun BatchTrackRow(item: LyricsBatchItem, checked: Boolean, highlighted:
                 color = SaltTheme.colors.subText, style = SaltTheme.textStyles.sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         BatchItemStatus(item, Modifier.widthIn(max = 180.dp))
+        DesktopIconButton("编辑 ${item.query.title} 的元数据", DesktopGlyph.Edit, edit, enabled = enabled)
     }
 }
 
@@ -42,7 +46,7 @@ private fun BatchItemStatus(item: LyricsBatchItem, modifier: Modifier) {
         Text(when (item.state) {
             LyricsBatchItemState.WAITING -> "等待处理"
             LyricsBatchItemState.SEARCHING -> "搜索中 ${(item.progress * 100).toInt()}%"
-            LyricsBatchItemState.COMPLETED -> "已缓存"
+            LyricsBatchItemState.COMPLETED -> if (item.metadataResult != null) "已完成写入检查" else "已缓存"
             LyricsBatchItemState.FAILED -> "需要重试"
             LyricsBatchItemState.CACHED -> "已有缓存"
             LyricsBatchItemState.EXCLUDED -> "未选择"
@@ -52,7 +56,8 @@ private fun BatchItemStatus(item: LyricsBatchItem, modifier: Modifier) {
             LyricsBatchItemState.SEARCHING, LyricsBatchItemState.COMPLETED -> SaltTheme.colors.highlight
             else -> SaltTheme.colors.subText
         })
-        Text(listOf(item.source, item.quality).filter(String::isNotBlank).joinToString(" · ").ifBlank { item.stage.ifBlank { item.message } },
+        Text(if (item.state == LyricsBatchItemState.FAILED) item.message
+            else item.metadataResult ?: listOf(item.source, item.quality).filter(String::isNotBlank).joinToString(" · ").ifBlank { item.stage.ifBlank { item.message } },
             color = SaltTheme.colors.subText, style = SaltTheme.textStyles.sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

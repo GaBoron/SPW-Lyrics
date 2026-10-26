@@ -25,13 +25,13 @@ internal fun LyricsWorkspaceContent(session: LyricsWorkspaceSession, close: () -
         Column(Modifier.width(width).fillMaxHeight().padding(horizontal = gutter).padding(top = gap),
             verticalArrangement = Arrangement.spacedBy(gap)) {
             LyricsWorkspaceHeader(session.page, focused, session::select) { session.requestClose(close) }
-            LyricsTransition(session.page, Modifier.weight(1f).fillMaxWidth()) { page ->
+            LyricsPageTransition(session.page, { it.ordinal }, Modifier.weight(1f).fillMaxWidth()) { page ->
                 pages.SaveableStateProvider(page.name) {
                     LyricsViewport(Modifier.fillMaxSize()) {
                         when (page) {
                             LyricsToolPage.SEARCH -> ManualSearchContent(session.manual)
                             LyricsToolPage.METADATA -> MetadataEditorContent(session.metadata, session.timing, session.lyricsView, session::selectLyricsView)
-                            LyricsToolPage.BATCH -> BatchProcessingContent(session.batch)
+                            LyricsToolPage.BATCH -> BatchProcessingContent(session.batch, session.batchMetadata)
                         }
                     }
                 }
@@ -39,4 +39,5 @@ internal fun LyricsWorkspaceContent(session: LyricsWorkspaceSession, close: () -
         }
     }
     MetadataDiscardDialog(session.metadata)
+    MetadataDiscardDialog(session.batchMetadata)
 }

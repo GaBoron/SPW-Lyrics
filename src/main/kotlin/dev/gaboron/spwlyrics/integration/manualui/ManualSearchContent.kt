@@ -31,7 +31,7 @@ internal fun ManualSearchContent(controller: ManualSearchController) {
                 ManualPreviewContent(controller, Modifier.weight(1.05f).fillMaxHeight())
             } else Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 LyricsTabs(listOf("搜索结果", "歌词预览"), if (detail) 1 else 0, { detail = it == 1 })
-                LyricsTransition(detail, Modifier.weight(1f).fillMaxWidth()) { preview ->
+                LyricsPageTransition(detail, { if (it) 1 else 0 }, Modifier.weight(1f).fillMaxWidth()) { preview ->
                     if (preview) ManualPreviewContent(controller, Modifier.fillMaxSize())
                     else ManualCandidateList(state, { controller.select(it); detail = true }, Modifier.fillMaxSize())
                 }

@@ -12,6 +12,7 @@ import com.moriafly.salt.ui.popup.*
 import dev.gaboron.spwlyrics.domain.TimingMark
 import dev.gaboron.spwlyrics.domain.TimingSplit
 import dev.gaboron.spwlyrics.integration.composeui.DesktopButton
+import dev.gaboron.spwlyrics.integration.composeui.DesktopPopupMenu
 
 @OptIn(UnstableSaltUiApi::class)
 @Composable
@@ -36,7 +37,7 @@ internal fun TimingCaptureControls(controller: LyricsTimingController, keyboard:
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Box {
                         DesktopButton("自动分词", { splitting = true }, enabled = state.lines.isNotEmpty() && !state.busy && !state.preparing)
-                        PopupMenu(splitting, { splitting = false }) {
+                        DesktopPopupMenu(splitting, { splitting = false }) {
                             TimingSplit.entries.forEach { mode ->
                                 ItemButton({ controller.prepare(mode); splitting = false }, mode.label)
                             }
@@ -46,7 +47,7 @@ internal fun TimingCaptureControls(controller: LyricsTimingController, keyboard:
                     DesktopButton(if (follow) "跟随播放" else "跟随所选", toggleFollow, primary = !follow)
                     Box {
                         DesktopButton("更多", { expanded = true })
-                        PopupMenu(expanded, { expanded = false }) {
+                        DesktopPopupMenu(expanded, { expanded = false }) {
                             ItemButton({ controller.undo(); expanded = false }, "撤销  Ctrl+Z", enabled = state.canUndo && !state.busy)
                             ItemButton({ controller.undo(true); expanded = false }, "重做  Ctrl+Y", enabled = state.canRedo && !state.busy)
                             ItemButton({ controller.seekToCursor(); expanded = false }, "定位所选词", enabled = state.available && state.cursor != null && !state.busy)

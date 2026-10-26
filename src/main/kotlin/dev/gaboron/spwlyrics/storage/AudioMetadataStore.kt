@@ -42,8 +42,14 @@ internal class FileAudioMetadataStore : AudioMetadataStore {
         return AudioMetadataSnapshot(target, before, metadata)
     }
 
-    @Synchronized
     override fun save(original: AudioMetadataSnapshot, edited: AudioMetadata): AudioMetadataSaved {
+        val key = original.path.toAbsolutePath().normalize().toString().lowercase(Locale.ROOT)
+        return synchronized(writeLocks[(key.hashCode() and Int.MAX_VALUE) % writeLocks.size]) {
+            saveLocked(original, edited)
+        }
+    }
+
+    private fun saveLocked(original: AudioMetadataSnapshot, edited: AudioMetadata): AudioMetadataSaved {
         val target = original.path
         require(edited != original.metadata) { "没有需要写入的修改。" }
         require(edited.lyrics.length <= 4_000_000) { "歌词过大，最多支持 400 万字符。" }
@@ -125,6 +131,8 @@ internal class FileAudioMetadataStore : AudioMetadataStore {
     }
 
     companion object {
+        // Batch work and both editors may hold separate store instances for the same audio file.
+        private val writeLocks = Array(32) { Any() }
         val SUPPORTED_EXTENSIONS = setOf("mp3", "flac", "m4a", "mp4", "ogg", "wav", "aif", "aiff")
     }
 }

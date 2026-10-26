@@ -10,7 +10,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.dp
 import com.moriafly.salt.ui.*
-import com.moriafly.salt.ui.dialog.BasicDialog
 import dev.gaboron.spwlyrics.integration.composeui.*
 import dev.gaboron.spwlyrics.integration.workspace.*
 import dev.gaboron.spwlyrics.integration.timingui.LyricsTimingController
@@ -60,11 +59,11 @@ internal fun MetadataEditorContent(controller: MetadataEditorController, timing:
                         }
                     }
                     Box(Modifier.weight(1f).fillMaxHeight()) {
-                        androidx.compose.animation.AnimatedVisibility(!wide && page == 0 && !focused, modifier = Modifier.fillMaxSize(), enter = fadeIn(), exit = fadeOut()) {
-                            MetadataFieldsPanel(controller, Modifier.fillMaxSize())
-                        }
-                        androidx.compose.animation.AnimatedVisibility(wide || page == 1 || focused, modifier = Modifier.fillMaxSize(), enter = fadeIn(), exit = fadeOut()) {
+                        if (wide || focused) {
                             MetadataLyricsPanel(controller, timing, view, { page = 1; selectView(it) }, Modifier.fillMaxSize())
+                        } else LyricsPageTransition(page, { it }, Modifier.fillMaxSize()) { selected ->
+                            if (selected == 0) MetadataFieldsPanel(controller, Modifier.fillMaxSize())
+                            else MetadataLyricsPanel(controller, timing, view, { page = 1; selectView(it) }, Modifier.fillMaxSize())
                         }
                     }
                 }
@@ -77,7 +76,7 @@ internal fun MetadataEditorContent(controller: MetadataEditorController, timing:
 @Composable
 internal fun MetadataDiscardDialog(controller: MetadataEditorController) {
     if (controller.state.pendingDiscard == null) return
-    BasicDialog(onDismissRequest = controller::cancelDiscard) {
+    DesktopDialog(controller::cancelDiscard) {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("放弃未保存的修改？")
             Text("修改尚未写入歌曲文件。返回后可点击“写入歌曲文件”保存。")

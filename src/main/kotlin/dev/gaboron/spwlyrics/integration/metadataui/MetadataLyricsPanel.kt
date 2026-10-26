@@ -21,7 +21,7 @@ internal fun MetadataLyricsPanel(controller: MetadataEditorController, timing: L
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         LyricsTabs(MetadataLyricsView.entries.map { it.title }, view.ordinal,
             { selectView(MetadataLyricsView.entries[it]) }, compact = focused)
-        LyricsTransition(view, Modifier.weight(1f).fillMaxWidth()) { section ->
+        LyricsPageTransition(view, { it.ordinal }, Modifier.weight(1f).fillMaxWidth()) { section ->
             if (section == MetadataLyricsView.TIMING) TimingPanel(timing)
             else LyricsSection(Modifier.fillMaxSize()) {
                 Box(Modifier.fillMaxSize().padding(16.dp)) {

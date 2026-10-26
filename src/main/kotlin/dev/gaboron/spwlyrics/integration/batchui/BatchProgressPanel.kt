@@ -27,11 +27,12 @@ internal fun BatchProgressPanel(state: BatchProcessingState, summary: BatchProgr
                 Box(Modifier.fillMaxHeight().fillMaxWidth(progress).background(SaltTheme.colors.highlight))
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("新缓存 ${summary.completed}", color = SaltTheme.colors.subText, style = SaltTheme.textStyles.sub)
+                Text("${if (state.snapshot.writingMetadata) "已处理" else "新缓存"} ${summary.completed}", color = SaltTheme.colors.subText, style = SaltTheme.textStyles.sub)
                 Text("已有缓存 ${summary.cached}", color = SaltTheme.colors.subText, style = SaltTheme.textStyles.sub)
                 Text("失败 ${summary.failed}", color = if (summary.failed > 0) SaltTheme.colors.error else SaltTheme.colors.subText,
                     style = SaltTheme.textStyles.sub)
-                Text("最多同时处理 3 首 · 只写入插件缓存", color = SaltTheme.colors.subText, style = SaltTheme.textStyles.sub)
+                Text(if (state.snapshot.writingMetadata) "最多同时处理 3 首 · 写入已选择的歌曲数据" else "最多同时处理 3 首 · 只写入插件缓存",
+                    color = SaltTheme.colors.subText, style = SaltTheme.textStyles.sub)
             }
         }
     }

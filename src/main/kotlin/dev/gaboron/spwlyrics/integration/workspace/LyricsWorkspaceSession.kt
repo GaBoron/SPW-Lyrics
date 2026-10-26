@@ -17,7 +17,7 @@ import dev.gaboron.spwlyrics.storage.TimingCalibrationStore
 import dev.gaboron.spwlyrics.integration.timingui.LyricsTimingController
 
 internal enum class LyricsToolPage(val title: String) {
-    SEARCH("手动搜索"), METADATA("元数据编辑"), BATCH("批量处理")
+    SEARCH("手动搜索"), METADATA("元数据编辑"), BATCH("批量管理")
 }
 
 /** Controllers belong to a session, never to a tab or a composition. All access is on the EDT. */
@@ -32,6 +32,7 @@ internal class LyricsWorkspaceSession(
 ) : AutoCloseable {
     val manual = ManualSearchController(manualOperations)
     val metadata = MetadataEditorController(FileAudioMetadataStore(), metadataOperations)
+    val batchMetadata = MetadataEditorController(FileAudioMetadataStore(), metadataOperations)
     val timing = LyricsTimingController(metadata, timingPlayback, calibrationStore, timingAudio)
     val batch = BatchProcessingController(processor, describeFailure)
     var page by mutableStateOf(LyricsToolPage.SEARCH)
@@ -58,6 +59,6 @@ internal class LyricsWorkspaceSession(
         lyricsView = value
     }
 
-    fun requestClose(close: () -> Unit) = metadata.requestDiscard(close)
-    override fun close() { timing.close(); manual.close(); metadata.close(); batch.close() }
+    fun requestClose(close: () -> Unit) = metadata.requestDiscard { batchMetadata.requestDiscard(close) }
+    override fun close() { timing.close(); manual.close(); metadata.close(); batchMetadata.close(); batch.close() }
 }

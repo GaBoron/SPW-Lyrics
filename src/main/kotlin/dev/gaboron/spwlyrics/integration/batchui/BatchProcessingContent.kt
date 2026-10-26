@@ -10,27 +10,41 @@ import dev.gaboron.spwlyrics.application.LyricsBatchItemState
 import dev.gaboron.spwlyrics.application.LyricsBatchState
 import dev.gaboron.spwlyrics.integration.composeui.*
 import dev.gaboron.spwlyrics.integration.workspace.*
+import dev.gaboron.spwlyrics.integration.metadataui.MetadataEditorController
+import java.nio.file.Path
 
 @OptIn(UnstableSaltUiApi::class)
 @Composable
-internal fun BatchProcessingContent(controller: BatchProcessingController) {
+internal fun BatchProcessingContent(controller: BatchProcessingController, editor: MetadataEditorController) {
     val state = controller.state
+    var editing by remember { mutableStateOf(false) }
+    var writeOptions by remember { mutableStateOf(false) }
+    val editable = state.editable && !editor.state.busy
+    val closeEditor: (() -> Unit) -> Unit = { action ->
+        editor.requestDiscard { editor.clear(); editing = false; action() }
+    }
     val summary = remember(state.snapshot, state.selectedKeys) { BatchProgressSummary.from(state) }
     Column(Modifier.fillMaxSize().onPreviewKeyEvent {
         if (it.type == KeyEventType.KeyDown && it.key == Key.F5) { controller.refresh(); true } else false
     }, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        LyricsStatus("为音乐库提前搜索并缓存歌词，离开页面后任务仍会继续。")
+        LyricsStatus("缓存歌词、批量写入所选数据，或点击每首歌旁的编辑图标修改元数据。")
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            DesktopButton(if (state.snapshot.state in listOf(LyricsBatchState.COMPLETED, LyricsBatchState.CANCELLED)) "重新处理" else "开始处理",
-                controller::start, enabled = state.editable && state.selectedKeys.isNotEmpty(), primary = !state.active, loading = state.busy)
-            if (state.active) {
-                DesktopButton(if (state.snapshot.state == LyricsBatchState.PAUSED) "继续处理" else "暂停", controller::pauseOrResume,
-                    enabled = !state.busy, primary = true)
-                DesktopButton("停止", controller::stop, enabled = !state.busy)
+            DesktopButton("缓存歌词", { closeEditor { controller.start() } },
+                enabled = editable && state.selectedKeys.isNotEmpty(), primary = !state.active, loading = state.busy)
+            DesktopButton("批量写入", { closeEditor { writeOptions = true } },
+                enabled = editable && state.selectedKeys.isNotEmpty(), glyph = DesktopGlyph.Edit)
+            androidx.compose.animation.AnimatedVisibility(state.active,
+                enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandHorizontally(),
+                exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.shrinkHorizontally()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DesktopButton(if (state.snapshot.state == LyricsBatchState.PAUSED) "继续处理" else "暂停", controller::pauseOrResume,
+                        enabled = !state.busy, primary = true)
+                    DesktopButton("停止", controller::stop, enabled = !state.busy)
+                }
             }
-            DesktopButton("重试失败项", controller::retry,
-                enabled = state.editable && state.snapshot.items.any { it.state == LyricsBatchItemState.FAILED })
-            DesktopButton("刷新音乐库", controller::refresh, enabled = state.editable, glyph = DesktopGlyph.Refresh)
+            DesktopButton("重试失败项", { closeEditor { controller.retry() } },
+                enabled = editable && state.snapshot.items.any { it.state == LyricsBatchItemState.FAILED })
+            DesktopButton("刷新音乐库", controller::refresh, enabled = editable, glyph = DesktopGlyph.Refresh)
         }
         BatchProgressPanel(state, summary, Modifier.fillMaxWidth())
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -40,6 +54,31 @@ internal fun BatchProcessingContent(controller: BatchProcessingController) {
             DesktopButton("取消全选", { controller.selectAll(false) }, enabled = state.editable && state.keys.isNotEmpty())
         }
         LyricsStatus(state.message, state.error)
-        BatchTrackList(state, controller::select, Modifier.weight(1f).fillMaxWidth())
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            val wide = maxWidth >= 900.dp
+            val list: @Composable (Modifier) -> Unit = { modifier ->
+                BatchTrackList(state, controller::select, { query ->
+                    editing = true
+                    editor.openPath(Path.of(query.path))
+                }, modifier)
+            }
+            val fields: @Composable (Modifier) -> Unit = { modifier ->
+                BatchTrackEditor(editor, { closeEditor {} }, modifier)
+            }
+            if (wide) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                list(Modifier.weight(1f).fillMaxHeight())
+                androidx.compose.animation.AnimatedVisibility(editing,
+                    enter = androidx.compose.animation.expandHorizontally() + androidx.compose.animation.fadeIn(),
+                    exit = androidx.compose.animation.shrinkHorizontally() + androidx.compose.animation.fadeOut()) {
+                    fields(Modifier.width(360.dp).fillMaxHeight())
+                }
+            } else LyricsPageTransition(editing, { if (it) 1 else 0 }, Modifier.fillMaxSize()) { detail ->
+                if (detail) fields(Modifier.fillMaxSize()) else list(Modifier.fillMaxSize())
+            }
+        }
+    }
+    if (writeOptions) BatchMetadataDialog(state.selectedKeys.size, { writeOptions = false }) {
+        writeOptions = false
+        controller.start(it)
     }
 }

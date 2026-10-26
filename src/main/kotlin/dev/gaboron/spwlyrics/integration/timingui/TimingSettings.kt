@@ -11,7 +11,6 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import com.moriafly.salt.ui.*
-import com.moriafly.salt.ui.popup.*
 import dev.gaboron.spwlyrics.domain.*
 import dev.gaboron.spwlyrics.integration.composeui.*
 import dev.gaboron.spwlyrics.integration.workspace.*
@@ -33,19 +32,9 @@ internal fun TimingSettingsPage(controller: LyricsTimingController,
 @Composable
 @OptIn(UnstableSaltUiApi::class)
 internal fun TimingSettings(controller: LyricsTimingController, openCalibration: () -> Unit) {
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val wide = maxWidth >= 900.dp
-        LyricsScroll(Modifier.fillMaxSize()) {
-            if (wide) Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    TimingInputLatencySettings(controller, openCalibration)
-                }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) { TimingCaptureSettings(controller) }
-            } else {
-                TimingInputLatencySettings(controller, openCalibration)
-                TimingCaptureSettings(controller)
-            }
-        }
+    LyricsScroll(Modifier.fillMaxSize()) {
+        TimingInputLatencySettings(controller, openCalibration)
+        TimingCaptureSettings(controller)
     }
 }
 
@@ -86,9 +75,9 @@ private fun TimingCaptureSettings(controller: LyricsTimingController) {
 @Composable
 private fun <T> TimingChoiceItem(text: String, choices: List<T>, selected: T, title: (T) -> String,
     select: (T) -> Unit, enabled: Boolean) {
-    ItemDropdown(text = text, value = title(selected), enabled = enabled) {
-        choices.forEach { choice ->
-            PopupMenuItem({ select(choice); state.dismiss() }, text = title(choice), selected = choice == selected)
-        }
+    ItemContainer {
+        JustifiedRow(startContent = { Text(text) }, endContent = {
+            LyricsMenu(title(selected), choices, selected, title, select, enabled = enabled)
+        }, verticalAlignment = Alignment.CenterVertically)
     }
 }

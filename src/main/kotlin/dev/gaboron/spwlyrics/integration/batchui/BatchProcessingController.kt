@@ -7,6 +7,7 @@ import dev.gaboron.spwlyrics.application.LyricsBatchItemState
 import dev.gaboron.spwlyrics.application.LyricsBatchProcessor
 import dev.gaboron.spwlyrics.application.LyricsBatchSnapshot
 import dev.gaboron.spwlyrics.application.LyricsBatchState
+import dev.gaboron.spwlyrics.application.BatchMetadataOptions
 import java.awt.EventQueue
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -42,11 +43,11 @@ internal class BatchProcessingController(
         if (state.editable) state = state.copy(selectedKeys = if (value) state.keys.toSet() else emptySet())
     }
 
-    fun start() {
+    fun start(metadata: BatchMetadataOptions? = null) {
         if (!state.editable || state.selectedKeys.isEmpty()) return
         val selected = state.selectedKeys
         val includeCached = state.includeCached
-        request(preserveSelection = false) { processor.start(includeCached, selected) }
+        request(preserveSelection = false) { processor.start(includeCached, selected, writeMetadata = metadata) }
     }
 
     fun pauseOrResume() {
@@ -87,6 +88,7 @@ internal class BatchProcessingController(
         }.toSet()
         state = state.copy(snapshot = snapshot, keys = keys, selectedKeys = selected,
             message = if (snapshot.items.isEmpty()) "没有可处理的歌曲，请先完成 SPW 音乐库扫描，再重新读取音乐库。"
+            else if (snapshot.writingMetadata) "使用可靠匹配的来源写入所选数据；离开页面后继续。停止后，正在保存的歌曲会完成写入。完成后请重新扫描曲库。"
             else "离开页面后任务继续；停止任务会保留已写入的缓存。", error = false)
     }
 

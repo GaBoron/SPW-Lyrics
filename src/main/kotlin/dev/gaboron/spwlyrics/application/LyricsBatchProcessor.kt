@@ -19,11 +19,13 @@ internal data class LyricsBatchItem(
     val source: String = "",
     val quality: String = "",
     val message: String = "",
+    val metadataResult: String? = null,
 )
 
 internal data class LyricsBatchSnapshot(
     val state: LyricsBatchState,
     val items: List<LyricsBatchItem>,
+    val writingMetadata: Boolean = false,
 )
 
 /** Preloads reliable lyrics into the plugin cache while keeping playback refresh work separate. */
@@ -31,6 +33,7 @@ internal class LyricsBatchProcessor(
     private val loadLibrary: () -> List<TrackQuery>,
     private val cache: LyricsCache,
     private val resolver: LyricsResolver,
+    private val metadataWriter: BatchMetadataWriter = BatchMetadataWriter(resolver),
 ) : AutoCloseable {
     private val workers = Executors.newFixedThreadPool(PARALLEL_TRACKS) { task ->
         Thread(task, "spw-lyrics-batch").apply { isDaemon = true }
@@ -42,6 +45,7 @@ internal class LyricsBatchProcessor(
     private var generation = 0
     private var nextIndex = AtomicInteger()
     private var remainingWorkers = AtomicInteger()
+    private var metadataOptions: BatchMetadataOptions? = null
 
     fun snapshot(loadLibrary: Boolean = false): LyricsBatchSnapshot = synchronized(lock) {
         if (loadLibrary && items.isEmpty() && state == LyricsBatchState.IDLE) prepare(includeCached = false)
@@ -49,7 +53,10 @@ internal class LyricsBatchProcessor(
     }
 
     fun reloadLibrary(): LyricsBatchSnapshot = synchronized(lock) {
-        if (state != LyricsBatchState.RUNNING && state != LyricsBatchState.PAUSED) prepare(includeCached = false)
+        if (state != LyricsBatchState.RUNNING && state != LyricsBatchState.PAUSED) {
+            metadataOptions = null
+            prepare(includeCached = false)
+        }
         snapshotLocked()
     }
 
@@ -57,8 +64,11 @@ internal class LyricsBatchProcessor(
         includeCached: Boolean,
         selectedKeys: Set<String>? = null,
         retryFailed: Boolean = false,
+        writeMetadata: BatchMetadataOptions? = null,
     ): LyricsBatchSnapshot = synchronized(lock) {
         if (state == LyricsBatchState.RUNNING || state == LyricsBatchState.PAUSED) return snapshotLocked()
+        if (!retryFailed) metadataOptions = writeMetadata
+        require(metadataOptions?.hasSelection != false) { "请先选择要写入的数据。" }
         if (retryFailed && items.isNotEmpty()) {
             items = items.map { item ->
                 if (item.state == LyricsBatchItemState.FAILED) item.copy(
@@ -70,7 +80,7 @@ internal class LyricsBatchProcessor(
                 else item
             }.toMutableList()
         } else {
-            prepare(includeCached, selectedKeys)
+            prepare(includeCached || metadataOptions != null, selectedKeys)
         }
         if (items.none { it.state == LyricsBatchItemState.WAITING }) {
             state = LyricsBatchState.COMPLETED
@@ -82,7 +92,8 @@ internal class LyricsBatchProcessor(
         remainingWorkers = AtomicInteger(PARALLEL_TRACKS)
         val sharedResolutions = ConcurrentHashMap<String, CompletableFuture<ResolvedLyrics?>>()
         val expectedGeneration = generation
-        repeat(PARALLEL_TRACKS) { workers.execute { process(expectedGeneration, sharedResolutions) } }
+        val options = metadataOptions
+        repeat(PARALLEL_TRACKS) { workers.execute { process(expectedGeneration, sharedResolutions, options) } }
         snapshotLocked()
     }
 
@@ -141,6 +152,7 @@ internal class LyricsBatchProcessor(
     private fun process(
         expectedGeneration: Int,
         sharedResolutions: ConcurrentHashMap<String, CompletableFuture<ResolvedLyrics?>>,
+        writeMetadata: BatchMetadataOptions?,
     ) {
         while (true) {
             val index = takeNext(expectedGeneration) ?: break
@@ -153,9 +165,13 @@ internal class LyricsBatchProcessor(
             val cacheFailure = if (resolved != null && isCurrent(expectedGeneration)) {
                 runCatching { cache.putLyrics(query, resolver.toCache(resolved)) }.exceptionOrNull()
             } else null
+            val metadata = if (resolved != null && cacheFailure == null && writeMetadata != null && isCurrent(expectedGeneration)) {
+                updateProgress(expectedGeneration, index, 0.99, "正在写入元数据", "正在写入所选数据")
+                runCatching { metadataWriter.write(query, resolved, writeMetadata) }
+            } else null
             synchronized(lock) {
                 if (generation != expectedGeneration) return@synchronized
-                items[index] = if (resolved != null && cacheFailure == null) {
+                items[index] = if (resolved != null && cacheFailure == null && metadata?.isFailure != true) {
                     LyricsBatchItem(
                         query = query,
                         state = LyricsBatchItemState.COMPLETED,
@@ -164,6 +180,7 @@ internal class LyricsBatchProcessor(
                         source = resolved.document.source.displayName,
                         quality = qualityLabel(resolved),
                         message = "已缓存",
+                        metadataResult = metadata?.getOrNull(),
                     )
                 } else {
                     LyricsBatchItem(
@@ -171,7 +188,7 @@ internal class LyricsBatchProcessor(
                         LyricsBatchItemState.FAILED,
                         progress = 1.0,
                         stage = "处理失败",
-                        message = (cacheFailure ?: outcome.exceptionOrNull())?.message?.take(80) ?: "未找到可靠歌词",
+                        message = (metadata?.exceptionOrNull() ?: cacheFailure ?: outcome.exceptionOrNull())?.message?.take(240) ?: "未找到可靠歌词",
                     )
                 }
             }
@@ -203,7 +220,7 @@ internal class LyricsBatchProcessor(
         }
     }
 
-    private fun snapshotLocked() = LyricsBatchSnapshot(state, items.toList())
+    private fun snapshotLocked() = LyricsBatchSnapshot(state, items.toList(), metadataOptions != null)
 
     private fun resolveShared(
         query: TrackQuery,

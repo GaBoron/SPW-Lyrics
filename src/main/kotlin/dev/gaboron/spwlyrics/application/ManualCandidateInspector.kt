@@ -29,5 +29,4 @@ internal class ManualCandidateInspector(
     }
 
     private fun cacheKey(candidate: LyricsCandidate): String = "${candidate.source.name}:${candidate.remoteId}"
-
 }

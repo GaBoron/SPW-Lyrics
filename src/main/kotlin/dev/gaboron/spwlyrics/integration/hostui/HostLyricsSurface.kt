@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.currentComposer
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.focusProperties
@@ -13,6 +14,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import dev.gaboron.spwlyrics.integration.workspace.LyricsWorkspace
 import dev.gaboron.spwlyrics.integration.workspace.LyricsTransition
+import dev.gaboron.spwlyrics.integration.composeui.LocalDesktopPopupMaterial
 
 /** Retain the host composition/state while hiding its page ink beneath the transparent workspace. */
 @Composable
@@ -32,7 +34,9 @@ internal fun HostLyricsSurface(bridge: HostUiBridge, workspace: LyricsWorkspace)
         }
         val dark = bridge.isDarkTheme()
         LyricsTransition(workspace.session, Modifier.fillMaxSize()) { session ->
-            if (session != null) HostLyricsPage(workspace, dark, session, bridge::back)
+            if (session != null) CompositionLocalProvider(LocalDesktopPopupMaterial provides bridge.popupSurface) {
+                HostLyricsPage(workspace, dark, session, bridge::back)
+            }
         }
     }
 }

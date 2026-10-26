@@ -17,7 +17,7 @@ import java.lang.reflect.Method
 
 /** Only this boundary translates discovered JVM members to host objects and Compose calls. */
 internal class HostUiBridge(val targets: HostUiDiscovery.Targets, private val loader: ClassLoader,
-    private val workspace: LyricsWorkspace) {
+    private val workspace: LyricsWorkspace, popup: HostPopupMaterialDiscovery.Targets?) {
     private val caption = method(targets.captionControl())
     private val page = method(targets.page().target())
     private val themeConfigs = method(targets.theme().configs())
@@ -30,6 +30,11 @@ internal class HostUiBridge(val targets: HostUiDiscovery.Targets, private val lo
     private val stack = field(targets.backStack())
     private val navigatorType = stack.declaringClass
     private val locals = targets.locals().map(::field)
+    private val popupModifier = popup?.modifier()?.let(::method)
+    private val popupMaterial = popup?.material()?.let(::field)?.get(null)
+    val popupSurface: (@Composable (Modifier) -> Modifier)? = popupModifier?.let { reflected ->
+        { modifier -> reflected.invoke(null, modifier, popupMaterial, currentComposer, 0) as Modifier }
+    }
     var replaying = false
         private set
     private var navigator: Any? = null

@@ -24,7 +24,10 @@ internal class HostUiIntegration(private val workspace: LyricsWorkspace, private
                 val source = Path.of(checkNotNull(host.protectionDomain.codeSource).location.toURI())
                 val index = HostBytecodeIndex.read(source)
                 val targets = HostUiDiscovery.discover(index)
-                val bridge = HostUiBridge(targets, host.classLoader, workspace)
+                val popup = runCatching { HostPopupMaterialDiscovery.discover(index) }.onFailure {
+                    System.getLogger("SPW Lyrics").log(System.Logger.Level.WARNING, "宿主菜单材质未接入，使用普通菜单", it)
+                }.getOrNull()
+                val bridge = HostUiBridge(targets, host.classLoader, workspace, popup)
                 bridge to runCatching { HostPlayerMenu(HostPlayerMenuDiscovery.discover(index), host.classLoader, workspace) { bridge.isDarkTheme() } }
             }
             EventQueue.invokeLater {

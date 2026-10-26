@@ -58,6 +58,15 @@ internal class MetadataEditorController(
         operations.chooseAudioFile()?.let { path -> run({ store.read(path) }, ::loaded) }
     }
 
+    fun openPath(path: Path) = requestDiscard { run({ store.read(path) }, ::loaded) }
+
+    fun clear() {
+        if (closed || state.busy) return
+        previewTask?.cancel(false)
+        previewGeneration++
+        state = MetadataEditorState()
+    }
+
     fun reload() = requestDiscard {
         state.loaded?.path?.let { path -> run({ store.read(path) }, ::loaded) }
     }
@@ -84,6 +93,7 @@ internal class MetadataEditorController(
     }
 
     fun editLine(change: (EditableLyricLine) -> EditableLyricLine) {
+        if (state.selectedLineIds.size != 1) return
         editLines(setOfNotNull(state.selectedLineId), change)
     }
 
@@ -160,11 +170,18 @@ internal class MetadataEditorController(
         TtmlLyricRows.add(snapshot.structured, snapshot.lineEdits, snapshot.selectedLineId)
     }
 
+    fun moveLine(id: Int, targetId: Int, after: Boolean) = changeRows { snapshot ->
+        val base = snapshot.structured ?: return@changeRows null
+        if (id == targetId) return@changeRows null
+        TtmlLyricRows.move(base, snapshot.lineEdits, id, targetId, after) to id
+    }
+
     fun deleteSelected() = changeRows { snapshot ->
         val base = snapshot.structured ?: return@changeRows null
         if (snapshot.selectedLineIds.isEmpty()) return@changeRows null
+        val index = base.lines.indexOfFirst { it.id == snapshot.selectedLineId }.coerceAtLeast(0)
         val result = TtmlLyricRows.delete(base, snapshot.lineEdits, snapshot.selectedLineIds)
-        result to result.lines.getOrNull((snapshot.selectedLineId ?: 0).coerceAtMost(result.lines.lastIndex).coerceAtLeast(0))?.id
+        result to result.lines.getOrNull(index.coerceAtMost(result.lines.lastIndex).coerceAtLeast(0))?.id
     }
 
     private fun changeRows(change: (MetadataEditorState) -> Pair<EditableLyrics, Int?>?) {

@@ -203,7 +203,9 @@ internal class LyricsTimingController(private val editor: MetadataEditorControll
         val id = state.cursor?.lineId ?: return
         val skipped = state.skipped + id
         val remaining = LyricTiming.cursors(state.lines, skipped)
-        val next = remaining.firstOrNull { it.lineId > id } ?: remaining.firstOrNull()
+        val currentIndex = state.lines.indexOfFirst { it.id == id }
+        val nextIds = state.lines.drop(currentIndex + 1).map { it.id }.toSet()
+        val next = remaining.firstOrNull { it.lineId in nextIds } ?: remaining.firstOrNull()
         pressing.clear(); state = state.copy(skipped = skipped, progress = TimingProgress(next), message = "已跳过本句；点击本句中的词可恢复参与打轴。")
         selectionRevision++
     }
