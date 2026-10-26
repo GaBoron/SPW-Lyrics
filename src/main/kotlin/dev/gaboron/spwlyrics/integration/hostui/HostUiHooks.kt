@@ -18,6 +18,8 @@ internal class HostUiHooks(private val bridge: HostUiBridge, private val workspa
                     reflected.parameterTypes.map { it.name }, object : MethodHook(80) {
                         override fun before(call: MethodHookParam) {
                             if (bridge.replaying || workspace.session == null) return
+                            // Let the host collapse its foreground lyrics sheet before leaving our page.
+                            if (key == bridge.targets.back() && bridge.playerExpanded()) return
                             val receiver = call.thisObject
                             val args = call.args.copyOf()
                             call.setResult(null)

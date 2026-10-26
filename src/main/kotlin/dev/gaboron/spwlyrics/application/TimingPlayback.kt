@@ -12,4 +12,6 @@ internal interface TimingPlayback {
     fun pause(expectedPath: Path)
     fun seek(expectedPath: Path, positionMs: Long)
     fun rate(expectedPath: Path, value: Float)
+    /** Speed is host-wide, so leaving a timing session also restores it after a track change. */
+    fun restoreRate(value: Float)
 }

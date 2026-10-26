@@ -46,8 +46,10 @@ internal class ManualLyricsSearch(
                 }
             }
         }
-        val requests = results.flatMap { result -> result.value.map { ManualCandidateRequest(ready[result.index], it) } }
-        return inspector.inspect(requests).map { MatchEngine.score(query, it) }.sortedWith(
+        val candidates = results.flatMap { it.value }.map { candidate ->
+            candidate.copy(qualityHint = inspector.cached(candidate)?.quality)
+        }
+        return candidates.map { MatchEngine.score(query, it) }.sortedWith(
             Comparator<CandidateScore> { left, right ->
                 preferences.compare(left.candidate.source, left.candidate.qualityHint ?: LyricsQuality.PLAIN,
                     right.candidate.source, right.candidate.qualityHint ?: LyricsQuality.PLAIN)

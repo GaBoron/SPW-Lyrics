@@ -1,7 +1,6 @@
 package dev.gaboron.spwlyrics.integration.timingui
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -45,7 +44,7 @@ internal fun TimingWordGrid(controller: LyricsTimingController, playing: Playing
                 val selection by animateFloatAsState(if (selected) .13f else 0f, tween(if (selected) 24 else 100), label = "selected line")
                 val activity by animateFloatAsState(if (active) .035f else 0f, tween(if (active) 20 else 90), label = "playing line")
                 val fill = SaltTheme.colors.highlight.copy(alpha = maxOf(selection, activity))
-                RoundedColumn(Modifier.animateItem().animateContentSize(tween(180)), paddingValues = PaddingValues(0.dp)) {
+                RoundedColumn(Modifier.fillMaxWidth().animateItem(), paddingValues = PaddingValues(0.dp)) {
                     Row(Modifier.fillMaxWidth().background(fill).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text((row + 1).toString(), Modifier.width(40.dp).padding(start = 12.dp),
                             style = SaltTheme.textStyles.sub, color = SaltTheme.colors.subText)

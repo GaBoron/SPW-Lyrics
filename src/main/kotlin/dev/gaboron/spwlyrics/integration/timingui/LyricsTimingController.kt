@@ -31,6 +31,8 @@ internal class LyricsTimingController(private val editor: MetadataEditorControll
     private var observedEdits: Any? = null
     private var retryAfter = 0L
     private var dependencyCheck = 0L
+    private var originalRate: Float? = null
+    private var changedRate = false
     private data class Press(val snapshot: TimingPlaybackSnapshot, val cursor: TimingCursor?, val at: Long)
     private val pressing = mutableMapOf<TimingMark, Press>()
     private data class Edit(val before: Map<Int, EditableLyricLine>, val after: Map<Int, EditableLyricLine>,
@@ -45,6 +47,7 @@ internal class LyricsTimingController(private val editor: MetadataEditorControll
         if (System.nanoTime() < retryAfter) return
         try {
             playback = transport.read(path)
+            if (originalRate == null) originalRate = playback?.rate
             state = state.copy(available = true, error = if (!state.available) false else state.error,
                 message = if (!state.available) "已连接宿主。F 词首 · G 连续轴 · H 词尾；可用空格播放/暂停。" else state.message)
         } catch (error: Exception) {
@@ -217,7 +220,29 @@ internal class LyricsTimingController(private val editor: MetadataEditorControll
         transport.pauseForCalibration()
         cancelPress(); calibration.start(state.judge)
     }
-    fun rate(value: Float) = perform { read(); transport.rate(editor.state.loaded!!.path, value.coerceIn(.5f, 2f)); cancelPress() }
+    fun rate(value: Float) = perform {
+        val sample = read()
+        if (originalRate == null) originalRate = sample.rate
+        transport.rate(editor.state.loaded!!.path, value.coerceIn(.5f, 2f))
+        changedRate = true
+        cancelPress()
+    }
+
+    fun leave() {
+        cancelPress()
+        val restore = originalRate
+        if (changedRate && restore != null) {
+            try {
+                transport.restoreRate(restore)
+                changedRate = false
+            } catch (error: Exception) {
+                fail(error)
+                System.getLogger("SPW Lyrics").log(System.Logger.Level.WARNING, "恢复打轴前倍速失败", error)
+                return
+            }
+        }
+        originalRate = null
+    }
     fun stepRate(delta: Float) = perform { rate((read().rate + delta).coerceIn(.5f, 2f)) }
     private fun read(): TimingPlaybackSnapshot = transport.read(editor.state.loaded?.path ?: error("请先读取歌曲文件。")).also { playback = it }
     private fun perform(action: () -> Unit) { try { action() } catch (error: Exception) { pressing.clear(); fail(error) } }
@@ -225,5 +250,5 @@ internal class LyricsTimingController(private val editor: MetadataEditorControll
         val cause = if (error is InvocationTargetException) error.targetException else error
         state = state.copy(error = true, message = cause.message ?: "宿主操作未完成，请检查当前播放歌曲。")
     }
-    override fun close() { cancelPress(); spectrum.close(); calibration.close() }
+    override fun close() { leave(); spectrum.close(); calibration.close() }
 }

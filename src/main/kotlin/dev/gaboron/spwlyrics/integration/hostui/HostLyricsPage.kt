@@ -17,13 +17,13 @@ import dev.gaboron.spwlyrics.integration.workspace.LyricsWorkspaceSession
 
 /** Input belongs to the workspace above the player's reserved area. */
 @Composable
-internal fun HostLyricsPage(workspace: LyricsWorkspace, isDarkTheme: Boolean, session: LyricsWorkspaceSession) {
+internal fun HostLyricsPage(workspace: LyricsWorkspace, isDarkTheme: Boolean, session: LyricsWorkspaceSession, back: () -> Unit) {
     val focus = remember { FocusRequester() }
     LaunchedEffect(session) { focus.requestFocus() }
     WorkspaceInputSurface(Modifier.fillMaxSize().padding(bottom = 96.dp).focusRequester(focus)
         .onKeyEvent {
             if (it.type == KeyEventType.KeyDown && it.key == Key.Escape) {
-                workspace.requestLeave {}; true
+                back(); true
             } else false
         }.focusGroup().focusable()) {
         DesktopTheme(isDarkTheme) {

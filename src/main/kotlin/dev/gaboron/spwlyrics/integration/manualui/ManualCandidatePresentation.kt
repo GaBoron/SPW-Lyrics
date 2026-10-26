@@ -19,7 +19,7 @@ internal enum class CandidateColumn(val title: String) {
             LyricsQuality.KARAOKE_SYNCED -> "逐字"
             LyricsQuality.LINE_SYNCED -> "逐行"
             LyricsQuality.PLAIN -> "普通"
-            null -> if (row.candidate.source.hasLyrics) "未知" else "元数据"
+            null -> if (row.candidate.source.hasLyrics) "点击读取" else "元数据"
         }
         SCORE -> String.format(Locale.ROOT, "%.3f", row.score)
     }

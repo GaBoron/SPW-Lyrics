@@ -37,11 +37,13 @@ internal class LyricsWorkspaceSession(
     var page by mutableStateOf(LyricsToolPage.SEARCH)
         private set
     var lyricsView by mutableStateOf(MetadataLyricsView.STRUCTURED)
+        private set
     val timingFocused get() = page == LyricsToolPage.METADATA && lyricsView == MetadataLyricsView.TIMING
 
     private val initialized = mutableSetOf<LyricsToolPage>()
 
     fun select(value: LyricsToolPage, initialize: Boolean = true) {
+        if (timingFocused && value != LyricsToolPage.METADATA) timing.leave()
         page = value
         if (!initialized.add(value) || !initialize) return
         when (value) {
@@ -49,6 +51,11 @@ internal class LyricsWorkspaceSession(
             LyricsToolPage.BATCH -> batch.load()
             LyricsToolPage.METADATA -> if (metadata.state.loaded == null && !metadata.state.busy) metadata.current()
         }
+    }
+
+    fun selectLyricsView(value: MetadataLyricsView) {
+        if (timingFocused && value != MetadataLyricsView.TIMING) timing.leave()
+        lyricsView = value
     }
 
     fun requestClose(close: () -> Unit) = metadata.requestDiscard(close)

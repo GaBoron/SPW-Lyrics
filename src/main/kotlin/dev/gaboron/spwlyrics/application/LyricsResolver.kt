@@ -128,7 +128,7 @@ class LyricsResolver(
     }
 
     fun fetchManual(candidate: LyricsCandidate): ResolvedLyrics? = providers[candidate.source]?.let { provider ->
-        val document = manualCandidateInspector.cached(candidate) ?: fetchDocument(provider, candidate) ?: return@let null
+        val document = manualCandidateInspector.fetch(provider, candidate) ?: return@let null
         resolved(FetchedLyrics(candidate, document))
     }
 

@@ -41,8 +41,13 @@ internal class SpwTimingPlayback : TimingPlayback {
         WorkshopApi.playback.seekTo(positionMs.coerceIn(0, item.duration.takeIf { it > 0 } ?: Long.MAX_VALUE))
     }
     override fun rate(expectedPath: Path, value: Float) {
-        require(value.isFinite() && value in .5f..2f) { "打轴倍速范围为 0.5× 到 2×。" }
         matching(expectedPath)
+        require(value.isFinite() && value in .5f..2f) { "打轴倍速范围为 0.5× 到 2×。" }
+        restoreRate(value)
+    }
+
+    override fun restoreRate(value: Float) {
+        require(value.isFinite() && value > 0)
         val prepared = access ?: discover().also { access = it }
         prepared.changeRate.invoke(prepared.controller, value)
     }

@@ -105,14 +105,18 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
     }
 
     fun select(row: CandidateScore) {
-        if (closed || state.mutating || row !in state.candidates || state.selected == row) return
+        if (closed || state.mutating || row !in state.candidates || state.selected == row && (state.previewing || state.document != null)) return
         val generation = ++previewGeneration
         state = state.copy(selected = row, document = null, lyricsMetadata = emptyMap(), previewing = true)
         submit({ previewGeneration == generation }, {
             operations.preview(row.candidate)?.document?.let { Triple(it, TtmlVocalParts.mainAgent(it), LyricsMetadataReader.read(it)) }
         }, { resolved ->
-            state = state.copy(document = resolved?.first, lyricsMetadata = resolved?.third.orEmpty(),
-                previewMainAgent = resolved?.second ?: "v1", previewing = false)
+            val inspected = row.copy(candidate = row.candidate.copy(qualityHint = resolved?.first?.quality))
+            state = state.copy(selected = inspected, candidates = state.candidates.map { if (it == row) inspected else it },
+                document = resolved?.first, lyricsMetadata = resolved?.third.orEmpty(),
+                previewMainAgent = resolved?.second ?: "v1", previewing = false,
+                status = if (resolved == null && row.candidate.source.hasLyrics) "歌词读取失败，点击此项可重试，或选择其他候选。" else "",
+                error = resolved == null && row.candidate.source.hasLyrics)
         }, { state = state.copy(previewing = false); reportFailure(it) })
     }
 

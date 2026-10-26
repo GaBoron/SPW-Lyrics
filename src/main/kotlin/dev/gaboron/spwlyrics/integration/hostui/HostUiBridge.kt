@@ -24,6 +24,9 @@ internal class HostUiBridge(val targets: HostUiDiscovery.Targets, private val lo
     private val themeDark = method(targets.theme().dark())
     private val navigate = method(targets.navigate())
     private val collapsePlayer = method(targets.collapsePlayer())
+    private val playerState = field(targets.playerState())
+    private val playerExpanded = method(targets.playerExpanded())
+    private val hostBack = method(targets.back())
     private val stack = field(targets.backStack())
     private val navigatorType = stack.declaringClass
     private val locals = targets.locals().map(::field)
@@ -65,6 +68,13 @@ internal class HostUiBridge(val targets: HostUiDiscovery.Targets, private val lo
     fun replay(action: () -> Unit) {
         replaying = true
         try { action() } finally { replaying = false }
+    }
+
+    fun playerExpanded(): Boolean = navigator?.let { playerExpanded.invoke(playerState.get(it)) as Boolean } == true
+
+    fun back() {
+        if (playerExpanded()) replay { hostBack.invoke(navigator) }
+        else workspace.requestLeave {}
     }
 
     @Composable

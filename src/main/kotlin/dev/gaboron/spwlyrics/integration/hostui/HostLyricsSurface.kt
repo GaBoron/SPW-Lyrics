@@ -32,7 +32,7 @@ internal fun HostLyricsSurface(bridge: HostUiBridge, workspace: LyricsWorkspace)
         }
         val dark = bridge.isDarkTheme()
         LyricsTransition(workspace.session, Modifier.fillMaxSize()) { session ->
-            if (session != null) HostLyricsPage(workspace, dark, session)
+            if (session != null) HostLyricsPage(workspace, dark, session, bridge::back)
         }
     }
 }

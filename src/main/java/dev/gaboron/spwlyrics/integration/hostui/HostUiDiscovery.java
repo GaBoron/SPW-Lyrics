@@ -11,7 +11,8 @@ public final class HostUiDiscovery {
     private static final String CAPTION = "(Lkotlin/jvm/functions/Function0;Ljava/lang/String;Landroidx/compose/ui/Modifier;ZLjava/lang/String;FLkotlin/jvm/functions/Function3;Landroidx/compose/runtime/Composer;II)V";
     public record Site(Method target, String caller) {}
     public record Targets(Site page, Site captionEntry, Method captionControl, Method back,
-                          Method navigate, Method collapsePlayer, List<Method> navigation, Field backStack, List<Field> locals,
+                          Method navigate, Method collapsePlayer, Field playerState, Method playerExpanded,
+                          List<Method> navigation, Field backStack, List<Field> locals,
                           HostThemeDiscovery.Targets theme) {}
 
     public static Targets discover(HostBytecodeIndex index) {
@@ -58,7 +59,13 @@ public final class HostUiDiscovery {
         var locals = content.fields().stream().filter(f -> f.owner().equals(root.method().owner())
             && f.descriptor().equals("Landroidx/compose/runtime/ProvidableCompositionLocal;")).distinct().toList();
         if (locals.isEmpty()) throw new IllegalStateException("Navigation composition locals are missing");
-        return new Targets(page, captionSite, caption.method(), back.method(), navigate.method(), collapse, navigation, stack, locals,
+        var playerState = unique(back.fields().stream().filter(f -> f.owner().equals(navClass.name()))
+            .filter(f -> back.calls().stream().anyMatch(c -> c.descriptor().equals("()Z")
+                && f.descriptor().equals("L" + c.owner() + ";"))).distinct().toList(), "player sheet state");
+        var playerExpanded = unique(back.calls().stream().filter(c -> c.descriptor().equals("()Z")
+            && playerState.descriptor().equals("L" + c.owner() + ";")).distinct().toList(), "player sheet expanded state");
+        return new Targets(page, captionSite, caption.method(), back.method(), navigate.method(), collapse, playerState, playerExpanded,
+            navigation, stack, locals,
             HostThemeDiscovery.discover(index, entry.method().owner()));
     }
 

@@ -11,7 +11,7 @@ internal class TimingKeyboard(private val controller: LyricsTimingController) {
     fun event(event: KeyEvent): Boolean {
         val key = event.key
         if (event.type == KeyEventType.KeyUp) {
-            if (!held.remove(key)) return false
+            if (!held.remove(key)) return key == Key.Spacebar
             mark(key)?.let(controller::release)
             return true
         }
