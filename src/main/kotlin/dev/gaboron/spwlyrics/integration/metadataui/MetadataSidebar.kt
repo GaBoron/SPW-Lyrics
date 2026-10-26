@@ -24,7 +24,7 @@ internal fun MetadataSidebar(controller: MetadataEditorController, expanded: Boo
     Column(modifier.width(width).fillMaxHeight().clipToBounds(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             AnimatedVisibility(expanded, Modifier.weight(1f), enter = fadeIn() + expandHorizontally(), exit = fadeOut() + shrinkHorizontally()) {
-                Text("歌曲信息", color = SaltTheme.colors.subText)
+                Text("歌曲信息", color = SaltTheme.colors.subText, maxLines = 1, softWrap = false)
             }
             DesktopButton(if (expanded) "收起" else "展开", { onExpandedChange(!expanded) },
                 glyph = if (expanded) DesktopGlyph.Back else null)

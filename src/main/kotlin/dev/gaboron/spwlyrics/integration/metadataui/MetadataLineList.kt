@@ -15,6 +15,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -37,6 +38,7 @@ internal fun MetadataLineList(controller: MetadataEditorController, modifier: Mo
     val window = LocalWindowInfo.current
     val reorder = rememberMetadataLineReorder(controller, scroll)
     val rows = reorder.rows()
+    val shape = SaltTheme.shapes.medium
     Box(modifier.focusRequester(focus).onPreviewKeyEvent {
         if (it.type == KeyEventType.KeyDown && it.isCtrlPressed && it.key == Key.A) { controller.selectAllLines(); true }
         else if (it.type == KeyEventType.KeyDown && it.key == Key.Delete) { controller.deleteSelected(); true }
@@ -50,10 +52,11 @@ internal fun MetadataLineList(controller: MetadataEditorController, modifier: Mo
                     .animateItem(fadeInSpec = null, fadeOutSpec = null,
                         placementSpec = if (moving) null else spring(stiffness = 650f, dampingRatio = 1f))
                     .zIndex(if (moving) 1f else 0f)
-                    .graphicsLayer { translationY = reorder.offset(line.id); shadowElevation = if (moving) 8.dp.toPx() else 0f }) {
+                    .graphicsLayer { translationY = reorder.offset(line.id) }) {
                     Row(Modifier.fillMaxWidth()
-                        .background(if (moving) SaltTheme.colors.subBackground else androidx.compose.ui.graphics.Color.Transparent, SaltTheme.shapes.medium)
+                        .background(if (moving) SaltTheme.colors.subBackground else Color.Transparent, shape)
                         .lyricsSelection(line.id in state.selectedLineIds)
+                        .border(1.dp, if (moving) SaltTheme.colors.highlight.copy(alpha = .3f) else Color.Transparent, shape)
                         .clickable(enabled = !state.busy && !reorder.active) {
                             focus.requestFocus()
                             controller.selectLine(line.id, window.keyboardModifiers.isCtrlPressed, window.keyboardModifiers.isShiftPressed)

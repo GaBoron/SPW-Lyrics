@@ -9,13 +9,26 @@ internal class TimingKeyboard(private val controller: LyricsTimingController) {
     private fun mark(key: Key) = when (key) { Key.F -> TimingMark.START; Key.G -> TimingMark.CONNECT; Key.H -> TimingMark.END; else -> null }
 
     fun event(event: KeyEvent): Boolean {
-        // The host's window detector toggles playback on key-up after an unconsumed typed space.
-        // Windows sends KEY_TYPED separately, with an unknown key/type, even after key-down was handled.
+        // Consume the separate Windows KEY_TYPED event so SPW's window shortcut does not toggle too.
         if (event.type == KeyEventType.Unknown && event.utf16CodePoint == ' '.code &&
             !event.isCtrlPressed && !event.isAltPressed && !event.isMetaPressed) return true
         val key = event.key
+        if (key == Key.Spacebar) {
+            if (event.type == KeyEventType.KeyUp) {
+                if (!held.remove(key)) return false
+                controller.playPause()
+                return true
+            }
+            if (event.type == KeyEventType.KeyDown && !event.isCtrlPressed && !event.isAltPressed &&
+                !event.isMetaPressed && !event.isShiftPressed) {
+                // SPW must see the bubbling down event to let the corresponding up reach this area.
+                // Toggle on release; repeated down/typed events still represent a single press.
+                held.add(key)
+                return false
+            }
+        }
         if (event.type == KeyEventType.KeyUp) {
-            if (!held.remove(key)) return key == Key.Spacebar
+            if (!held.remove(key)) return false
             mark(key)?.let(controller::release)
             return true
         }
@@ -30,7 +43,6 @@ internal class TimingKeyboard(private val controller: LyricsTimingController) {
             Key.W -> ({ controller.moveLine(-1) }); Key.S -> ({ controller.moveLine(1) })
             Key.R -> ({ controller.move(-1, true) }); Key.Y -> ({ controller.move(1, true) })
             Key.MoveHome -> ({ controller.boundary(false) }); Key.MoveEnd -> ({ controller.boundary(true) })
-            Key.Spacebar -> controller::playPause
             Key.DirectionLeft -> ({ controller.seek(-1000) }); Key.DirectionRight -> ({ controller.seek(1000) })
             Key.LeftBracket -> ({ controller.stepRate(-.05f) }); Key.RightBracket -> ({ controller.stepRate(.05f) })
             Key.Apostrophe -> ({ controller.rate(1f) })
