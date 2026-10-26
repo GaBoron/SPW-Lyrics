@@ -1,6 +1,7 @@
 package dev.gaboron.spwlyrics.integration.batchui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.animation.core.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.*
@@ -19,9 +20,19 @@ internal fun BatchProcessingContent(controller: BatchProcessingController, edito
     val state = controller.state
     var editing by remember { mutableStateOf(false) }
     var writeOptions by remember { mutableStateOf(false) }
+    var afterClose by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val pane = updateTransition(editing, label = "batch editor")
+    val paneWidth by pane.animateDp(transitionSpec = { tween(240) }, label = "editor and gap") {
+        if (it) 376.dp else 0.dp
+    }
+    LaunchedEffect(pane.currentState, pane.targetState, pane.isRunning, paneWidth, afterClose) {
+        if (!pane.currentState && !pane.targetState && !pane.isRunning && paneWidth == 0.dp) {
+            afterClose?.let { action -> afterClose = null; editor.clear(); action() }
+        }
+    }
     val editable = state.editable && !editor.state.busy
     val closeEditor: (() -> Unit) -> Unit = { action ->
-        editor.requestDiscard { editor.clear(); editing = false; action() }
+        editor.requestDiscard { editing = false; afterClose = action }
     }
     val summary = remember(state.snapshot, state.selectedKeys) { BatchProgressSummary.from(state) }
     Column(Modifier.fillMaxSize().onPreviewKeyEvent {
@@ -58,20 +69,18 @@ internal fun BatchProcessingContent(controller: BatchProcessingController, edito
             val wide = maxWidth >= 900.dp
             val list: @Composable (Modifier) -> Unit = { modifier ->
                 BatchTrackList(state, controller::select, { query ->
-                    editing = true
-                    editor.openPath(Path.of(query.path))
+                    if (afterClose == null) {
+                        editing = true
+                        editor.openPath(Path.of(query.path))
+                    }
                 }, modifier)
             }
             val fields: @Composable (Modifier) -> Unit = { modifier ->
                 BatchTrackEditor(editor, { closeEditor {} }, modifier)
             }
-            if (wide) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            if (wide) Row(Modifier.fillMaxSize()) {
                 list(Modifier.weight(1f).fillMaxHeight())
-                androidx.compose.animation.AnimatedVisibility(editing,
-                    enter = androidx.compose.animation.expandHorizontally() + androidx.compose.animation.fadeIn(),
-                    exit = androidx.compose.animation.shrinkHorizontally() + androidx.compose.animation.fadeOut()) {
-                    fields(Modifier.width(360.dp).fillMaxHeight())
-                }
+                BatchEditorPane(paneWidth) { fields(Modifier.fillMaxSize()) }
             } else LyricsPageTransition(editing, { if (it) 1 else 0 }, Modifier.fillMaxSize()) { detail ->
                 if (detail) fields(Modifier.fillMaxSize()) else list(Modifier.fillMaxSize())
             }

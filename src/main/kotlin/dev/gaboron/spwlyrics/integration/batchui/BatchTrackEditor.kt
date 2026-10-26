@@ -5,12 +5,27 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.moriafly.salt.ui.Text
 import dev.gaboron.spwlyrics.integration.composeui.*
 import dev.gaboron.spwlyrics.integration.metadataui.MetadataEditorController
 import dev.gaboron.spwlyrics.integration.metadataui.MetadataFieldsPanel
 import dev.gaboron.spwlyrics.integration.workspace.LyricsStatus
+
+/** Measure the fields at their final width; animate the pane and its gutter as one allocation. */
+@Composable
+internal fun BatchEditorPane(width: Dp, content: @Composable () -> Unit) {
+    Layout(content = { if (width > 0.dp) content() }, modifier = Modifier.width(width).fillMaxHeight().clipToBounds()) { children, constraints ->
+        val fieldWidth = 360.dp.roundToPx()
+        val gutter = 16.dp.roundToPx()
+        val child = children.singleOrNull()?.measure(Constraints.fixed(fieldWidth, constraints.maxHeight))
+        layout(constraints.maxWidth, constraints.maxHeight) { child?.placeRelative(gutter, 0) }
+    }
+}
 
 @Composable
 internal fun BatchTrackEditor(controller: MetadataEditorController, close: () -> Unit, modifier: Modifier) {

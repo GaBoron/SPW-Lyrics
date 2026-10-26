@@ -1,7 +1,8 @@
 package dev.gaboron.spwlyrics.integration.metadataui
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
@@ -45,6 +46,21 @@ internal fun MetadataLineTiming(line: EditableLyricLine, controller: MetadataEdi
         }
         Text("时间格式 mm:ss.mmm，或整数毫秒；平移单位 ms，同时调整整句和逐字时间。",
             color = DesktopColors.Muted, style = SaltTheme.textStyles.sub)
+    }
+}
+
+@Composable
+internal fun MetadataSelectedTiming(controller: MetadataEditorController, enabled: Boolean) {
+    var delay by rememberSaveable { mutableStateOf("0") }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("所选歌词时间平移", color = DesktopColors.Muted, style = SaltTheme.textStyles.sub)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            DesktopField(delay, { delay = it }, Modifier.width(130.dp), enabled = enabled, suffix = "ms")
+            DesktopButton("应用平移", { controller.shiftSelected(delay) }, enabled = enabled)
+            DesktopButton("−100", { controller.shiftSelected("-100") }, enabled = enabled)
+            DesktopButton("+100", { controller.shiftSelected("100") }, enabled = enabled)
+        }
+        Text("正数延后，负数提前，同时移动所选句子及其逐字时间。", color = DesktopColors.Muted, style = SaltTheme.textStyles.sub)
     }
 }
 
