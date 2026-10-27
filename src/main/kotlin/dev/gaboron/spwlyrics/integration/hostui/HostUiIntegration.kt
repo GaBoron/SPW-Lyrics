@@ -5,7 +5,6 @@ import com.xuncorp.spw.workshop.api.PluginPermission
 import com.xuncorp.spw.workshop.api.WorkshopApi
 import dev.gaboron.spwlyrics.integration.workspace.LyricsWorkspace
 import java.awt.EventQueue
-import java.nio.file.Path
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -21,8 +20,7 @@ internal class HostUiIntegration(private val workspace: LyricsWorkspace, private
             val result = runCatching {
                 check(WorkshopApi.manager.isPermissionGranted(PluginPermission.CLASS_TRANSFORM)) { "请授予类变换权限后重新启用插件" }
                 val host = WorkshopApi.instance.javaClass
-                val source = Path.of(checkNotNull(host.protectionDomain.codeSource).location.toURI())
-                val index = HostBytecodeIndex.read(source)
+                val index = HostBytecodeIndex.read(host)
                 val targets = HostUiDiscovery.discover(index)
                 val popup = runCatching { HostPopupMaterialDiscovery.discover(index) }.onFailure {
                     System.getLogger("SPW Lyrics").log(System.Logger.Level.WARNING, "宿主菜单材质未接入，使用普通菜单", it)

@@ -5,6 +5,8 @@ import java.lang.classfile.ClassFile;
 import java.lang.classfile.instruction.FieldInstruction;
 import java.lang.classfile.instruction.InvokeInstruction;
 import java.lang.constant.MethodTypeDesc;
+import java.net.JarURLConnection;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -34,6 +36,39 @@ public final class HostBytecodeIndex {
     public Collection<Body> methods() { return methods.values(); }
     public Type type(String name) { return types.get(name); }
     public Body body(Method method) { return methods.get(method); }
+
+    public static HostBytecodeIndex read(Class<?> host) throws IOException {
+        return read(source(host));
+    }
+
+    private static Path source(Class<?> host) throws IOException {
+        var domain = host.getProtectionDomain();
+        var codeSource = domain == null ? null : domain.getCodeSource();
+        var location = codeSource == null ? null : codeSource.getLocation();
+        var name = host.getName().replace('.', '/') + ".class";
+        try {
+            if (location != null && location.getProtocol().equals("file")) return Path.of(location.toURI());
+            // Class resources remain usable when the host omits its CodeSource location.
+            var resource = host.getResource("/" + name);
+            if (resource != null && resource.getProtocol().equals("jar")) {
+                var archive = ((JarURLConnection) resource.openConnection()).getJarFileURL();
+                if (archive.getProtocol().equals("file")) return Path.of(archive.toURI());
+            }
+            if (resource != null && resource.getProtocol().equals("file")) {
+                var root = Path.of(resource.toURI());
+                for (var segment : name.split("/")) {
+                    root = root.getParent();
+                    if (root == null) break;
+                }
+                if (root != null) return root;
+            }
+            throw new IOException("无法定位宿主代码来源：" + host.getName() + " (source=" +
+                (location == null ? "none" : location.getProtocol()) + ", resource=" +
+                (resource == null ? "none" : resource.getProtocol()) + ")");
+        } catch (URISyntaxException error) {
+            throw new IOException("宿主代码来源 URL 无法转换为本地路径：" + host.getName(), error);
+        }
+    }
 
     public static HostBytecodeIndex read(Path source) throws IOException {
         var bodies = new ArrayList<Body>();
