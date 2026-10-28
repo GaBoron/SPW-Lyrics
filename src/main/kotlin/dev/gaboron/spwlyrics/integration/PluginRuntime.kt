@@ -75,6 +75,7 @@ object PluginRuntime {
                 cacheDirectory.resolve("AMLL 索引"),
                 ProviderHttpClient(requestTimeout = Duration.ofSeconds(6)),
                 legacyIndexPath = root.resolve("amll").resolve("amll-index.jsonl"),
+                indexHttp = ProviderHttpClient(connectTimeout = Duration.ofSeconds(5), requestTimeout = Duration.ofSeconds(30)),
             ),
             QqMusicProvider(http),
             KugouMusicProvider(http),

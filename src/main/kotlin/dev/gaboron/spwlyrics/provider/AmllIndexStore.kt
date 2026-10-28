@@ -47,12 +47,11 @@ internal class AmllIndexStore(
     @Synchronized
     fun searchManual(query: TrackQuery, keywords: String, limit: Int,
         onStatus: (ProviderSearchStatus) -> Unit): List<LyricsCandidate> {
-        val previousAttempt = lastRefreshAttempt
         ensureCurrent()
         val status = when {
-            refreshing -> ProviderSearchStatus(LyricsSource.AMLL, ProviderSearchPhase.SEARCHING, "正在更新索引（使用本地索引）。")
+            refreshing -> ProviderSearchStatus(LyricsSource.AMLL, ProviderSearchPhase.SEARCHING,
+                if (searchIndex?.isEmpty == false) "正在后台更新全量索引，暂用本地结果。" else "正在后台下载全量索引，完成后会更新搜索结果。")
             refreshFailure != null -> indexFailure(checkNotNull(refreshFailure))
-            lastRefreshAttempt != previousAttempt -> ProviderSearchStatus(LyricsSource.AMLL, ProviderSearchPhase.AVAILABLE, "索引获取成功。")
             searchIndex?.isEmpty == false -> ProviderSearchStatus(LyricsSource.AMLL, ProviderSearchPhase.AVAILABLE, "本地索引可用；本次未检查网络。")
             else -> ProviderSearchStatus(LyricsSource.AMLL, ProviderSearchPhase.FAILED, "索引获取失败，请稍后重试。")
         }
@@ -75,39 +74,38 @@ internal class AmllIndexStore(
         val now = clock.instant()
         if ((searchIndex?.isEmpty == false && !isStale(now)) || !mayAttemptRefresh(now) || refreshing) return
         lastRefreshAttempt = now
-        if (searchIndex?.isEmpty == false && Files.isRegularFile(indexPath)) {
-            // Keep searches responsive while an existing index is refreshed.
-            refreshing = true
-            refreshTask = refreshExecutor.submit {
-                val refreshed = runCatching { refresh(now).getOrThrow(); synchronized(this) { if (!closed) loadIndex() } }
-                val (listeners, status) = synchronized(this) {
-                    refreshing = false
-                    refreshFailure = refreshed.exceptionOrNull()
-                    val status = refreshFailure?.let(::indexFailure)
-                        ?: ProviderSearchStatus(LyricsSource.AMLL, ProviderSearchPhase.AVAILABLE, "索引更新成功。")
-                    refreshListeners.toList().also { refreshListeners.clear() } to status
-                }
-                if (!closed) listeners.forEach { runCatching { it(status) } }
+        // A caller's search deadline must not cancel the shared download or hold the search lock.
+        refreshing = true
+        refreshTask = refreshExecutor.submit {
+            val refreshed = refresh(now)
+            val (listeners, status) = synchronized(this) {
+                if (!closed) refreshed.onSuccess { searchIndex = it }
+                refreshing = false
+                refreshFailure = refreshed.exceptionOrNull()
+                val status = refreshFailure?.let(::indexFailure)
+                    ?: ProviderSearchStatus(LyricsSource.AMLL, ProviderSearchPhase.AVAILABLE,
+                        "全量索引更新成功。", resultsChanged = true)
+                refreshListeners.toList().also { refreshListeners.clear() } to status
             }
-        } else {
-            // Fetch the full index on first use, retaining the old subset if the upgrade fails.
-            val refreshed = runCatching { refresh(now).getOrThrow(); loadIndex() }
-            refreshFailure = refreshed.exceptionOrNull()
+            if (!closed) listeners.forEach { runCatching { it(status) } }
         }
     }
 
     private fun isStale(now: Instant): Boolean = !Files.isRegularFile(indexPath) ||
         !Files.getLastModifiedTime(indexPath).toInstant().plus(INDEX_TTL).isAfter(now)
 
-    private fun mayAttemptRefresh(now: Instant): Boolean = lastRefreshAttempt
-        ?.plus(REFRESH_RETRY_DELAY)
-        ?.isAfter(now) != true
+    private fun mayAttemptRefresh(now: Instant): Boolean {
+        val delay = if (Files.isRegularFile(indexPath)) REFRESH_RETRY_DELAY else INITIAL_REFRESH_RETRY_DELAY
+        return lastRefreshAttempt?.plus(delay)?.isAfter(now) != true
+    }
 
-    private fun refresh(now: Instant): Result<Unit> {
+    private fun refresh(now: Instant): Result<AmllSearchIndex> {
         return runCatching {
             val content = http.get(AmllProvider.INDEX_URL)
+            val records = parseRecords(content.lineSequence())
+            check(records.isNotEmpty()) { "AMLL index contains no valid records" }
+            val updated = AmllSearchIndex(records)
             check(!closed && !Thread.currentThread().isInterrupted) { "AMLL index refresh cancelled" }
-            check(parseRecords(content.lineSequence()).isNotEmpty()) { "AMLL index contains no valid records" }
             val temporary = Files.createTempFile(cacheDirectory, "amll-index", ".tmp")
             try {
                 Files.writeString(temporary, content, StandardCharsets.UTF_8)
@@ -121,6 +119,7 @@ internal class AmllIndexStore(
                     if (!recycled) System.getLogger("SPW Lyrics").log(System.Logger.Level.WARNING, "AMLL 临时索引保留在：$temporary")
                 }
             }
+            updated
         }
     }
 
@@ -178,6 +177,7 @@ internal class AmllIndexStore(
     private companion object {
         const val INDEX_FILE_NAME = "raw-lyrics-index.jsonl"
         val INDEX_TTL: Duration = Duration.ofHours(6)
+        val INITIAL_REFRESH_RETRY_DELAY: Duration = Duration.ofSeconds(30)
         val REFRESH_RETRY_DELAY: Duration = Duration.ofMinutes(5)
     }
 }

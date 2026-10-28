@@ -15,9 +15,10 @@ class AmllProvider(
     private val http: ProviderHttp,
     private val clock: Clock = Clock.systemUTC(),
     legacyIndexPath: Path? = null,
+    indexHttp: ProviderHttp = http,
 ) : LyricsProvider, AutoCloseable {
     override val source: LyricsSource = LyricsSource.AMLL
-    private val index = AmllIndexStore(cacheDirectory, http, clock, legacyIndexPath)
+    private val index = AmllIndexStore(cacheDirectory, indexHttp, clock, legacyIndexPath)
 
     override fun search(query: TrackQuery, keywords: String, limit: Int): List<LyricsCandidate> =
         index.search(query, keywords, limit)

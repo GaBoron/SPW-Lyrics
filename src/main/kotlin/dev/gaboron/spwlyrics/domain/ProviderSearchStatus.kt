@@ -9,6 +9,8 @@ data class ProviderSearchStatus(
     val source: LyricsSource,
     val phase: ProviderSearchPhase = ProviderSearchPhase.NOT_CHECKED,
     val detail: String = "本次尚未请求此词源。",
+    /** A shared background update completed after the search snapshot was taken. */
+    val resultsChanged: Boolean = false,
 ) {
     companion object {
         fun unchecked(): Map<LyricsSource, ProviderSearchStatus> = LyricsSource.entries
