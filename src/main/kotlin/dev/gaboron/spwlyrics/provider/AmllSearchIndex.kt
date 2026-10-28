@@ -71,6 +71,8 @@ internal data class AmllRecord(
     val rawLyricFile: String?,
 ) {
     val identity: String get() = rawLyricFile?.takeIf(String::isNotBlank) ?: id
+    private val lyricUrl: String get() = rawLyricFile?.let { "${AmllProvider.RAW_BASE}/$it" }
+        ?: "${AmllProvider.LEGACY_RAW_BASE}/$id.ttml"
 
     fun candidate(titleQuery: String, albumQuery: String) = LyricsCandidate(
         source = LyricsSource.AMLL,
@@ -80,6 +82,6 @@ internal data class AmllRecord(
         album = albums.maxByOrNull { TextNormalizer.similarity(albumQuery, it) }.orEmpty(),
         qualityHint = LyricsQuality.KARAOKE_SYNCED,
         externalIds = ids.mapValues { it.value.firstOrNull().orEmpty() },
-        context = mapOf("url" to "${AmllProvider.RAW_BASE}/$id.ttml"),
+        context = mapOf("url" to lyricUrl),
     )
 }

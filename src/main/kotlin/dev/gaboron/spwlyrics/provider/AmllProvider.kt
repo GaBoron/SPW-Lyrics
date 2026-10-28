@@ -31,12 +31,17 @@ class AmllProvider(
     override fun close() = index.close()
 
     override fun fetch(candidate: LyricsCandidate): LyricsDocument? = runCatching {
-        val url = candidate.context["url"] ?: "$RAW_BASE/${candidate.remoteId}.ttml"
+        val url = candidate.context["url"] ?: if (candidate.remoteId.endsWith(".ttml")) {
+            "$RAW_BASE/${candidate.remoteId}"
+        } else {
+            "$LEGACY_RAW_BASE/${candidate.remoteId}.ttml"
+        }
         LyricsContentFilter.clean(TtmlCodec().parse(http.get(url), source), candidate)
     }.getOrNull()
 
     companion object {
-        const val INDEX_URL = "https://raw.githubusercontent.com/amll-dev/amll-ttml-db/main/am-lyrics/index.jsonl"
-        const val RAW_BASE = "https://raw.githubusercontent.com/amll-dev/amll-ttml-db/main/am-lyrics"
+        const val INDEX_URL = "https://raw.githubusercontent.com/amll-dev/amll-ttml-db/main/metadata/raw-lyrics-index.jsonl"
+        const val RAW_BASE = "https://raw.githubusercontent.com/amll-dev/amll-ttml-db/main/raw-lyrics"
+        internal const val LEGACY_RAW_BASE = "https://raw.githubusercontent.com/amll-dev/amll-ttml-db/main/am-lyrics"
     }
 }

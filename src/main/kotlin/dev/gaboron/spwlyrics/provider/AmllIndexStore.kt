@@ -71,12 +71,11 @@ internal class AmllIndexStore(
     private fun ensureCurrent() {
         if (closed) return
         Files.createDirectories(cacheDirectory)
-        migrateLegacyIndex()
         if (searchIndex == null) loadIndex()
         val now = clock.instant()
         if ((searchIndex?.isEmpty == false && !isStale(now)) || !mayAttemptRefresh(now) || refreshing) return
         lastRefreshAttempt = now
-        if (searchIndex?.isEmpty == false) {
+        if (searchIndex?.isEmpty == false && Files.isRegularFile(indexPath)) {
             // Keep searches responsive while an existing index is refreshed.
             refreshing = true
             refreshTask = refreshExecutor.submit {
@@ -91,6 +90,7 @@ internal class AmllIndexStore(
                 if (!closed) listeners.forEach { runCatching { it(status) } }
             }
         } else {
+            // Fetch the full index on first use, retaining the old subset if the upgrade fails.
             val refreshed = runCatching { refresh(now).getOrThrow(); loadIndex() }
             refreshFailure = refreshed.exceptionOrNull()
         }
@@ -125,20 +125,16 @@ internal class AmllIndexStore(
     }
 
     private fun loadIndex() {
-        val loaded = if (Files.isRegularFile(indexPath)) {
-            Files.newBufferedReader(indexPath, StandardCharsets.UTF_8).use { reader ->
+        val available = listOfNotNull(indexPath, cacheDirectory.resolve("index.jsonl"), legacyIndexPath)
+            .firstOrNull(Files::isRegularFile)
+        val loaded = if (available != null) {
+            Files.newBufferedReader(available, StandardCharsets.UTF_8).use { reader ->
                 parseRecords(reader.lineSequence())
             }
         } else {
             emptyList()
         }
         searchIndex = AmllSearchIndex(loaded)
-    }
-
-    private fun migrateLegacyIndex() {
-        val legacy = legacyIndexPath?.takeIf(Files::isRegularFile) ?: return
-        if (Files.exists(indexPath)) return
-        runCatching { moveReplacing(legacy, indexPath) }
     }
 
     private fun moveReplacing(source: Path, target: Path) {
@@ -167,19 +163,20 @@ internal class AmllIndexStore(
             val values = (pair[1] as JsonArray).map { (it as JsonPrimitive).content }
             key to values
         }
-        val id = root.string("id") ?: return@runCatching null
+        val rawLyricFile = root.string("rawLyricFile")?.takeIf(String::isNotBlank)
+        val id = rawLyricFile ?: root.string("id")?.takeIf(String::isNotBlank) ?: return@runCatching null
         AmllRecord(
             id = id,
             titles = metadata["musicName"].orEmpty().filter(String::isNotBlank).ifEmpty { return@runCatching null },
             artists = metadata["artists"].orEmpty(),
             albums = metadata["album"].orEmpty(),
             ids = metadata.filterKeys { it.endsWith("Id", true) },
-            rawLyricFile = root.string("rawLyricFile"),
+            rawLyricFile = rawLyricFile,
         )
     }.getOrNull()
 
     private companion object {
-        const val INDEX_FILE_NAME = "index.jsonl"
+        const val INDEX_FILE_NAME = "raw-lyrics-index.jsonl"
         val INDEX_TTL: Duration = Duration.ofHours(6)
         val REFRESH_RETRY_DELAY: Duration = Duration.ofMinutes(5)
     }
