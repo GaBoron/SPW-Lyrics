@@ -37,6 +37,7 @@ import dev.gaboron.spwlyrics.integration.workspace.LyricsToolPage
 import dev.gaboron.spwlyrics.integration.hostui.HostUiIntegration
 import dev.gaboron.spwlyrics.storage.FileLyricsDelaySettings
 import dev.gaboron.spwlyrics.storage.FileTimingCalibrationStore
+import dev.gaboron.spwlyrics.storage.LyricsUiStateStore
 import java.time.Duration
 import kotlin.io.path.Path
 
@@ -65,6 +66,7 @@ object PluginRuntime {
         val cacheDirectory = root.resolve("cache")
         val cache = FileLyricsCache(cacheDirectory)
         val delays = FileLyricsDelaySettings(root.resolve("歌词延迟"))
+        val uiState = LyricsUiStateStore(root.resolve("界面状态.properties"))
         cacheFolderOpener = CacheFolderOpener(cacheDirectory)
         settings = PluginSettings(WorkshopApi.manager.createConfigManager(), {
             coordinator?.selectionChanged()
@@ -125,8 +127,8 @@ object PluginRuntime {
             else "批量处理失败：${error.message ?: "未知错误"}"
         }
         val metadataOperations = object : MetadataEditorOperations {
-            override fun lyricsFormat() = settings?.metadataLyricsFormat() ?: MetadataLyricsFormat.TTML
-            override fun saveLyricsFormat(format: MetadataLyricsFormat) = settings?.setMetadataLyricsFormat(format) == true
+            override fun lyricsFormat() = MetadataLyricsFormat.fromStorageValue(uiState.lyricsFormat())
+            override fun saveLyricsFormat(format: MetadataLyricsFormat) = uiState.rememberLyricsFormat(format.storageValue)
             override fun currentAudioPath() = currentQuery()?.path
             override fun chooseAudioFile() = MetadataFilePicker.audio()
             override fun chooseLyricsFile() = MetadataFilePicker.lyrics()
@@ -140,8 +142,8 @@ object PluginRuntime {
             }
         }
         val manualOperations = object : ManualSearchOperations {
-            override fun candidateSort() = settings?.manualCandidateSort() ?: "PREFERENCE"
-            override fun saveCandidateSort(value: String) = settings?.setManualCandidateSort(value) == true
+            override fun candidateSort() = uiState.candidateSort()
+            override fun saveCandidateSort(value: String) = uiState.rememberCandidateSort(value)
             override fun currentQuery() = PluginRuntime.currentQuery()
             override fun search(query: TrackQuery, keywords: String, source: LyricsSource?, onStatus: (ProviderSearchStatus) -> Unit) =
                 checkNotNull(coordinator) { "歌词搜索尚未启用。" }.searchManual(query, keywords, source, onStatus)

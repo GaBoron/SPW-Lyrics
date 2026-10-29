@@ -19,11 +19,11 @@ internal fun MetadataWriteDialog(controller: MetadataEditorController) {
             Text(request.original.path.fileName.toString())
             MetadataFormatPicker(request.format, controller::format, enabled = !controller.state.busy)
             if (controller.state.error) LyricsStatus(controller.state.status, true)
-            if (request.losses.isEmpty()) Text("此格式可保留当前歌词的信息。")
+            if (request.losses.isEmpty()) Text("已选择 ${request.format.label}，可继续写入。")
             else {
                 Text("${request.format.label} 无法保留以下信息：")
                 request.losses.forEach { Text("· $it") }
-                Text("可继续按此格式写入，或选择其他格式。TTML 可保留这些信息。")
+                Text("可继续按此格式写入，或改选能保留所需信息的格式。")
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 DesktopButton("按 ${request.format.label} 写入", controller::confirmWrite, primary = true)

@@ -77,7 +77,7 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
     fun sort(value: CandidateColumn) {
         if (closed || value == state.sort) return
         state = state.copy(sort = value)
-        runCatching { check(operations.saveCandidateSort(value.name)) { "排序已切换，但未能记住本次选择，请检查配置文件权限。" } }
+        runCatching { check(operations.saveCandidateSort(value.name)) { "排序已切换，但未能记住本次选择，请检查本地数据目录权限。" } }
             .onFailure(::reportFailure)
     }
 

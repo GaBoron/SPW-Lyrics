@@ -11,16 +11,18 @@ internal object MetadataLyricsExport {
         val root = document.rawTtml?.let { TtmlXmlDocument.parse(it).documentElement }
         val mainAgent = root?.let(TtmlVocalParts::mainAgent) ?: "v1"
         return buildList {
-            if (document.lines.any { !it.agent.isNullOrBlank() && it.agent != mainAgent }) add("对唱声部将按普通歌词行保存")
-            if (document.lines.any { it.background }) add("背景人声将按普通歌词行保存")
-            if (format == MetadataLyricsFormat.LRC && document.lines.any { it.words.isNotEmpty() }) add("逐字时间将退为逐行时间")
+            if (document.lines.any { !it.agent.isNullOrBlank() && it.agent != mainAgent }) add("对唱声部将按普通歌词行保存；TTML 可保留声部标记。")
+            if (document.lines.any { it.background }) add("背景人声将按普通歌词行保存；TTML 可保留背景标记。")
+            if (format == MetadataLyricsFormat.LRC && document.lines.any { it.words.isNotEmpty() }) {
+                add("逐字时间将退为逐行时间；增强 LRC、SPL、TTML 均可保留逐字时间。")
+            }
             if (root != null) {
                 val elements = root.getElementsByTagName("*")
                 val hasRuby = (0 until elements.length).any { index ->
                     val attributes = elements.item(index).attributes
                     (0 until attributes.length).any { attributes.item(it).localName == "ruby" }
                 }
-                if (hasRuby) add("注音标记无法保留")
+                if (hasRuby) add("注音标记无法保留；TTML 可保留注音标记。")
             }
         }
     }

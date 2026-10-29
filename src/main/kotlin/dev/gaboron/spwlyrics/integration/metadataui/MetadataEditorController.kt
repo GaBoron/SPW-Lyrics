@@ -222,7 +222,7 @@ internal class MetadataEditorController(
         }
         state = state.copy(format = format, pendingWrite = pending, error = false,
             status = "写入时将使用 ${format.label}，草稿内容已保留。")
-        runCatching { check(operations.saveLyricsFormat(format)) { "已选择 ${format.label}，但未能记住本次选择，请检查配置文件权限。" } }
+        runCatching { check(operations.saveLyricsFormat(format)) { "已选择 ${format.label}，但未能记住本次选择，请检查本地数据目录权限。" } }
             .onFailure { state = state.copy(error = true, status = it.message.orEmpty()) }
     }
 
