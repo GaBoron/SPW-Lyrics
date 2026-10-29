@@ -1,8 +1,12 @@
 package dev.gaboron.spwlyrics.integration.manualui
 
 import dev.gaboron.spwlyrics.domain.CandidateScore
+import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsQuality
 import java.util.Locale
+
+internal fun sameCandidate(left: LyricsCandidate, right: LyricsCandidate): Boolean =
+    left.source == right.source && left.remoteId == right.remoteId
 
 /** Candidate labels and sorting stay independent of matching gates and list layout. */
 internal enum class CandidateColumn(val title: String) {
@@ -28,5 +32,16 @@ internal enum class CandidateColumn(val title: String) {
         SCORE -> compareBy { it.score }
         DURATION -> compareBy { it.candidate.durationMs ?: -1 }
         else -> compareBy { text(it) }
+    }
+
+    /** The automatic result stays first regardless of sorting, keywords, or source filtering. */
+    fun rows(candidates: List<CandidateScore>, automatic: CandidateScore?): List<CandidateScore> {
+        val manual = candidates.filterNot { automatic != null && sameCandidate(it.candidate, automatic.candidate) }
+        val sorted = when (this) {
+            PREFERENCE -> manual
+            SCORE -> manual.sortedWith(comparator().reversed())
+            else -> manual.sortedWith(comparator())
+        }
+        return listOfNotNull(automatic) + sorted
     }
 }

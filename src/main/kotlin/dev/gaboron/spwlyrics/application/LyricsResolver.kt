@@ -132,6 +132,11 @@ class LyricsResolver(
         resolved(FetchedLyrics(candidate, document))
     }
 
+    /** Reuses the exact automatic document for manual preview and apply, including disk cache hits. */
+    fun rememberManual(resolved: ResolvedLyrics) {
+        manualCandidateInspector.cache(resolved.candidate, resolved.document)
+    }
+
     fun inspectManual(candidates: List<LyricsCandidate>, report: (LyricsCandidate) -> Unit) {
         manualCandidateInspector.inspect(candidates.filter { it.source.hasLyrics }.mapNotNull { candidate ->
             providers[candidate.source]?.let { ManualCandidateRequest(it, candidate) }
@@ -143,6 +148,7 @@ class LyricsResolver(
         encoded = SpwLyricsEncoder.encode(resolved.document),
         savedAtEpochMs = clock.millis(),
         selectionKey = resolved.selectionKey,
+        candidate = resolved.candidate.copy(qualityHint = resolved.document.quality),
     )
 
     private fun search(provider: LyricsProvider, query: TrackQuery, keywords: String): List<LyricsCandidate> =

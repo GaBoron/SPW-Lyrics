@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import dev.gaboron.spwlyrics.domain.CandidateScore
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsSource
+import dev.gaboron.spwlyrics.domain.MatchEngine
 import dev.gaboron.spwlyrics.domain.ProviderSearchStatus
 import dev.gaboron.spwlyrics.domain.ProviderSearchPhase
 import dev.gaboron.spwlyrics.domain.TrackQuery
@@ -20,18 +21,22 @@ import java.util.concurrent.Future
 internal class ManualSearchController(private val operations: ManualSearchOperations) : AutoCloseable {
     var state by mutableStateOf(ManualSearchState())
         private set
-    private val workers = Executors.newFixedThreadPool(2) { task ->
+    private val workers = Executors.newFixedThreadPool(3) { task ->
         Thread(task, "spw-lyrics-manual-search").apply { isDaemon = true }
     }
     @Volatile private var closed = false
     private var trackGeneration = 0
     private var searchGeneration = 0
     private var previewGeneration = 0
+    private var automaticGeneration = 0
     private var inspection: Future<*>? = null
+    private var automatic: Future<*>? = null
 
     fun searchMetadata(query: TrackQuery) {
         if (closed || state.mutating) return
         inspection?.cancel(true)
+        automatic?.cancel(true)
+        automaticGeneration++
         trackGeneration++
         searchGeneration++
         previewGeneration++
@@ -44,6 +49,8 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
     fun refreshTrack() {
         if (closed || state.mutating || state.readingTrack && trackGeneration > 0) return
         inspection?.cancel(true)
+        automatic?.cancel(true)
+        automaticGeneration++
         val generation = ++trackGeneration
         searchGeneration++
         previewGeneration++
@@ -97,6 +104,7 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
         state = state.copy(candidates = emptyList(), selected = null, document = null, lyricsMetadata = emptyMap(),
             sourceStatuses = ProviderSearchStatus.unchecked(),
             searching = true, previewing = false, searched = false, status = "正在搜索…", error = false)
+        refreshAutomatic(query)
         submit({ searchGeneration == generation }, { operations.search(query, keywords, source) { update ->
             EventQueue.invokeLater {
                 if (!closed && searchGeneration == generation) {
@@ -108,7 +116,7 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
             }
         } }, { rows ->
             state = state.copy(candidates = rows, searching = false, searched = true,
-                status = if (rows.isEmpty()) "没有找到候选，请缩短关键词或换一个来源。" else "")
+                status = "")
             if (refreshAfterSearch) search() else inspect(rows, generation)
         }, { error ->
             state = state.copy(searching = false, searched = true, sourceStatuses = state.sourceStatuses.mapValues { (_, status) ->
@@ -116,6 +124,16 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
             })
             reportFailure(error)
         })
+    }
+
+    private fun refreshAutomatic(query: TrackQuery) {
+        automatic?.cancel(true)
+        val generation = ++automaticGeneration
+        state = state.copy(automatic = null, automaticDocument = null, matchingAutomatic = true)
+        automatic = submit({ automaticGeneration == generation }, { operations.automatic(query) }, { resolved ->
+            val row = resolved?.let { MatchEngine.score(query, it.candidate.copy(qualityHint = it.document.quality)) }
+            state = state.copy(automatic = row, automaticDocument = resolved?.document, matchingAutomatic = false)
+        }, { state = state.copy(matchingAutomatic = false) })
     }
 
     private fun inspect(rows: List<CandidateScore>, generation: Int) {
@@ -134,15 +152,15 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
         }
     }
 
-    private fun sameCandidate(left: LyricsCandidate, right: LyricsCandidate) = left.source == right.source && left.remoteId == right.remoteId
-
     fun select(row: CandidateScore) {
-        if (closed || state.mutating || state.candidates.none { sameCandidate(it.candidate, row.candidate) } ||
+        if (closed || state.mutating || (!state.isAutomatic(row) && state.candidates.none { sameCandidate(it.candidate, row.candidate) }) ||
             state.selected?.candidate?.let { sameCandidate(it, row.candidate) } == true && (state.previewing || state.document != null)) return
         val generation = ++previewGeneration
+        val automaticDocument = state.automaticDocument.takeIf { state.isAutomatic(row) }
         state = state.copy(selected = row, document = null, lyricsMetadata = emptyMap(), previewing = true)
         submit({ previewGeneration == generation }, {
-            operations.preview(row.candidate)?.document?.let { Triple(it, TtmlVocalParts.mainAgent(it), LyricsMetadataReader.read(it)) }
+            (automaticDocument ?: operations.preview(row.candidate)?.document)
+                ?.let { Triple(it, TtmlVocalParts.mainAgent(it), LyricsMetadataReader.read(it)) }
         }, { resolved ->
             val inspected = row.copy(candidate = row.candidate.copy(qualityHint = resolved?.first?.quality))
             state = state.copy(selected = inspected, candidates = state.candidates.map { if (sameCandidate(it.candidate, row.candidate)) inspected else it },
@@ -209,18 +227,21 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
     private fun invalidDelay() = status("请输入 -60000 到 60000 之间的整数毫秒。", true)
     private fun reportFailure(error: Throwable) = status("操作失败：${error.message ?: "未知错误"}", true)
 
-    private fun <T> submit(current: () -> Boolean, action: () -> T, complete: (T) -> Unit, failure: (Throwable) -> Unit) {
-        if (closed) return
-        runCatching {
-            workers.execute {
+    private fun <T> submit(current: () -> Boolean, action: () -> T, complete: (T) -> Unit, failure: (Throwable) -> Unit): Future<*>? {
+        if (closed) return null
+        return runCatching {
+            workers.submit {
                 val result = runCatching(action)
                 EventQueue.invokeLater {
                     if (!closed && current()) result.onSuccess(complete).onFailure(failure)
                 }
             }
-        }.onFailure { if (!closed && current()) failure(it) }
+        }.getOrElse {
+            if (!closed && current()) failure(it)
+            null
+        }
     }
 
     // A submitted apply/save may finish after the user closes the view, as before.
-    override fun close() { closed = true; inspection?.cancel(true); workers.shutdown() }
+    override fun close() { closed = true; inspection?.cancel(true); automatic?.cancel(true); workers.shutdown() }
 }

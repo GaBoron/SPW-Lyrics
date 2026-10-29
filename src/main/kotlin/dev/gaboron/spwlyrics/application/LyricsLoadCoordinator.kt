@@ -96,6 +96,15 @@ class LyricsLoadCoordinator(
 
     fun preview(candidate: LyricsCandidate): ResolvedLyrics? = resolver.fetchManual(candidate)
 
+    /** Previews automatic matching without applying lyrics or changing a manual/local override. */
+    fun previewAutomatic(query: TrackQuery): ResolvedLyrics? {
+        val selectionKey = resolver.selectionKey()
+        val cached = cache.getLyrics(query)?.takeIf { it.selectionKey == selectionKey }
+        val resolved = cached?.candidate?.let { ResolvedLyrics(it, cached.document, cached.selectionKey) }
+            ?: resolver.resolveAutomaticFully(prepareQuery(query))
+        return resolved?.takeIf { it.selectionKey == resolver.selectionKey() }?.also(resolver::rememberManual)
+    }
+
     fun applyManual(query: TrackQuery, candidate: LyricsCandidate): Boolean {
         if (current.get()?.key != query.key) return false
         tasks.cancel(upgradeKey(query))
