@@ -9,12 +9,21 @@ import dev.gaboron.spwlyrics.codec.TtmlVocalParts
 import dev.gaboron.spwlyrics.domain.LyricVocalPart
 import dev.gaboron.spwlyrics.storage.AudioMetadataSnapshot
 
+internal data class MetadataWriteRequest(
+    val original: AudioMetadataSnapshot,
+    val edited: AudioMetadata,
+    val document: LyricsDocument?,
+    val format: MetadataLyricsFormat,
+    val losses: List<String>,
+    val continuation: (() -> Unit)?,
+)
+
 internal data class MetadataEditorState(
     val loaded: AudioMetadataSnapshot? = null,
     val onlineImport: dev.gaboron.spwlyrics.domain.OnlineMetadataImport? = null,
     val draft: AudioMetadata = AudioMetadata(),
     val format: MetadataLyricsFormat = MetadataLyricsFormat.TTML,
-    val sourceDocument: LyricsDocument? = null,
+    val lyricsWritingEnabled: Boolean = true,
     val preview: LyricsDocument? = null,
     val structured: EditableLyrics? = null,
     val structuredError: String? = null,
@@ -28,12 +37,13 @@ internal data class MetadataEditorState(
     val status: String = "读取当前歌曲，或打开本地歌曲文件。",
     val error: Boolean = false,
     val pendingDiscard: (() -> Unit)? = null,
+    val pendingWrite: MetadataWriteRequest? = null,
 ) {
     val dirty get() = loaded != null && (draft != loaded.metadata || lineEdits.isNotEmpty())
     val lyricsChanged get() = loaded != null && draft.lyrics != loaded.metadata.lyrics
     val canEditRows get() = loaded != null && !busy && structuredError == null && (structured != null || draft.lyrics.isBlank())
-    private val canWrite get() = dirty && !busy &&
-        (!(lyricsChanged || lineEdits.isNotEmpty()) || draft.lyrics.isBlank() || !validating && previewError == null)
+    private val canWrite get() = loaded != null && (dirty || lyricsWritingEnabled && preview != null) && !busy && pendingWrite == null &&
+        (draft.lyrics.isBlank() || !validating && (previewError == null || !lyricsChanged && lineEdits.isEmpty()))
     val canSave get() = canWrite && pendingDiscard == null
     val canSaveAndContinue get() = canWrite && pendingDiscard != null
     fun line(id: Int): EditableLyricLine? = lineEdits[id] ?: structured?.lines?.firstOrNull { it.id == id }

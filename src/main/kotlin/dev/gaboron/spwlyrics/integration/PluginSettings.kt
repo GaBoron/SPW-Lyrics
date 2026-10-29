@@ -5,6 +5,7 @@ import com.xuncorp.spw.workshop.api.config.ConfigHelper
 import com.xuncorp.spw.workshop.api.config.ConfigManager
 import dev.gaboron.spwlyrics.application.AutomaticReplacementPolicy
 import dev.gaboron.spwlyrics.domain.*
+import dev.gaboron.spwlyrics.codec.MetadataLyricsFormat
 import java.util.concurrent.atomic.AtomicReference
 import java.util.function.Consumer
 
@@ -18,6 +19,8 @@ class PluginSettings(
     private val replacementPolicy = AtomicReference(readPolicy(initialConfig))
     private val selection = AtomicReference(readSelection(initialConfig).getOrDefault(LyricsPreferences()))
     private val shareKey = AtomicReference(initialConfig.get("lrcshare_api_key", "").trim())
+    private val writeFormat = AtomicReference(initialConfig.get("metadata_lyrics_format", "ttml"))
+    private val manualSort = AtomicReference(initialConfig.get("manual_candidate_sort", "PREFERENCE"))
     private var invalidInput: String? = null
     private val listener = Consumer<ConfigHelper> {
         // SPW saves settings through a separate helper; the callback can still hold cached values.
@@ -29,6 +32,8 @@ class PluginSettings(
         val invalid = next.exceptionOrNull()?.message
         if (invalid != null && invalid != invalidInput) notify("排序未生效，已保留上一次有效设置。$invalid")
         invalidInput = invalid
+        writeFormat.set(it.get("metadata_lyrics_format", "ttml"))
+        manualSort.set(it.get("manual_candidate_sort", "PREFERENCE"))
         val key = it.get("lrcshare_api_key", "").trim()
         if (shareKey.getAndSet(key) != key || changed || policyChanged) onSelectionChanged()
     }
@@ -41,6 +46,24 @@ class PluginSettings(
     fun automaticReplacementPolicy(): AutomaticReplacementPolicy = replacementPolicy.get()
     fun lyricsPreferences(): LyricsPreferences = selection.get()
     fun lrcShareApiKey(): String = shareKey.get()
+    internal fun metadataLyricsFormat(): MetadataLyricsFormat = MetadataLyricsFormat.fromConfigValue(writeFormat.get())
+    fun manualCandidateSort(): String = manualSort.get()
+
+    internal fun setMetadataLyricsFormat(format: MetadataLyricsFormat): Boolean = saveChoice("metadata_lyrics_format", format.configValue) {
+        writeFormat.set(format.configValue)
+    }
+
+    fun setManualCandidateSort(value: String): Boolean = saveChoice("manual_candidate_sort", value) { manualSort.set(value) }
+
+    @Synchronized
+    private fun saveChoice(key: String, value: String, accepted: () -> Unit): Boolean {
+        val config = manager.getConfig(CONFIG_FILE)
+        if (!config.reload() && java.nio.file.Files.exists(config.getConfigPath())) return false
+        config.set(key, value)
+        if (!config.save()) return false
+        accepted()
+        return true
+    }
 
     private fun readSelection(config: ConfigHelper): Result<LyricsPreferences> = runCatching {
         LyricsPreferenceInput.parse(config.get("lyrics_priority_mode", "type_first"),

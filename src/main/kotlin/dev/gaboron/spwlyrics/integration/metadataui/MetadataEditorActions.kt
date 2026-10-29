@@ -33,7 +33,6 @@ internal fun MetadataEditorActions(controller: MetadataEditorController, focused
                         DesktopButton("在线匹配信息与封面", controller::openSearch, enabled = state.loaded != null && !state.busy, glyph = DesktopGlyph.Search)
                         DesktopButton("导入歌词", controller::importLyrics, enabled = state.loaded != null && !state.busy)
                         MetadataFormatPicker(state.format, controller::format, enabled = !state.busy)
-                        DesktopButton("转换格式", controller::convert, enabled = state.loaded != null && !state.busy && !state.validating && state.preview != null)
                     }
                 }
             }

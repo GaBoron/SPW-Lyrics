@@ -13,6 +13,7 @@ import dev.gaboron.spwlyrics.integration.composeui.*
 import dev.gaboron.spwlyrics.integration.manualui.ManualSearchContent
 import dev.gaboron.spwlyrics.integration.metadataui.MetadataDiscardDialog
 import dev.gaboron.spwlyrics.integration.metadataui.MetadataEditorContent
+import dev.gaboron.spwlyrics.integration.metadataui.MetadataWriteDialog
 
 @Composable
 internal fun LyricsWorkspaceContent(session: LyricsWorkspaceSession, close: () -> Unit) {
@@ -40,4 +41,6 @@ internal fun LyricsWorkspaceContent(session: LyricsWorkspaceSession, close: () -
     }
     MetadataDiscardDialog(session.metadata)
     MetadataDiscardDialog(session.batchMetadata)
+    MetadataWriteDialog(session.metadata)
+    MetadataWriteDialog(session.batchMetadata)
 }

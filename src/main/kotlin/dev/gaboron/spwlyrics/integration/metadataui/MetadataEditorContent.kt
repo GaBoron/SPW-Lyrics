@@ -76,7 +76,7 @@ internal fun MetadataEditorContent(controller: MetadataEditorController, timing:
 @Composable
 internal fun MetadataDiscardDialog(controller: MetadataEditorController) {
     val state = controller.state
-    if (state.pendingDiscard == null) return
+    if (state.pendingDiscard == null || state.pendingWrite != null) return
     DesktopDialog(controller::cancelDiscard) {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("有未保存的修改")

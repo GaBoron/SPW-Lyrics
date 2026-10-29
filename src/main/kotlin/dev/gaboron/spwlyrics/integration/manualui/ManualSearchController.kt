@@ -19,7 +19,7 @@ import java.util.concurrent.Future
 
 /** Owns asynchronous requests and presentation state; domain rules stay behind operations. */
 internal class ManualSearchController(private val operations: ManualSearchOperations) : AutoCloseable {
-    var state by mutableStateOf(ManualSearchState())
+    var state by mutableStateOf(ManualSearchState(sort = CandidateColumn.entries.firstOrNull { it.name == operations.candidateSort() } ?: CandidateColumn.PREFERENCE))
         private set
     private val workers = Executors.newFixedThreadPool(3) { task ->
         Thread(task, "spw-lyrics-manual-search").apply { isDaemon = true }
@@ -40,7 +40,7 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
         trackGeneration++
         searchGeneration++
         previewGeneration++
-        state = ManualSearchState(query = query, metadataOnly = true, readingTrack = false,
+        state = ManualSearchState(query = query, sort = state.sort, metadataOnly = true, readingTrack = false,
             keywords = listOf(query.title, query.artists.joinToString(" ")).filter(String::isNotBlank).joinToString(" "),
             status = "正在为编辑中的歌曲匹配在线信息与封面…")
         search()
@@ -54,7 +54,7 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
         val generation = ++trackGeneration
         searchGeneration++
         previewGeneration++
-        state = ManualSearchState(source = state.source)
+        state = ManualSearchState(source = state.source, sort = state.sort)
         submit({ trackGeneration == generation }, {
             operations.currentQuery()?.let { it to operations.delay(it) }
         }, { loaded ->
@@ -72,6 +72,13 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
     }
     fun source(value: LyricsSource?) {
         if (value != state.source) { invalidateSearch(); state = state.copy(source = value) }
+    }
+
+    fun sort(value: CandidateColumn) {
+        if (closed || value == state.sort) return
+        state = state.copy(sort = value)
+        runCatching { check(operations.saveCandidateSort(value.name)) { "排序已切换，但未能记住本次选择，请检查配置文件权限。" } }
+            .onFailure(::reportFailure)
     }
 
     private fun invalidateSearch() {

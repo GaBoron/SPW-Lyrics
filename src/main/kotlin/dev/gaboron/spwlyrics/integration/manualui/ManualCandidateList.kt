@@ -6,7 +6,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -19,8 +18,8 @@ import dev.gaboron.spwlyrics.integration.composeui.*
 import dev.gaboron.spwlyrics.integration.workspace.*
 
 @Composable
-internal fun ManualCandidateList(state: ManualSearchState, select: (CandidateScore) -> Unit, modifier: Modifier) {
-    var sort by rememberSaveable { mutableStateOf(CandidateColumn.PREFERENCE) }
+internal fun ManualCandidateList(state: ManualSearchState, select: (CandidateScore) -> Unit, selectSort: (CandidateColumn) -> Unit, modifier: Modifier) {
+    val sort = state.sort
     val rows = remember(state.candidates, state.automatic, sort) {
         sort.rows(state.candidates, state.automatic)
     }
@@ -34,7 +33,7 @@ internal fun ManualCandidateList(state: ManualSearchState, select: (CandidateSco
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("搜索结果  ${rows.size}" + if (state.matchingAutomatic) " · 正在自动搜索…" else "",
                 Modifier.weight(1f), color = SaltTheme.colors.subText, style = SaltTheme.textStyles.sub)
-            LyricsMenu("排序：${sort.title}", CandidateColumn.entries.toList(), sort, { it.title }, { sort = it })
+            LyricsMenu("排序：${sort.title}", CandidateColumn.entries.toList(), sort, { it.title }, selectSort)
         }
         LyricsSection(Modifier.weight(1f)) {
             Box(Modifier.fillMaxSize().focusRequester(focus).onPreviewKeyEvent { event ->

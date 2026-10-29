@@ -12,6 +12,7 @@ internal data class ManualSearchState(
     val metadataOnly: Boolean = false,
     val keywords: String = "",
     val source: LyricsSource? = null,
+    val sort: CandidateColumn = CandidateColumn.PREFERENCE,
     val candidates: List<CandidateScore> = emptyList(),
     val automatic: CandidateScore? = null,
     val automaticDocument: LyricsDocument? = null,

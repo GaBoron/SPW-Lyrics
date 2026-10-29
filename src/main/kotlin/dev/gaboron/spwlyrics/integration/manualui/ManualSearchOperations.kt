@@ -11,6 +11,8 @@ import dev.gaboron.spwlyrics.domain.ProviderSearchStatus
 /** Keeps the window independent of host APIs, cache storage, and matching rules. */
 internal interface ManualSearchOperations {
     fun currentQuery(): TrackQuery?
+    fun candidateSort(): String = "PREFERENCE"
+    fun saveCandidateSort(value: String): Boolean = true
     fun search(query: TrackQuery, keywords: String, source: LyricsSource?,
         onStatus: (ProviderSearchStatus) -> Unit): List<CandidateScore>
     fun preview(candidate: LyricsCandidate): ResolvedLyrics?

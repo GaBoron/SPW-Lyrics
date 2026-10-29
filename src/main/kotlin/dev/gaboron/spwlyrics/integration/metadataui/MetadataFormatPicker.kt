@@ -6,5 +6,5 @@ import dev.gaboron.spwlyrics.integration.workspace.LyricsMenu
 
 @Composable
 internal fun MetadataFormatPicker(format: MetadataLyricsFormat, select: (MetadataLyricsFormat) -> Unit, enabled: Boolean) {
-    LyricsMenu(format.label, MetadataLyricsFormat.entries.toList(), format, { it.label }, select, enabled = enabled)
+    LyricsMenu("写入格式：${format.label}", MetadataLyricsFormat.entries.toList(), format, { it.label }, select, enabled = enabled)
 }

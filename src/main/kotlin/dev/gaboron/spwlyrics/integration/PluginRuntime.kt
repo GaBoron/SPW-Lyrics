@@ -11,6 +11,7 @@ import dev.gaboron.spwlyrics.application.LyricsBatchProcessor
 import dev.gaboron.spwlyrics.application.LyricsResolver
 import dev.gaboron.spwlyrics.application.LyricsPrecache
 import dev.gaboron.spwlyrics.application.LyricsOutputRouter
+import dev.gaboron.spwlyrics.codec.MetadataLyricsFormat
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsDocument
 import dev.gaboron.spwlyrics.domain.LyricsSource
@@ -124,6 +125,8 @@ object PluginRuntime {
             else "批量处理失败：${error.message ?: "未知错误"}"
         }
         val metadataOperations = object : MetadataEditorOperations {
+            override fun lyricsFormat() = settings?.metadataLyricsFormat() ?: MetadataLyricsFormat.TTML
+            override fun saveLyricsFormat(format: MetadataLyricsFormat) = settings?.setMetadataLyricsFormat(format) == true
             override fun currentAudioPath() = currentQuery()?.path
             override fun chooseAudioFile() = MetadataFilePicker.audio()
             override fun chooseLyricsFile() = MetadataFilePicker.lyrics()
@@ -137,6 +140,8 @@ object PluginRuntime {
             }
         }
         val manualOperations = object : ManualSearchOperations {
+            override fun candidateSort() = settings?.manualCandidateSort() ?: "PREFERENCE"
+            override fun saveCandidateSort(value: String) = settings?.setManualCandidateSort(value) == true
             override fun currentQuery() = PluginRuntime.currentQuery()
             override fun search(query: TrackQuery, keywords: String, source: LyricsSource?, onStatus: (ProviderSearchStatus) -> Unit) =
                 checkNotNull(coordinator) { "歌词搜索尚未启用。" }.searchManual(query, keywords, source, onStatus)

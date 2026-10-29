@@ -5,6 +5,26 @@ import dev.gaboron.spwlyrics.domain.LyricsDocument
 
 /** Converts parsed search results, never inventing word or line timing. */
 internal object MetadataLyricsExport {
+    /** Describes information that the selected text format cannot represent before any file write. */
+    fun losses(document: LyricsDocument, format: MetadataLyricsFormat): List<String> {
+        if (format == MetadataLyricsFormat.TTML) return emptyList()
+        val root = document.rawTtml?.let { TtmlXmlDocument.parse(it).documentElement }
+        val mainAgent = root?.let(TtmlVocalParts::mainAgent) ?: "v1"
+        return buildList {
+            if (document.lines.any { !it.agent.isNullOrBlank() && it.agent != mainAgent }) add("对唱声部将按普通歌词行保存")
+            if (document.lines.any { it.background }) add("背景人声将按普通歌词行保存")
+            if (format == MetadataLyricsFormat.LRC && document.lines.any { it.words.isNotEmpty() }) add("逐字时间将退为逐行时间")
+            if (root != null) {
+                val elements = root.getElementsByTagName("*")
+                val hasRuby = (0 until elements.length).any { index ->
+                    val attributes = elements.item(index).attributes
+                    (0 until attributes.length).any { attributes.item(it).localName == "ruby" }
+                }
+                if (hasRuby) add("注音标记无法保留")
+            }
+        }
+    }
+
     fun encode(document: LyricsDocument, format: MetadataLyricsFormat): String {
         require(document.lines.isNotEmpty()) { "没有可以转换的歌词。" }
         if (format == MetadataLyricsFormat.TTML) return document.rawTtml?.let { TtmlXmlDocument.write(TtmlXmlDocument.parse(it)) }

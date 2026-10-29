@@ -32,7 +32,7 @@ internal class LyricsWorkspaceSession(
 ) : AutoCloseable {
     val manual = ManualSearchController(manualOperations)
     val metadata = MetadataEditorController(FileAudioMetadataStore(), metadataOperations)
-    val batchMetadata = MetadataEditorController(FileAudioMetadataStore(), metadataOperations)
+    val batchMetadata = MetadataEditorController(FileAudioMetadataStore(), metadataOperations, lyricsWritingEnabled = false)
     val timing = LyricsTimingController(metadata, timingPlayback, calibrationStore, timingAudio)
     val batch = BatchProcessingController(processor, describeFailure)
     var page by mutableStateOf(LyricsToolPage.SEARCH)

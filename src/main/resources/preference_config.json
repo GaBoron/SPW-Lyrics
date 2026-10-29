@@ -58,6 +58,15 @@
           "on_click": "dev.gaboron.spwlyrics.integration.SpwLyricsActions.resetLyricsOrder"
         },
         {
+          "key": "metadata_lyrics_format",
+          "type": "list",
+          "title": "歌词写入格式",
+          "summary": "元数据编辑页写入内嵌歌词时使用的格式；自动记住上次选择。无法保留的信息会在写入前提示。",
+          "entries": ["TTML", "LRC", "增强 LRC", "SPL"],
+          "entry_values": ["ttml", "lrc", "enhanced_lrc", "spl"],
+          "default_value": "ttml"
+        },
+        {
           "key": "lrcshare_api_key",
           "type": "edittext",
           "title": "LrcShare API Key",

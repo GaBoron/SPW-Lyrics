@@ -19,6 +19,7 @@ import dev.gaboron.spwlyrics.domain.LyricsDocument
 import dev.gaboron.spwlyrics.domain.TrackQuery
 import dev.gaboron.spwlyrics.domain.AudioMetadataField
 import dev.gaboron.spwlyrics.storage.AudioMetadataSnapshot
+import dev.gaboron.spwlyrics.storage.AudioMetadataSaved
 import dev.gaboron.spwlyrics.storage.AudioMetadataStore
 import java.awt.EventQueue
 import java.nio.file.Path
@@ -27,6 +28,8 @@ import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 
 internal interface MetadataEditorOperations {
+    fun lyricsFormat(): MetadataLyricsFormat = MetadataLyricsFormat.TTML
+    fun saveLyricsFormat(format: MetadataLyricsFormat): Boolean = true
     fun currentAudioPath(): String?
     fun chooseAudioFile(): Path?
     fun chooseLyricsFile(): Path?
@@ -40,8 +43,9 @@ internal class MetadataEditorController(
     private val store: AudioMetadataStore,
     private val operations: MetadataEditorOperations,
     private val artworkImport: OnlineArtworkImport = OnlineArtworkImport(),
+    private val lyricsWritingEnabled: Boolean = true,
 ) : AutoCloseable {
-    var state by mutableStateOf(MetadataEditorState())
+    var state by mutableStateOf(MetadataEditorState(format = operations.lyricsFormat(), lyricsWritingEnabled = lyricsWritingEnabled))
         private set
     private val worker = Executors.newSingleThreadExecutor { Thread(it, "spw-lyrics-metadata").apply { isDaemon = true } }
     private val parser = Executors.newSingleThreadScheduledExecutor { Thread(it, "spw-lyrics-metadata-preview").apply { isDaemon = true } }
@@ -64,7 +68,7 @@ internal class MetadataEditorController(
         if (closed || state.busy) return
         previewTask?.cancel(false)
         previewGeneration++
-        state = MetadataEditorState()
+        state = MetadataEditorState(format = operations.lyricsFormat(), lyricsWritingEnabled = lyricsWritingEnabled)
     }
 
     fun reload() = requestDiscard {
@@ -78,7 +82,7 @@ internal class MetadataEditorController(
 
     fun lyrics(text: String) {
         if (closed || state.busy || state.loaded == null) return
-        state = state.copy(draft = state.draft.copy(lyrics = text), sourceDocument = null,
+        state = state.copy(draft = state.draft.copy(lyrics = text),
             structured = null, structuredError = null, lineEdits = emptyMap(), error = false)
         preview()
     }
@@ -142,10 +146,10 @@ internal class MetadataEditorController(
             }
             EventQueue.invokeLater {
                 if (!closed && generation == previewGeneration) result.onSuccess { (raw, parsed) ->
-                    state = state.copy(draft = state.draft.copy(lyrics = raw), sourceDocument = parsed.getOrNull(), preview = parsed.getOrNull(),
+                    state = state.copy(draft = state.draft.copy(lyrics = raw), preview = parsed.getOrNull(),
                         previewError = parsed.exceptionOrNull()?.message,
-                        validating = false, format = MetadataLyricsFormat.TTML,
-                        status = "歌词修改已记入草稿。逐句编辑使用 TTML 保存声部、背景和逐字信息；可再转换为其他格式。")
+                        validating = false,
+                        status = "歌词修改已记入草稿，保留声部、背景和逐字信息；写入时使用所选格式。")
                 }.onFailure { state = state.copy(validating = false, previewError = it.message ?: "歌词编辑内容无效。") }
             }
         }, 200, TimeUnit.MILLISECONDS)
@@ -201,8 +205,8 @@ internal class MetadataEditorController(
                         if (edited == null) return@onSuccess
                         val (base, id, parsed) = edited
                         state = state.copy(structured = base, lineEdits = emptyMap(),
-                            draft = state.draft.copy(lyrics = base.raw), format = MetadataLyricsFormat.TTML,
-                            preview = parsed.getOrNull(), sourceDocument = parsed.getOrNull(), previewError = parsed.exceptionOrNull()?.message,
+                            draft = state.draft.copy(lyrics = base.raw),
+                            preview = parsed.getOrNull(), previewError = parsed.exceptionOrNull()?.message,
                             selectedLineId = id, selectedLineIds = setOfNotNull(id), selectionAnchor = id,
                             status = "歌词行修改已记入草稿，点击“写入歌曲文件”保存。")
                     }.onFailure { state = state.copy(previewError = it.message) }
@@ -212,17 +216,14 @@ internal class MetadataEditorController(
     }
 
     fun format(format: MetadataLyricsFormat) {
-        if (!state.busy) state = state.copy(format = format)
-    }
-
-    fun convert() {
-        if (closed || state.busy || state.loaded == null || state.validating) return
-        val document = state.sourceDocument ?: state.preview ?: return
-        val format = state.format
-        run({ MetadataLyricsExport.encode(document, format) }, { text ->
-            lyrics(text)
-            state = state.copy(sourceDocument = document, status = "已转换为 ${format.label}，点击“写入歌曲文件”保存。")
-        })
+        if (closed || state.busy) return
+        val pending = state.pendingWrite?.let { request ->
+            request.copy(format = format, losses = request.document?.let { MetadataLyricsExport.losses(it, format) }.orEmpty())
+        }
+        state = state.copy(format = format, pendingWrite = pending, error = false,
+            status = "写入时将使用 ${format.label}，草稿内容已保留。")
+        runCatching { check(operations.saveLyricsFormat(format)) { "已选择 ${format.label}，但未能记住本次选择，请检查配置文件权限。" } }
+            .onFailure { state = state.copy(error = true, status = it.message.orEmpty()) }
     }
 
     fun importSearch(query: TrackQuery, candidate: dev.gaboron.spwlyrics.domain.LyricsCandidate, document: LyricsDocument?, preserveDraft: Boolean = false) {
@@ -231,24 +232,22 @@ internal class MetadataEditorController(
             runCatching { java.nio.file.Files.isSameFile(path, Path.of(query.path)) }.getOrDefault(false)
         } == true
         if (preserveDraft && sameFile) {
-            val format = state.format
-            run({ prepareOnlineImport(candidate, document, format) }, { pending ->
+            run({ prepareOnlineImport(candidate, document) }, { pending ->
                 state = state.copy(onlineImport = pending, status = "已读取在线信息、封面与可用歌词，原草稿已保留。请勾选并应用。")
             })
         } else requestDiscard { loadSearch(query, candidate, document) }
     }
 
     private fun loadSearch(query: TrackQuery, candidate: dev.gaboron.spwlyrics.domain.LyricsCandidate, document: LyricsDocument?) {
-        val format = state.format
-        run({ store.read(Path.of(query.path)) to prepareOnlineImport(candidate, document, format) }, { (snapshot, pending) ->
+        run({ store.read(Path.of(query.path)) to prepareOnlineImport(candidate, document) }, { (snapshot, pending) ->
             loaded(snapshot)
-            state = state.copy(format = format, onlineImport = pending,
+            state = state.copy(onlineImport = pending,
                 status = "已读取在线信息。请勾选字段、封面或歌词并应用到草稿；核对后写入歌曲文件。")
         })
     }
 
-    private fun prepareOnlineImport(candidate: dev.gaboron.spwlyrics.domain.LyricsCandidate, document: LyricsDocument?, format: MetadataLyricsFormat) =
-        artworkImport.prepare(candidate).copy(lyricsText = document?.let { MetadataLyricsExport.encode(it, format) }, lyricsDocument = document)
+    private fun prepareOnlineImport(candidate: dev.gaboron.spwlyrics.domain.LyricsCandidate, document: LyricsDocument?) =
+        artworkImport.prepare(candidate).copy(lyricsText = document?.let { MetadataLyricsExport.encode(it, MetadataLyricsFormat.TTML) }, lyricsDocument = document)
 
     fun selectImport(field: AudioMetadataField, selected: Boolean) {
         val pending = state.onlineImport ?: return
@@ -299,7 +298,7 @@ internal class MetadataEditorController(
         val updated = pending.apply(state.draft)
         val replacingLyrics = pending.lyricsSelected && pending.lyricsText != null && (!pending.fillMissing || state.draft.lyrics.isBlank())
         if (replacingLyrics) lyrics(updated.lyrics)
-        state = state.copy(draft = updated, sourceDocument = if (replacingLyrics) pending.lyricsDocument else state.sourceDocument, error = false,
+        state = state.copy(draft = updated, error = false,
             status = "所选字段、封面和歌词已按导入模式应用到草稿。请核对后写入歌曲文件。")
     }
 
@@ -332,21 +331,41 @@ internal class MetadataEditorController(
         val allowed = if (continuation == null) state.canSave else state.canSaveAndContinue
         if (closed || !allowed) return
         val original = state.loaded ?: return
-        val edited = state.draft
+        val document = state.preview.takeIf { lyricsWritingEnabled && state.draft.lyrics.isNotBlank() }
+        val request = MetadataWriteRequest(original, state.draft, document, state.format,
+            document?.let { MetadataLyricsExport.losses(it, state.format) }.orEmpty(), continuation)
+        if (request.losses.isNotEmpty()) state = state.copy(pendingWrite = request)
+        else write(request)
+    }
+
+    fun confirmWrite() {
+        val request = state.pendingWrite ?: return
+        if (closed || state.busy) return
+        state = state.copy(pendingWrite = null)
+        write(request)
+    }
+
+    fun cancelWrite() { if (!state.busy) state = state.copy(pendingWrite = null, pendingDiscard = null) }
+
+    private fun write(request: MetadataWriteRequest) {
         run({
-            if (edited.lyrics.isNotBlank() && edited.lyrics != original.metadata.lyrics) MetadataLyricsImport.preview(edited.lyrics)
-            store.save(original, edited)
-        }, { saved ->
-            loaded(saved.snapshot)
-            val refresh = runCatching { operations.afterSave(saved.snapshot.path) }.isSuccess
-            state = state.copy(status = "已写入。" +
-                (if (refresh) "歌曲信息可重新扫描曲库后更新。" else "请切歌后重试歌词显示，并重新扫描曲库更新歌曲信息。") + saved.notice)
-            continuation?.invoke()
+            val edited = request.document?.let { request.edited.copy(lyrics = MetadataLyricsExport.encode(it, request.format)) } ?: request.edited
+            if (edited.lyrics.isNotBlank() && edited.lyrics != request.original.metadata.lyrics) MetadataLyricsImport.preview(edited.lyrics)
+            if (edited == request.original.metadata) AudioMetadataSaved(request.original) to false
+            else store.save(request.original, edited) to true
+        }, { (saved, written) ->
+            loaded(saved.snapshot, request.format)
+            if (written) {
+                val refresh = runCatching { operations.afterSave(saved.snapshot.path) }.isSuccess
+                state = state.copy(status = "已写入。" +
+                    (if (refresh) "歌曲信息可重新扫描曲库后更新。" else "请切歌后重试歌词显示，并重新扫描曲库更新歌曲信息。") + saved.notice)
+            } else state = state.copy(status = "内容已符合所选格式，无需重复写入。")
+            request.continuation?.invoke()
         })
     }
 
     fun requestDiscard(action: () -> Unit) {
-        if (closed || state.busy || state.pendingDiscard != null) return
+        if (closed || state.busy || state.pendingDiscard != null || state.pendingWrite != null) return
         if (state.dirty) state = state.copy(pendingDiscard = action)
         else action()
     }
@@ -360,8 +379,8 @@ internal class MetadataEditorController(
 
     fun cancelDiscard() { if (!state.busy) state = state.copy(pendingDiscard = null) }
 
-    private fun loaded(snapshot: AudioMetadataSnapshot) {
-        state = MetadataEditorState(loaded = snapshot, draft = snapshot.metadata, format = state.format,
+    private fun loaded(snapshot: AudioMetadataSnapshot, format: MetadataLyricsFormat = operations.lyricsFormat()) {
+        state = MetadataEditorState(loaded = snapshot, draft = snapshot.metadata, format = format, lyricsWritingEnabled = lyricsWritingEnabled,
             status = "已读取歌曲标签。修改后点击“写入歌曲文件”；多值字段每行填写一个值。")
         preview()
     }
