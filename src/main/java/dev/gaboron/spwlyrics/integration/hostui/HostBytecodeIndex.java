@@ -41,7 +41,7 @@ public final class HostBytecodeIndex {
         return read(source(host));
     }
 
-    private static Path source(Class<?> host) throws IOException {
+    public static Path source(Class<?> host) throws IOException {
         var domain = host.getProtectionDomain();
         var codeSource = domain == null ? null : domain.getCodeSource();
         var location = codeSource == null ? null : codeSource.getLocation();

@@ -37,15 +37,20 @@ internal class HostUiHooks(private val bridge: HostUiBridge, private val workspa
             val entry = bridge.targets.captionEntry()
             handles += WorkshopApi.hookRegistrar.afterComposable(entry.target().owner().replace('/', '.'),
                 entry.target().name(), entry.caller().replace('/', '.'), parameterTypes = emptyList()) { bridge.Entry() }
-        } catch (failure: Throwable) { close(); throw failure }
+        } catch (failure: Throwable) {
+            runCatching(::close).onFailure(failure::addSuppressed)
+            throw failure
+        }
     }
 
     override fun close() {
-        handles.asReversed().forEach { handle ->
-            runCatching { handle.close() }.onFailure {
+        var failure: Throwable? = null
+        handles.asReversed().toList().forEach { handle ->
+            runCatching { handle.close() }.onSuccess { handles.remove(handle) }.onFailure {
                 System.getLogger("SPW Lyrics").log(System.Logger.Level.WARNING, "清理歌词管理 Hook 失败", it)
+                if (failure == null) failure = it else failure.addSuppressed(it)
             }
         }
-        handles.clear()
+        failure?.let { throw it }
     }
 }

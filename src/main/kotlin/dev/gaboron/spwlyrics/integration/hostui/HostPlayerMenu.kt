@@ -26,12 +26,19 @@ internal class HostPlayerMenu(private val targets: HostPlayerMenuDiscovery.Targe
     private fun method(key: HostBytecodeIndex.Method): java.lang.reflect.Method {
         val signature = MethodType.fromMethodDescriptorString(key.descriptor(), loader)
         return Class.forName(key.owner().replace('/', '.'), false, loader).getDeclaredMethod(key.name(), *signature.parameterArray())
-            .also { check(it.trySetAccessible()) { "播放器菜单控件不可访问" } }
+            .also { check(it.returnType == signature.returnType() && it.trySetAccessible()) { "播放器菜单控件不可访问或类型已改变" } }
     }
     private val builder = method(targets.builder())
     private val dismiss = method(targets.dismiss())
     private val label = method(targets.label())
     private var handle: AutoCloseable? = null
+
+    init {
+        val parameters = builder.parameterTypes
+        check(targets.scopeParameter() in parameters.indices && targets.popupParameter() in parameters.indices &&
+            targets.scopeParameter() != targets.popupParameter() && parameters[targets.scopeParameter()] == scope &&
+            parameters[targets.popupParameter()] == dismiss.declaringClass) { "播放器菜单参数已改变" }
+    }
 
     fun install() {
         handle = WorkshopApi.hookRegistrar.hookMethod(builder.declaringClass.name, builder.name,

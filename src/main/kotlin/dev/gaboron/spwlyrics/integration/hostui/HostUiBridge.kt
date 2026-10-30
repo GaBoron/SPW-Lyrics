@@ -49,7 +49,9 @@ internal class HostUiBridge(val targets: HostUiDiscovery.Targets, private val lo
     }
 
     private fun field(key: HostBytecodeIndex.Field) = Class.forName(key.owner().replace('/', '.'), false, loader)
-        .getDeclaredField(key.name()).also { check(it.trySetAccessible()) { "宿主 UI 状态不可访问" } }
+        .getDeclaredField(key.name()).also {
+            check(it.type.descriptorString() == key.descriptor() && it.trySetAccessible()) { "宿主 UI 状态不可访问或类型已改变" }
+        }
 
     fun capture(composer: Composer) {
         for (field in locals) {

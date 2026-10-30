@@ -35,6 +35,7 @@ import dev.gaboron.spwlyrics.integration.workspace.LyricsWorkspace
 import dev.gaboron.spwlyrics.integration.workspace.LyricsWorkspaceSession
 import dev.gaboron.spwlyrics.integration.workspace.LyricsToolPage
 import dev.gaboron.spwlyrics.integration.hostui.HostUiIntegration
+import dev.gaboron.spwlyrics.integration.hostui.HostUiTargetCache
 import dev.gaboron.spwlyrics.storage.FileLyricsDelaySettings
 import dev.gaboron.spwlyrics.storage.FileTimingCalibrationStore
 import dev.gaboron.spwlyrics.storage.LyricsUiStateStore
@@ -227,7 +228,10 @@ private class PluginRuntimeSession : AutoCloseable {
                 timingTransport, calibration, SpwTimingAudioDecoder(timingRuntime, TimingRuntimeInstall(channel), performance)) }, ::toastWarning)
         }
         hostUi = performance.measure(Operation.HOST_START) {
-            HostUiIntegration(checkNotNull(workspace), ::toastWarning, performance).also { it.start() }
+            HostUiIntegration(
+                checkNotNull(workspace), ::toastWarning, performance,
+                HostUiTargetCache(cacheDirectory.resolve("宿主Hook.properties")),
+            ).also { it.start() }
         }
         maintenance.execute {
             if (!closed) runCatching {
