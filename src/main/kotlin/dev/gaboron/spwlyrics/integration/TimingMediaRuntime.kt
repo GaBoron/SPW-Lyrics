@@ -11,6 +11,7 @@ internal class TimingMediaRuntime(private val pluginId: String, private val perf
     private val lock = Any()
     private var connection: RuntimeConnection? = null
     private val processes = mutableMapOf<Process, AnalysisProcess>()
+    private val starting = mutableSetOf<CompletableFuture<Void>>()
     private var accepting = true
     private var retired: MediaRuntime? = null
     private var closed = false
@@ -44,16 +45,33 @@ internal class TimingMediaRuntime(private val pluginId: String, private val perf
     }
 
     /** A successful start transfers lease ownership; the caller closes it if start fails. */
-    fun start(client: MediaRuntime, generation: Long, command: List<String>, lease: AutoCloseable): Process = synchronized(lock) {
-        check(!closed && accepting && retired !== client && connection?.current === client && connection?.snapshot?.generation == generation) { "Runtime 已重连，请重新分析。" }
-        val process = ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.DISCARD).start()
+    fun start(client: MediaRuntime, generation: Long, command: List<String>, lease: AutoCloseable): Process {
+        val reservation = CompletableFuture<Void>()
+        synchronized(lock) {
+            check(!closed && accepting && retired !== client && connection?.current === client && connection?.snapshot?.generation == generation) { "Runtime 已重连，请重新分析。" }
+            starting += reservation
+        }
+        // Starting an executable can itself block on IO. Stop only snapshots its reservation.
+        val process = try {
+            ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.DISCARD).start()
+        } catch (error: Throwable) {
+            synchronized(lock) { starting.remove(reservation) }
+            reservation.complete(null)
+            throw error
+        }
         val owned = AnalysisProcess(process, lease)
-        processes[process] = owned
+        val stopImmediately = synchronized(lock) {
+            processes[process] = owned
+            starting.remove(reservation)
+            closed || !accepting || retired === client
+        }
         owned.released.whenComplete { _, error ->
             synchronized(lock) { processes.remove(process) }
+            if (error == null) reservation.complete(null) else reservation.completeExceptionally(error)
             if (error != null) System.getLogger("SPW Lyrics").log(System.Logger.Level.WARNING, "释放音频分析租约失败", error)
         }
-        process
+        if (stopImmediately) owned.stop()
+        return process
     }
     fun finished(process: Process) { synchronized(lock) { processes[process] }?.stop() }
     fun verify(client: MediaRuntime, generation: Long) {
@@ -61,13 +79,13 @@ internal class TimingMediaRuntime(private val pluginId: String, private val perf
         synchronized(lock) { check(!closed && connection?.current === client && connection?.snapshot?.generation == generation) { "Runtime 已重连，请重新分析。" } }
     }
     private fun stopProcesses(previous: MediaRuntime? = null): CompletableFuture<Void> {
-        val owned = synchronized(lock) {
+        val (owned, launches) = synchronized(lock) {
             accepting = false
             if (previous != null) retired = previous
-            processes.values.toList()
+            processes.values.toList() to starting.toList()
         }
         owned.forEach(AnalysisProcess::stop)
-        return CompletableFuture.allOf(*owned.map { it.released }.toTypedArray())
+        return CompletableFuture.allOf(*(owned.map { it.released } + launches).toTypedArray())
     }
     override fun close() {
         val owner = synchronized(lock) {

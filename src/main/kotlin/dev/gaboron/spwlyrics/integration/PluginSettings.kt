@@ -83,14 +83,25 @@ class PluginSettings(
     }
 
     fun resetSelection(): Boolean {
+        synchronized(lock) {
+            if (closed) return false
+            revision++
+            pending?.cancel(false)
+        }
         val config = manager.getConfig(CONFIG_FILE)
         if (!config.reload()) return false
         config.set("lyrics_priority_mode", "type_first")
         config.set("lyrics_quality_order", LyricsPreferenceInput.DEFAULT_QUALITIES)
         config.set("lyrics_source_order", LyricsPreferenceInput.DEFAULT_SOURCES)
         if (!config.save()) return false
-        invalidInput = null
-        if (selection.getAndSet(LyricsPreferences()) != LyricsPreferences()) onSelectionChanged()
+        val changed = synchronized(lock) {
+            if (closed) return false
+            revision++
+            pending?.cancel(false)
+            invalidInput = null
+            selection.getAndSet(LyricsPreferences()) != LyricsPreferences()
+        }
+        if (!closed && changed) onSelectionChanged()
         return true
     }
 

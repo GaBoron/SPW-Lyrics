@@ -6,6 +6,7 @@ import java.util.concurrent.atomic.LongAdder
 
 /** Per-enable counters: no paths, song metadata, or per-callback log output. */
 class PluginPerformance {
+    private val sessionId = sequence.incrementAndGet()
     enum class Operation {
         START, STORAGE, STORAGE_PREPARE, CONFIG, HTTP, PROVIDERS,
         AMLL, QQ, KUGOU, NETEASE, SODA, APPLE, LRCSHARE, MUSICBRAINZ, LOCAL,
@@ -55,6 +56,8 @@ class PluginPerformance {
             }
         }.joinToString("; ")
         System.getLogger("SPW Lyrics").log(System.Logger.Level.INFO,
-            "性能统计 [$reason] $summary; pendingPeak=${pendingPeak.get()}; cancelled=${cancelled.sum()}")
+            "性能统计 [session=$sessionId/$reason] $summary; pendingPeak=${pendingPeak.get()}; cancelled=${cancelled.sum()}")
     }
+
+    private companion object { val sequence = AtomicLong() }
 }
