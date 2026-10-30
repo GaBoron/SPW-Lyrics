@@ -14,6 +14,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.Future
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
+import dev.gaboron.spwlyrics.diagnostics.PluginPerformance
 
 interface LyricsRefreshBridge {
     fun reloadCurrentLyrics(): Boolean
@@ -30,18 +31,21 @@ class LyricsLoadCoordinator(
     private val delays: LyricsDelaySettings? = null,
     private val output: LyricsOutputRouter? = null,
     private val prepareQuery: (TrackQuery) -> TrackQuery = { it },
+    private val performance: PluginPerformance = PluginPerformance(),
 ) : AutoCloseable {
     private val refreshRetrier = LyricsRefreshRetrier(refreshBridge, notify)
     private val current = AtomicReference<TrackQuery?>()
     private val localLyrics = AtomicReference<Pair<String, LyricsDocument>?>()
-    private val tasks = LyricsResolutionTasks(executor)
+    private val tasks = LyricsResolutionTasks(executor, performance = performance)
     private val qualityUpgradeAttempts = BackgroundAttemptGate(QUALITY_UPGRADE_RETRY_SECONDS)
     private val notifiedFailures = ConcurrentHashMap.newKeySet<String>()
     private val selectionLock = Any()
+    @Volatile private var closed = false
 
     fun currentQuery(): TrackQuery? = current.get()
 
     fun selectionChanged() {
+        if (closed) return
         synchronized(selectionLock) { tasks.cancelAll() }
         current.get()?.takeUnless(::automaticWasSuperseded)?.let { query ->
             output?.withdraw(query)
@@ -55,8 +59,11 @@ class LyricsLoadCoordinator(
         replacementPolicy: AutomaticReplacementPolicy,
         localTtml: (() -> LyricsDocument?)? = null,
     ): String? {
-        if (current.getAndSet(query)?.key != query.key) {
-            tasks.cancelExcept(query.key, upgradeKey(query))
+        synchronized(selectionLock) {
+            if (closed) return null
+            if (current.getAndSet(query)?.key != query.key) {
+                tasks.cancelExcept(query.key, upgradeKey(query))
+            }
         }
         val override = cache.getOverride(query)
         if (phase == LyricsLoadPhase.BEFORE_LOCAL) {
@@ -83,6 +90,7 @@ class LyricsLoadCoordinator(
 
     /** Warms disk entries and shares an unfinished speculative search with later playback. */
     fun precache(query: TrackQuery, hasLocalLyrics: Boolean = false): Future<*>? {
+        if (closed) return null
         val override = cache.getOverride(query)
         if (override?.local == true) return null
         if (override?.candidate == null && hasLocalLyrics) return null
@@ -197,7 +205,7 @@ class LyricsLoadCoordinator(
         }
 
     private fun applyAutomaticResult(query: TrackQuery, result: ResolvedLyrics, isActive: () -> Boolean) = synchronized(selectionLock) {
-        if (!isActive()) return@synchronized
+        if (closed || !isActive()) return@synchronized
         if (automaticWasSuperseded(query)) return@synchronized
         if (result.selectionKey != resolver.selectionKey()) return@synchronized
         val cached = cache.getLyrics(query)?.takeIf { it.selectionKey == result.selectionKey }
@@ -271,10 +279,13 @@ class LyricsLoadCoordinator(
     }
 
     override fun close() {
-        current.set(null)
+        synchronized(selectionLock) {
+            closed = true
+            current.set(null)
+            tasks.close()
+        }
         localLyrics.set(null)
         output?.close()
-        tasks.close()
         resolver.close()
     }
 

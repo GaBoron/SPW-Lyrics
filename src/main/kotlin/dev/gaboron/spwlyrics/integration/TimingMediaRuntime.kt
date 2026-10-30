@@ -1,15 +1,16 @@
 package dev.gaboron.spwlyrics.integration
 
 import dev.gaboron.spwmedia.sdk.*
+import dev.gaboron.spwlyrics.diagnostics.PluginPerformance
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import java.util.function.Function
 
 /** Plugin-owned SDK connection. Only its own analysis processes are stopped on disconnect. */
-internal class TimingMediaRuntime(private val pluginId: String) : AutoCloseable {
+internal class TimingMediaRuntime(private val pluginId: String, private val performance: PluginPerformance) : AutoCloseable {
     private val lock = Any()
     private var connection: RuntimeConnection? = null
-    private val processes = mutableSetOf<Process>()
+    private val processes = mutableMapOf<Process, AnalysisProcess>()
     private var accepting = true
     private var retired: MediaRuntime? = null
     private var closed = false
@@ -21,7 +22,7 @@ internal class TimingMediaRuntime(private val pluginId: String) : AutoCloseable 
             connection ?: MediaRuntime.connectWhenAvailable(pluginId,
                 ConnectionOptions(retryTimeoutMillis = 5000, retryIntervalMillis = 500, healthCheckIntervalMillis = 1000),
                 Function { previous ->
-                    try { stopProcesses(previous); CompletableFuture.completedFuture(null) }
+                    try { stopProcesses(previous) }
                     catch (error: Exception) { CompletableFuture.failedFuture(error) }
                 }).also { connection = it }
         }
@@ -42,28 +43,47 @@ internal class TimingMediaRuntime(private val pluginId: String) : AutoCloseable 
         }
     }
 
-    fun start(client: MediaRuntime, generation: Long, command: List<String>): Process = synchronized(lock) {
+    /** A successful start transfers lease ownership; the caller closes it if start fails. */
+    fun start(client: MediaRuntime, generation: Long, command: List<String>, lease: AutoCloseable): Process = synchronized(lock) {
         check(!closed && accepting && retired !== client && connection?.current === client && connection?.snapshot?.generation == generation) { "Runtime 已重连，请重新分析。" }
-        ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.DISCARD).start().also(processes::add)
+        val process = ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.DISCARD).start()
+        val owned = AnalysisProcess(process, lease)
+        processes[process] = owned
+        owned.released.whenComplete { _, error ->
+            synchronized(lock) { processes.remove(process) }
+            if (error != null) System.getLogger("SPW Lyrics").log(System.Logger.Level.WARNING, "释放音频分析租约失败", error)
+        }
+        process
     }
-    fun finished(process: Process) { synchronized(lock) { processes.remove(process) } }
+    fun finished(process: Process) { synchronized(lock) { processes[process] }?.stop() }
     fun verify(client: MediaRuntime, generation: Long) {
         client.capabilities() // Validate the old token even before the next periodic health check.
-        synchronized(lock) { check(connection?.current === client && connection?.snapshot?.generation == generation) { "Runtime 已重连，请重新分析。" } }
+        synchronized(lock) { check(!closed && connection?.current === client && connection?.snapshot?.generation == generation) { "Runtime 已重连，请重新分析。" } }
     }
-    private fun stopProcesses(previous: MediaRuntime? = null) {
-        val owned = synchronized(lock) { accepting = false; if (previous != null) retired = previous; processes.toList() }
-        owned.forEach { process ->
-            process.destroy()
-            if (!process.waitFor(1, TimeUnit.SECONDS)) {
-                process.destroyForcibly()
-                check(process.waitFor(2, TimeUnit.SECONDS)) { "音频分析进程尚未退出，保留 Runtime 租约。" }
-            }
+    private fun stopProcesses(previous: MediaRuntime? = null): CompletableFuture<Void> {
+        val owned = synchronized(lock) {
+            accepting = false
+            if (previous != null) retired = previous
+            processes.values.toList()
         }
+        owned.forEach(AnalysisProcess::stop)
+        return CompletableFuture.allOf(*owned.map { it.released }.toTypedArray())
     }
     override fun close() {
-        val owner = synchronized(lock) { closed = true; connection }
+        val owner = synchronized(lock) {
+            if (closed) return
+            closed = true
+            connection
+        }
         stopProcesses()
-        owner?.close()
+        Thread.ofVirtual().name("spw-lyrics-media-cleanup").start {
+            performance.measure(PluginPerformance.Operation.MEDIA_CLEANUP) {
+                runCatching { owner?.close() }.onFailure {
+                    // SDK cleanup timeout abandons executable pins instead of releasing live tools.
+                    System.getLogger("SPW Lyrics").log(System.Logger.Level.WARNING, "Runtime 清理未完成，已保留进程资源保护", it)
+                }
+            }
+            performance.report("media cleanup")
+        }
     }
 }

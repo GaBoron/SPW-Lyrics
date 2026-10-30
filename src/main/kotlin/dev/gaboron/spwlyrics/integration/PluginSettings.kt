@@ -7,30 +7,64 @@ import dev.gaboron.spwlyrics.application.AutomaticReplacementPolicy
 import dev.gaboron.spwlyrics.domain.*
 import java.util.concurrent.atomic.AtomicReference
 import java.util.function.Consumer
+import java.util.concurrent.ScheduledThreadPoolExecutor
+import java.util.concurrent.Future
+import java.util.concurrent.TimeUnit
+import dev.gaboron.spwlyrics.diagnostics.PluginPerformance
 
 @OptIn(UnstableSpwWorkshopApi::class)
 class PluginSettings(
     private val manager: ConfigManager,
     private val onSelectionChanged: () -> Unit = {},
     private val notify: (String) -> Unit = {},
+    private val performance: PluginPerformance = PluginPerformance(),
 ) : AutoCloseable {
     private val initialConfig = manager.getConfig(CONFIG_FILE)
     private val replacementPolicy = AtomicReference(readPolicy(initialConfig))
     private val selection = AtomicReference(readSelection(initialConfig).getOrDefault(LyricsPreferences()))
     private val shareKey = AtomicReference(initialConfig.get("lrcshare_api_key", "").trim())
     private var invalidInput: String? = null
-    private val listener = Consumer<ConfigHelper> {
+    private val lock = Any()
+    @Volatile private var closed = false
+    private var revision = 0L
+    private var pending: Future<*>? = null
+    private val worker = ScheduledThreadPoolExecutor(1) { task ->
+        Thread(task, "spw-lyrics-config").apply { isDaemon = true }
+    }.apply { removeOnCancelPolicy = true }
+    private val listener = Consumer<ConfigHelper> { config ->
+        performance.measure(PluginPerformance.Operation.CONFIG_CALLBACK) {
+            synchronized(lock) {
+                if (!closed) {
+                    val expected = ++revision
+                    pending?.cancel(false)
+                    pending = worker.schedule({
+                        runCatching {
+                            performance.measure(PluginPerformance.Operation.CONFIG_RELOAD) { reload(config, expected) }
+                        }.onFailure {
+                            if (!closed) System.getLogger("SPW Lyrics").log(System.Logger.Level.WARNING, "重新读取歌词设置失败", it)
+                        }
+                    }, 40, TimeUnit.MILLISECONDS)
+                }
+            }
+        }
+    }
+
+    private fun reload(config: ConfigHelper, expected: Long) {
         // SPW saves settings through a separate helper; the callback can still hold cached values.
-        if (!it.reload()) return@Consumer
-        val nextPolicy = readPolicy(it)
-        val policyChanged = replacementPolicy.getAndSet(nextPolicy) != nextPolicy
-        val next = readSelection(it)
-        val changed = next.getOrNull()?.let { value -> selection.getAndSet(value) != value } ?: false
-        val invalid = next.exceptionOrNull()?.message
-        if (invalid != null && invalid != invalidInput) notify("排序未生效，已保留上一次有效设置。$invalid")
-        invalidInput = invalid
-        val key = it.get("lrcshare_api_key", "").trim()
-        if (shareKey.getAndSet(key) != key || changed || policyChanged) onSelectionChanged()
+        if (!config.reload()) return
+        val nextPolicy = readPolicy(config)
+        val next = readSelection(config)
+        val key = config.get("lrcshare_api_key", "").trim()
+        val selectionChanged = synchronized(lock) {
+            if (closed || revision != expected) return
+            val policyChanged = replacementPolicy.getAndSet(nextPolicy) != nextPolicy
+            val changed = next.getOrNull()?.let { value -> selection.getAndSet(value) != value } ?: false
+            val invalid = next.exceptionOrNull()?.message
+            if (invalid != null && invalid != invalidInput) notify("排序未生效，已保留上一次有效设置。$invalid")
+            invalidInput = invalid
+            shareKey.getAndSet(key) != key || changed || policyChanged
+        }
+        if (!closed && selectionChanged) onSelectionChanged()
     }
 
     init {
@@ -61,6 +95,12 @@ class PluginSettings(
     }
 
     override fun close() {
+        synchronized(lock) {
+            closed = true
+            revision++
+            pending?.cancel(true)
+        }
+        worker.shutdownNow()
         manager.removeConfigChangeListener(listener)
     }
 

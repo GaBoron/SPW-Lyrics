@@ -10,11 +10,9 @@ internal class ReadableCacheLayout(private val root: Path) {
     private val lyricsDirectory = root.resolve("歌词")
     private val overridesDirectory = root.resolve("手动匹配")
 
-    init {
+    fun prepare() {
         Files.createDirectories(lyricsDirectory)
         Files.createDirectories(overridesDirectory)
-        purgeLegacyFiles("lyrics-*.json")
-        purgeLegacyFiles("override-*.json")
         writeInstructions()
     }
 
@@ -34,12 +32,6 @@ internal class ReadableCacheLayout(private val root: Path) {
         .replace(Regex("\\s+"), " ")
         .trim(' ', '.')
         .ifBlank { "未知歌曲" }
-
-    private fun purgeLegacyFiles(pattern: String) {
-        Files.newDirectoryStream(root, pattern).use { paths ->
-            paths.filter(Files::isRegularFile).forEach(Files::deleteIfExists)
-        }
-    }
 
     private fun writeInstructions() {
         val instructions = root.resolve("缓存说明.txt")

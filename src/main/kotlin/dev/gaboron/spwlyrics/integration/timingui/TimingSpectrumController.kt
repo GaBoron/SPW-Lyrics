@@ -6,7 +6,7 @@ import dev.gaboron.spwlyrics.domain.TimingSpectrum
 import dev.gaboron.spwlyrics.codec.TimingSpectrumAnalysis
 import java.awt.EventQueue
 import java.nio.file.Path
-import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.Future
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
@@ -24,9 +24,10 @@ internal class TimingSpectrumController(private val decoder: TimingAudioDecoder)
     private var requestedStart = 0L
     private var requestedSpan = 0L
     private val generation = AtomicLong()
-    private val worker = Executors.newSingleThreadScheduledExecutor { Thread(it, "spw-lyrics-spectrum").apply { isDaemon = true } }
+    private val worker = ScheduledThreadPoolExecutor(1) { Thread(it, "spw-lyrics-spectrum").apply { isDaemon = true } }
+        .apply { removeOnCancelPolicy = true }
     private var task: Future<*>? = null
-    private var closed = false
+    @Volatile private var closed = false
 
     fun refreshDependency() {
         val next = decoder.dependency()

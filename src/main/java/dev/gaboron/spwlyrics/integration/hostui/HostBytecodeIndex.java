@@ -75,8 +75,12 @@ public final class HostBytecodeIndex {
         var types = new ArrayList<Type>();
         if (Files.isDirectory(source)) {
             try (var entries = Files.walk(source)) {
-                for (var path : entries.filter(p -> p.toString().endsWith(".class")).toList())
+                var paths = entries.filter(p -> p.toString().endsWith(".class")).iterator();
+                while (paths.hasNext()) {
+                    if (Thread.currentThread().isInterrupted()) throw new IOException("Host UI discovery cancelled");
+                    var path = paths.next();
                     parse(Files.readAllBytes(path), bodies, types);
+                }
             }
         } else try (var jar = new JarFile(source.toFile())) {
             for (var entry : Collections.list(jar.entries())) {
@@ -99,6 +103,7 @@ public final class HostBytecodeIndex {
         var ownFields = model.fields().stream().map(f -> new Field(owner, f.fieldName().stringValue(), f.fieldType().stringValue())).toList();
         types.add(new Type(owner, ownFields));
         for (var method : model.methods()) {
+            if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException("Host UI discovery cancelled");
             if (method.code().isEmpty()) continue;
             var calls = new ArrayList<Method>();
             var fields = new ArrayList<Field>();

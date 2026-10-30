@@ -64,9 +64,8 @@ class FileLyricsCache(
     }
     private val trackLocks = Array(32) { Any() }
 
-    init {
-        Files.createDirectories(root)
-    }
+    /** Optional background warmup; normal writes create their own parent directories. */
+    fun prepare() = layout.prepare()
 
     override fun getLyrics(query: TrackQuery): CachedLyrics? {
         val key = query.key

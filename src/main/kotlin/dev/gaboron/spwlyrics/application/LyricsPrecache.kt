@@ -1,19 +1,21 @@
 package dev.gaboron.spwlyrics.application
 
 import dev.gaboron.spwlyrics.domain.TrackQuery
-import java.util.concurrent.Executors
 import java.util.concurrent.Future
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.ScheduledThreadPoolExecutor
+import dev.gaboron.spwlyrics.diagnostics.PluginPerformance
 
 /** A bounded lookahead in library order; the host API does not expose its playback queue. */
 internal class LyricsPrecache(
     private val loadLibrary: () -> List<TrackQuery>,
     private val prepare: (TrackQuery) -> Future<*>?,
     private val enabled: () -> Boolean,
+    private val performance: PluginPerformance = PluginPerformance(),
 ) : AutoCloseable {
-    private val worker = Executors.newSingleThreadScheduledExecutor { task ->
+    private val worker = ScheduledThreadPoolExecutor(1) { task ->
         Thread(task, "spw-lyrics-precache").apply { isDaemon = true }
-    }
+    }.apply { removeOnCancelPolicy = true }
     private var scheduled: Future<*>? = null
     private var currentKey: String? = null
     @Volatile private var revision = 0L
@@ -22,13 +24,15 @@ internal class LyricsPrecache(
     private var libraryLoadedAt = 0L
 
     @Synchronized
-    fun trackChanged(query: TrackQuery, force: Boolean = false) {
-        if (closed || (!force && currentKey == query.key)) return
+    fun trackChanged(query: TrackQuery, force: Boolean = false) = performance.measure(PluginPerformance.Operation.PRECACHE_CALLBACK) {
+        if (closed || (!force && currentKey == query.key)) return@measure
         currentKey = query.key
         val expected = ++revision
         scheduled?.cancel(true)
-        if (!enabled()) return
-        scheduled = worker.schedule({ prepareAhead(query, expected) }, 750, TimeUnit.MILLISECONDS)
+        if (!enabled()) return@measure
+        scheduled = worker.schedule({
+            performance.measure(PluginPerformance.Operation.PRECACHE_WORK) { prepareAhead(query, expected) }
+        }, 750, TimeUnit.MILLISECONDS)
     }
 
     private fun prepareAhead(query: TrackQuery, expected: Long) {

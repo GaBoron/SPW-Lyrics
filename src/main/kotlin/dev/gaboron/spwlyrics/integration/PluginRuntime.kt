@@ -39,9 +39,58 @@ import dev.gaboron.spwlyrics.storage.FileLyricsDelaySettings
 import dev.gaboron.spwlyrics.storage.FileTimingCalibrationStore
 import dev.gaboron.spwlyrics.storage.LyricsUiStateStore
 import java.time.Duration
+import dev.gaboron.spwlyrics.diagnostics.PluginPerformance
+import dev.gaboron.spwlyrics.diagnostics.PluginPerformance.Operation
+import java.util.concurrent.Executors
 import kotlin.io.path.Path
 
 object PluginRuntime {
+    @Volatile private var session: PluginRuntimeSession? = null
+
+    @Synchronized
+    fun install(pluginId: String, channel: com.xuncorp.spw.workshop.api.Channel) {
+        if (session != null) return
+        val started = System.nanoTime()
+        val next = PluginRuntimeSession()
+        try {
+            next.install(pluginId, channel)
+            session = next
+        } catch (error: Throwable) {
+            runCatching { next.close() }.onFailure(error::addSuppressed)
+            throw error
+        } finally {
+            next.performance.record(Operation.START, System.nanoTime() - started)
+            next.performance.report("start")
+        }
+    }
+
+    @Synchronized
+    fun close() {
+        val previous = session ?: return
+        session = null
+        try { previous.performance.measure(Operation.STOP) { previous.close() } }
+        finally { previous.performance.report("stop") }
+    }
+
+    fun beforeLoad(item: PlaybackExtensionPoint.MediaItem) = session?.beforeLoad(item)
+    fun afterLocalLyricsMissing(item: PlaybackExtensionPoint.MediaItem) = session?.afterLocalLyricsMissing(item)
+    fun currentQuery() = session?.currentQuery()
+    fun openManualSearch() { session?.openManualSearch() }
+    fun openBatchProcessing() { session?.openBatchProcessing() }
+    fun openMetadataEditor() { session?.openMetadataEditor() }
+    fun openWorkspace() { session?.openWorkspace() }
+    fun timingSeeked() { session?.timingSeeked() }
+    fun openCacheFolder() { session?.openCacheFolder() }
+    fun resetLyricsOrder() { session?.resetLyricsOrder() }
+}
+
+/** Callbacks capture this enable's objects, never a later enable's global state. */
+private class PluginRuntimeSession : AutoCloseable {
+    val performance = PluginPerformance()
+    @Volatile private var closed = false
+    private val maintenance = Executors.newSingleThreadScheduledExecutor { task ->
+        Thread(task, "spw-lyrics-maintenance").apply { isDaemon = true }
+    }
     @Volatile private var coordinator: LyricsLoadCoordinator? = null
     @Volatile private var batchProcessor: LyricsBatchProcessor? = null
     @Volatile private var precache: LyricsPrecache? = null
@@ -58,38 +107,44 @@ object PluginRuntime {
     @OptIn(UnstableSpwWorkshopApi::class)
     fun install(pluginId: String, channel: com.xuncorp.spw.workshop.api.Channel) {
         if (coordinator != null) return
-        timingMedia?.close()
-        timingMedia = null
         val localData = System.getenv("LOCALAPPDATA")?.takeIf(String::isNotBlank)
             ?.let(::Path) ?: Path(System.getProperty("user.home"))
         val root = localData.resolve("SPW Lyrics")
         val cacheDirectory = root.resolve("cache")
-        val cache = FileLyricsCache(cacheDirectory)
-        val delays = FileLyricsDelaySettings(root.resolve("歌词延迟"))
-        val uiState = LyricsUiStateStore(root.resolve("界面状态.properties"))
+        val (cache, delays) = performance.measure(Operation.STORAGE) {
+            FileLyricsCache(cacheDirectory) to FileLyricsDelaySettings(root.resolve("歌词延迟"))
+        }
+        val uiState by lazy { LyricsUiStateStore(root.resolve("界面状态.properties")) }
         cacheFolderOpener = CacheFolderOpener(cacheDirectory)
-        settings = PluginSettings(WorkshopApi.manager.createConfigManager(), {
+        settings = performance.measure(Operation.CONFIG) { PluginSettings(WorkshopApi.manager.createConfigManager(), {
+            if (closed) return@PluginSettings
             coordinator?.selectionChanged()
             coordinator?.currentQuery()?.let { precache?.trackChanged(it, force = true) }
-        }, ::toastWarning)
-        val http = ProviderHttpClient()
-        val providers = listOf(
-            AmllProvider(
-                cacheDirectory.resolve("AMLL 索引"),
-                ProviderHttpClient(requestTimeout = Duration.ofSeconds(6)),
-                legacyIndexPath = root.resolve("amll").resolve("amll-index.jsonl"),
-                indexHttp = ProviderHttpClient(connectTimeout = Duration.ofSeconds(5), requestTimeout = Duration.ofSeconds(30)),
-            ),
-            QqMusicProvider(http),
-            KugouMusicProvider(http),
-            NeteaseMusicProvider(http),
-            SodaMusicProvider(http),
-            AppleMusicProvider(http),
-            LrcShareProvider(http) { settings?.lrcShareApiKey().orEmpty() },
-            MusicBrainzProvider(http),
-            LocalLyricsProvider(),
-        )
-        val resolver = LyricsResolver(providers, preferences = { settings?.lyricsPreferences() ?: dev.gaboron.spwlyrics.domain.LyricsPreferences() })
+        }, ::toastWarning, performance) }
+        val http = performance.measure(Operation.HTTP) { ProviderHttpClient() }
+        val providers = performance.measure(Operation.PROVIDERS) {
+            listOf(
+                performance.measure(Operation.AMLL) {
+                    AmllProvider(
+                        cacheDirectory.resolve("AMLL 索引"),
+                        ProviderHttpClient(requestTimeout = Duration.ofSeconds(6)),
+                        legacyIndexPath = root.resolve("amll").resolve("amll-index.jsonl"),
+                        indexHttp = ProviderHttpClient(connectTimeout = Duration.ofSeconds(5), requestTimeout = Duration.ofSeconds(30)),
+                    )
+                },
+                performance.measure(Operation.QQ) { QqMusicProvider(http) },
+                performance.measure(Operation.KUGOU) { KugouMusicProvider(http) },
+                performance.measure(Operation.NETEASE) { NeteaseMusicProvider(http) },
+                performance.measure(Operation.SODA) { SodaMusicProvider(http) },
+                performance.measure(Operation.APPLE) { AppleMusicProvider(http) },
+                performance.measure(Operation.LRCSHARE) { LrcShareProvider(http) { settings?.lrcShareApiKey().orEmpty() } },
+                performance.measure(Operation.MUSICBRAINZ) { MusicBrainzProvider(http) },
+                performance.measure(Operation.LOCAL) { LocalLyricsProvider() },
+            )
+        }
+        val resolver = performance.measure(Operation.RESOLVER) {
+            LyricsResolver(providers, preferences = { settings?.lyricsPreferences() ?: dev.gaboron.spwlyrics.domain.LyricsPreferences() })
+        }
         val refreshBridge = ReflectiveLyricsRefreshBridge()
         val output = LyricsOutputRouter(
             receiver = JmxTtmlReceiver(),
@@ -100,7 +155,7 @@ object PluginRuntime {
             },
             refresh = { refreshBridge.reloadCurrentLyrics() },
         )
-        coordinator = LyricsLoadCoordinator(
+        coordinator = performance.measure(Operation.COORDINATOR) { LyricsLoadCoordinator(
             cache = cache,
             resolver = resolver,
             refreshBridge = refreshBridge,
@@ -108,13 +163,15 @@ object PluginRuntime {
             delays = delays,
             output = output,
             prepareQuery = libraryTracks::prepare,
-        )
+            performance = performance,
+        ) }
         precache = LyricsPrecache(
             loadLibrary = libraryTracks::loadForPrecache,
             prepare = { query ->
                 coordinator?.precache(query, hasLocalLyrics = localTtmlLyrics.load(query.path) != null)
             },
             enabled = { settings?.automaticReplacementPolicy() == AutomaticReplacementPolicy.ALWAYS },
+            performance = performance,
         )
         val batch = LyricsBatchProcessor(
             loadLibrary = libraryTracks::load,
@@ -144,7 +201,7 @@ object PluginRuntime {
         val manualOperations = object : ManualSearchOperations {
             override fun candidateSort() = uiState.candidateSort()
             override fun saveCandidateSort(value: String) = uiState.rememberCandidateSort(value)
-            override fun currentQuery() = PluginRuntime.currentQuery()
+            override fun currentQuery() = this@PluginRuntimeSession.currentQuery()
             override fun search(query: TrackQuery, keywords: String, source: LyricsSource?, onStatus: (ProviderSearchStatus) -> Unit) =
                 checkNotNull(coordinator) { "歌词搜索尚未启用。" }.searchManual(query, keywords, source, onStatus)
             override fun preview(candidate: LyricsCandidate) = coordinator?.preview(candidate)
@@ -163,19 +220,33 @@ object PluginRuntime {
             }
         }
         val timingTransport = SpwTimingPlayback().also { timingPlayback = it }
-        val timingRuntime = TimingMediaRuntime(pluginId).also { timingMedia = it }
-        val calibration = FileTimingCalibrationStore(root.resolve("打轴输入校准.properties"))
-        workspace = LyricsWorkspace({ LyricsWorkspaceSession(manualOperations, metadataOperations, batch, describeBatchFailure,
-            timingTransport, calibration, SpwTimingAudioDecoder(timingRuntime, TimingRuntimeInstall(channel))) }, ::toastWarning)
-        hostUi = HostUiIntegration(checkNotNull(workspace), ::toastWarning).also { it.start() }
+        val timingRuntime = TimingMediaRuntime(pluginId, performance).also { timingMedia = it }
+        val calibration by lazy { FileTimingCalibrationStore(root.resolve("打轴输入校准.properties")) }
+        workspace = performance.measure(Operation.WORKSPACE) {
+            LyricsWorkspace({ LyricsWorkspaceSession(manualOperations, metadataOperations, batch, describeBatchFailure,
+                timingTransport, calibration, SpwTimingAudioDecoder(timingRuntime, TimingRuntimeInstall(channel), performance)) }, ::toastWarning)
+        }
+        hostUi = performance.measure(Operation.HOST_START) {
+            HostUiIntegration(checkNotNull(workspace), ::toastWarning, performance).also { it.start() }
+        }
+        maintenance.execute {
+            if (!closed) runCatching {
+                performance.measure(Operation.STORAGE_PREPARE) { cache.prepare() }
+            }.onFailure {
+                System.getLogger("SPW Lyrics").log(System.Logger.Level.WARNING, "缓存目录准备失败，将在读写时重试", it)
+            }
+        }
+        maintenance.scheduleWithFixedDelay({ if (!closed) performance.report("running") }, 60, 60, java.util.concurrent.TimeUnit.SECONDS)
     }
 
-    fun beforeLoad(mediaItem: PlaybackExtensionPoint.MediaItem): String? =
+    fun beforeLoad(mediaItem: PlaybackExtensionPoint.MediaItem): String? = performance.measure(Operation.BEFORE_LOAD) {
         load(mediaItem, LyricsLoadPhase.BEFORE_LOCAL) {
             localTtmlLyrics.load(mediaItem.path)
         }
-    fun afterLocalLyricsMissing(mediaItem: PlaybackExtensionPoint.MediaItem): String? =
+    }
+    fun afterLocalLyricsMissing(mediaItem: PlaybackExtensionPoint.MediaItem): String? = performance.measure(Operation.AFTER_MISSING) {
         load(mediaItem, LyricsLoadPhase.AFTER_LOCAL_MISSING)
+    }
     fun currentQuery(): TrackQuery? = runCatching { libraryTracks.current() }.getOrElse { error ->
         toastWarning(if (error is PluginPermissionDeniedException) {
             "请在 SPW 的插件权限中授予曲库读取权限。"
@@ -206,25 +277,26 @@ object PluginRuntime {
     }
 
     @Synchronized
-    fun close() {
-        hostUi?.close()
+    override fun close() {
+        if (closed) return
+        closed = true
+        maintenance.shutdownNow()
+        val resources = listOfNotNull(hostUi, workspace, timingMedia, settings, batchProcessor, precache, coordinator)
         hostUi = null
-        workspace?.close()
         workspace = null
-        val mediaCleanup = runCatching { timingMedia?.close() }
-        if (mediaCleanup.isSuccess) timingMedia = null
+        timingMedia = null
         timingPlayback = null
         cacheFolderOpener = null
-        settings?.close()
         settings = null
-        batchProcessor?.close()
         batchProcessor = null
-        precache?.close()
         precache = null
-        coordinator?.close()
         coordinator = null
+        resources.forEach { resource ->
+            runCatching { resource.close() }.onFailure {
+                System.getLogger("SPW Lyrics").log(System.Logger.Level.WARNING, "停用歌词模块失败：${resource.javaClass.simpleName}", it)
+            }
+        }
         libraryTracks.clear()
-        mediaCleanup.getOrThrow()
     }
 
     private fun load(
@@ -232,6 +304,7 @@ object PluginRuntime {
         phase: LyricsLoadPhase,
         localTtml: (() -> LyricsDocument?)? = null,
     ): String? {
+        if (closed) return null
         val query = libraryTracks.fromLyricsCallback(mediaItem)
         val result = coordinator?.onLoad(
             query,
@@ -246,6 +319,7 @@ object PluginRuntime {
     private fun isCurrentTrack(query: TrackQuery): Boolean = currentQuery()?.key == query.key
 
     private fun toastWarning(message: String) {
+        if (closed) return
         runCatching { WorkshopApi.ui.toast(message, WorkshopApi.Ui.ToastType.Warning) }
     }
 }

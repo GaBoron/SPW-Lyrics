@@ -1,7 +1,8 @@
 package dev.gaboron.spwlyrics.application
 
-import java.util.concurrent.ExecutorCompletionService
-import java.util.concurrent.Executors
+import java.util.concurrent.FutureTask
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -9,7 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger
 internal class ProviderTaskPool(
     parallelism: Int = DEFAULT_PARALLELISM,
 ) : AutoCloseable {
-    private val executor = Executors.newFixedThreadPool(parallelism) { task ->
+    private val executor = ThreadPoolExecutor(parallelism, parallelism, 0, TimeUnit.MILLISECONDS, LinkedBlockingQueue()) { task ->
         Thread(task, "spw-provider-${THREAD_NUMBER.incrementAndGet()}").apply { isDaemon = true }
     }
 
@@ -20,12 +21,8 @@ internal class ProviderTaskPool(
         onProgress: (completed: List<IndexedValue<T>>, pendingIndices: Set<Int>) -> Unit = { _, _ -> },
     ): List<IndexedValue<T>> {
         if (tasks.isEmpty()) return emptyList()
-        val completion = ExecutorCompletionService<TaskOutcome<T>>(executor)
-        val futures = tasks.mapIndexed { index, task ->
-            completion.submit {
-                TaskOutcome(index, runCatching { task() }.getOrNull())
-            }
-        }
+        val completion = LinkedBlockingQueue<FutureTask<TaskOutcome<T>>>()
+        val futures = submit(tasks, completion)
         val completed = mutableListOf<IndexedValue<T>>()
         val pending = tasks.indices.toMutableSet()
         try {
@@ -63,12 +60,8 @@ internal class ProviderTaskPool(
             onSnapshot(emptyList())
             return emptyList()
         }
-        val completion = ExecutorCompletionService<TaskOutcome<T>>(executor)
-        val futures = tasks.mapIndexed { index, task ->
-            completion.submit {
-                TaskOutcome(index, runCatching { task() }.getOrNull())
-            }
-        }
+        val completion = LinkedBlockingQueue<FutureTask<TaskOutcome<T>>>()
+        val futures = submit(tasks, completion)
         val completed = mutableListOf<IndexedValue<T>>()
         val pending = tasks.indices.toMutableSet()
         var snapshotPublished = false
@@ -110,6 +103,30 @@ internal class ProviderTaskPool(
 
     override fun close() {
         executor.shutdownNow()
+    }
+
+    /** Queue the cancellable task itself, so obsolete providers leave the executor immediately. */
+    private fun <T> submit(
+        tasks: List<() -> T?>,
+        completion: LinkedBlockingQueue<FutureTask<TaskOutcome<T>>>,
+    ): List<FutureTask<TaskOutcome<T>>> {
+        val submitted = mutableListOf<FutureTask<TaskOutcome<T>>>()
+        try {
+            tasks.forEachIndexed { index, action ->
+                val task = object : FutureTask<TaskOutcome<T>>({ TaskOutcome(index, runCatching(action).getOrNull()) }) {
+                    override fun done() {
+                        if (isCancelled) executor.remove(this)
+                        completion.add(this)
+                    }
+                }
+                submitted += task
+                executor.execute(task)
+            }
+            return submitted
+        } catch (error: RuntimeException) {
+            submitted.forEach { it.cancel(true) }
+            throw error
+        }
     }
 
     private fun remainingNanos(deadlineNanos: Long): Long =
