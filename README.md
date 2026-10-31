@@ -6,6 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/GaBoron/SPW-Lyrics/releases/latest"><img src="https://img.shields.io/github/v/release/GaBoron/SPW-Lyrics?label=Release&color=6750A4" alt="最新版本"></a>
+  <a href="https://steamcommunity.com/sharedfiles/filedetails/?id=3821567732"><img src="https://img.shields.io/badge/Steam-Workshop-1B2838?logo=steam&logoColor=white" alt="Steam 创意工坊"></a>
   <img src="https://img.shields.io/badge/SPW-1.19.0-3A7AFE" alt="目标 SPW 版本">
   <img src="https://img.shields.io/badge/Windows%20%2F%20Linux-0078D4" alt="Windows 和 Linux">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/GaBoron/SPW-Lyrics?color=2E8B57" alt="MIT 许可证"></a>
