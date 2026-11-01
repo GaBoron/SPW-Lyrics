@@ -34,14 +34,15 @@ internal enum class CandidateColumn(val title: String) {
         else -> compareBy { text(it) }
     }
 
-    /** The automatic result stays first regardless of sorting, keywords, or source filtering. */
-    fun rows(candidates: List<CandidateScore>, automatic: CandidateScore?): List<CandidateScore> {
-        val manual = candidates.filterNot { automatic != null && sameCandidate(it.candidate, automatic.candidate) }
+    /** Automatic and applied results stay visible across sorting, keywords, and source filtering. */
+    fun rows(candidates: List<CandidateScore>, automatic: CandidateScore?, applied: CandidateScore?): List<CandidateScore> {
+        val pinned = listOfNotNull(automatic, applied).distinctBy { it.candidate.source to it.candidate.remoteId }
+        val manual = candidates.filterNot { row -> pinned.any { sameCandidate(it.candidate, row.candidate) } }
         val sorted = when (this) {
             PREFERENCE -> manual
             SCORE -> manual.sortedWith(comparator().reversed())
             else -> manual.sortedWith(comparator())
         }
-        return listOfNotNull(automatic) + sorted
+        return pinned + sorted
     }
 }

@@ -19,7 +19,10 @@ import java.util.concurrent.Future
 
 /** Owns asynchronous requests and presentation state; domain rules stay behind operations. */
 internal class ManualSearchController(private val operations: ManualSearchOperations) : AutoCloseable {
-    var state by mutableStateOf(ManualSearchState(sort = CandidateColumn.entries.firstOrNull { it.name == operations.candidateSort() } ?: CandidateColumn.PREFERENCE))
+    var state by mutableStateOf(ManualSearchState(
+        sort = CandidateColumn.entries.firstOrNull { it.name == operations.candidateSort() } ?: CandidateColumn.PREFERENCE,
+        source = LyricsSource.entries.firstOrNull { it.name == operations.searchSource() },
+    ))
         private set
     private val workers = Executors.newFixedThreadPool(3) { task ->
         Thread(task, "spw-lyrics-manual-search").apply { isDaemon = true }
@@ -40,7 +43,7 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
         trackGeneration++
         searchGeneration++
         previewGeneration++
-        state = ManualSearchState(query = query, sort = state.sort, metadataOnly = true, readingTrack = false,
+        state = ManualSearchState(query = query, source = state.source, sort = state.sort, metadataOnly = true, readingTrack = false,
             keywords = listOf(query.title, query.artists.joinToString(" ")).filter(String::isNotBlank).joinToString(" "),
             status = "正在为编辑中的歌曲匹配在线信息与封面…")
         search()
@@ -56,11 +59,12 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
         previewGeneration++
         state = ManualSearchState(source = state.source, sort = state.sort)
         submit({ trackGeneration == generation }, {
-            operations.currentQuery()?.let { it to operations.delay(it) }
+            operations.currentQuery()?.let { Triple(it, operations.delay(it), operations.applied(it)) }
         }, { loaded ->
             state = state.copy(
                 query = loaded?.first, keywords = loaded?.first?.title.orEmpty(),
                 delayText = (loaded?.second ?: 0).toString(), savedDelay = loaded?.second ?: 0,
+                applied = loaded?.third?.let { MatchEngine.score(loaded.first, it) },
                 readingTrack = false, status = if (loaded == null) "请先播放歌曲，再点击“刷新歌曲”。" else "正在搜索…",
             )
             if (loaded != null) search()
@@ -71,7 +75,11 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
         if (value != state.keywords) { invalidateSearch(); state = state.copy(keywords = value) }
     }
     fun source(value: LyricsSource?) {
-        if (value != state.source) { invalidateSearch(); state = state.copy(source = value) }
+        if (closed || value == state.source) return
+        invalidateSearch()
+        state = state.copy(source = value)
+        runCatching { check(operations.saveSearchSource(value?.name)) { "来源已切换，但未能记住本次选择，请检查本地数据目录权限。" } }
+            .onFailure(::reportFailure)
     }
 
     fun sort(value: CandidateColumn) {
@@ -124,7 +132,10 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
         } }, { rows ->
             state = state.copy(candidates = rows, searching = false, searched = true,
                 status = "")
-            if (refreshAfterSearch) search() else inspect(rows, generation)
+            if (refreshAfterSearch) search() else {
+                inspect(rows, generation)
+                if (state.selected == null) state.applied?.let(::select)
+            }
         }, { error ->
             state = state.copy(searching = false, searched = true, sourceStatuses = state.sourceStatuses.mapValues { (_, status) ->
                 if (status.phase == ProviderSearchPhase.SEARCHING) status.copy(phase = ProviderSearchPhase.FAILED, detail = "搜索未完成，请重试。") else status
@@ -160,7 +171,7 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
     }
 
     fun select(row: CandidateScore) {
-        if (closed || state.mutating || (!state.isAutomatic(row) && state.candidates.none { sameCandidate(it.candidate, row.candidate) }) ||
+        if (closed || state.mutating || (!state.isAutomatic(row) && !state.isApplied(row) && state.candidates.none { sameCandidate(it.candidate, row.candidate) }) ||
             state.selected?.candidate?.let { sameCandidate(it, row.candidate) } == true && (state.previewing || state.document != null)) return
         val generation = ++previewGeneration
         val automaticDocument = state.automaticDocument.takeIf { state.isAutomatic(row) }
@@ -180,19 +191,26 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
 
     fun apply() {
         val query = state.query ?: return
-        val candidate = state.selected?.candidate ?: return
-        if (!candidate.source.hasLyrics || state.document == null || state.busy) return
-        mutate("歌词已应用并保存为当前歌曲的手动选择。", action = { operations.apply(query, candidate) })
+        val selected = state.selected ?: return
+        val candidate = selected.candidate
+        if (!candidate.source.hasLyrics || state.document == null || state.busy || state.selectedIsApplied) return
+        mutate("歌词已应用并保存为当前歌曲的手动选择。", action = { operations.apply(query, candidate) }) {
+            state = state.copy(applied = selected)
+        }
     }
 
     fun useLocal() {
         val query = state.query ?: return
-        mutate("已切回 SPW 本地歌词流程。", action = { operations.useLocal(query) })
+        mutate("已切回 SPW 本地歌词流程。", action = { operations.useLocal(query) }) {
+            state = state.copy(applied = null)
+        }
     }
 
     fun useAutomatic() {
         val query = state.query ?: return
-        mutate("已清除手动选择，正在重新自动匹配。", action = { operations.useAutomatic(query) })
+        mutate("已清除手动选择，正在重新自动匹配。", action = { operations.useAutomatic(query) }) {
+            state = state.copy(applied = null)
+        }
     }
 
     fun saveDelay(reset: Boolean = false) {

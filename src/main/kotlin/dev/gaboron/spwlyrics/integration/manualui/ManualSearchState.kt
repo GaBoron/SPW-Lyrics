@@ -15,6 +15,7 @@ internal data class ManualSearchState(
     val sort: CandidateColumn = CandidateColumn.PREFERENCE,
     val candidates: List<CandidateScore> = emptyList(),
     val automatic: CandidateScore? = null,
+    val applied: CandidateScore? = null,
     val automaticDocument: LyricsDocument? = null,
     val matchingAutomatic: Boolean = false,
     val sourceStatuses: Map<LyricsSource, ProviderSearchStatus> = ProviderSearchStatus.unchecked(),
@@ -40,4 +41,6 @@ internal data class ManualSearchState(
     val canMutate: Boolean get() = query != null && !busy && !metadataOnly
 
     fun isAutomatic(row: CandidateScore): Boolean = automatic?.candidate?.let { sameCandidate(it, row.candidate) } == true
+    fun isApplied(row: CandidateScore): Boolean = applied?.candidate?.let { sameCandidate(it, row.candidate) } == true
+    val selectedIsApplied: Boolean get() = selected?.let(::isApplied) == true
 }

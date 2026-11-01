@@ -44,6 +44,15 @@ class LyricsLoadCoordinator(
 
     fun currentQuery(): TrackQuery? = current.get()
 
+    /** Restores the applied identity and its cached preview without requiring another provider request. */
+    fun manualSelection(query: TrackQuery): LyricsCandidate? {
+        val candidate = cache.getOverride(query)?.takeUnless { it.local }?.candidate ?: return null
+        cache.getLyrics(query)?.takeIf { cached ->
+            cached.candidate?.let { it.source == candidate.source && it.remoteId == candidate.remoteId } == true
+        }?.let { resolver.rememberManual(ResolvedLyrics(candidate, it.document, it.selectionKey)) }
+        return candidate
+    }
+
     fun selectionChanged() {
         if (closed) return
         synchronized(selectionLock) { tasks.cancelAll() }

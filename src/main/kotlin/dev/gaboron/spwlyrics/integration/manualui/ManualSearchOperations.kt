@@ -13,6 +13,9 @@ internal interface ManualSearchOperations {
     fun currentQuery(): TrackQuery?
     fun candidateSort(): String = "PREFERENCE"
     fun saveCandidateSort(value: String): Boolean = true
+    fun searchSource(): String? = null
+    fun saveSearchSource(value: String?): Boolean = true
+    fun applied(query: TrackQuery): LyricsCandidate?
     fun search(query: TrackQuery, keywords: String, source: LyricsSource?,
         onStatus: (ProviderSearchStatus) -> Unit): List<CandidateScore>
     fun preview(candidate: LyricsCandidate): ResolvedLyrics?

@@ -20,7 +20,14 @@ import dev.gaboron.spwlyrics.integration.composeui.*
 import dev.gaboron.spwlyrics.integration.workspace.lyricsSelection
 
 @Composable
-internal fun ManualCandidateRow(row: CandidateScore, selected: Boolean, enabled: Boolean, automatic: Boolean, click: () -> Unit) {
+internal fun ManualCandidateRow(
+    row: CandidateScore,
+    selected: Boolean,
+    enabled: Boolean,
+    automatic: Boolean,
+    applied: Boolean,
+    click: () -> Unit,
+) {
     val checked by animateFloatAsState(if (selected) 1f else 0f, tween(160), label = "candidate check")
     Row(Modifier.fillMaxWidth().lyricsSelection(selected)
         .selectable(selected, enabled = enabled, role = Role.RadioButton, onClick = click).padding(14.dp),
@@ -29,7 +36,7 @@ internal fun ManualCandidateRow(row: CandidateScore, selected: Boolean, enabled:
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(row.candidate.title, Modifier.weight(1f, fill = false), fontWeight = FontWeight.Medium,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (automatic) Text("自动搜索", Modifier.background(SaltTheme.colors.highlight.copy(alpha = .12f), RoundedCornerShape(4.dp))
+                if (applied || automatic) Text(if (applied) "当前应用" else "自动搜索", Modifier.background(SaltTheme.colors.highlight.copy(alpha = .12f), RoundedCornerShape(4.dp))
                     .padding(horizontal = 6.dp, vertical = 2.dp), color = SaltTheme.colors.highlight, style = SaltTheme.textStyles.sub)
             }
             Text(listOf(row.candidate.artists.joinToString(" / "), row.candidate.album).filter(String::isNotBlank).joinToString(" · "),

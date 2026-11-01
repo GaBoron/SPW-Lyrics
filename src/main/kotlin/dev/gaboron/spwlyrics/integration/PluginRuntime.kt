@@ -194,6 +194,8 @@ private class PluginRuntimeSession : AutoCloseable {
         val metadataOperations = object : MetadataEditorOperations {
             override fun lyricsFormat() = MetadataLyricsFormat.fromStorageValue(uiState.lyricsFormat())
             override fun saveLyricsFormat(format: MetadataLyricsFormat) = uiState.rememberLyricsFormat(format.storageValue)
+            override fun metadataImportFillMissing() = uiState.metadataImportFillMissing()
+            override fun saveMetadataImportFillMissing(value: Boolean) = uiState.rememberMetadataImportFillMissing(value)
             override fun currentAudioPath() = currentQuery()?.path
             override fun chooseAudioFile() = MetadataFilePicker.audio()
             override fun chooseLyricsFile() = MetadataFilePicker.lyrics()
@@ -209,6 +211,9 @@ private class PluginRuntimeSession : AutoCloseable {
         val manualOperations = object : ManualSearchOperations {
             override fun candidateSort() = uiState.candidateSort()
             override fun saveCandidateSort(value: String) = uiState.rememberCandidateSort(value)
+            override fun searchSource() = uiState.searchSource()
+            override fun saveSearchSource(value: String?) = uiState.rememberSearchSource(value)
+            override fun applied(query: TrackQuery) = coordinator?.manualSelection(query)
             override fun currentQuery() = this@PluginRuntimeSession.currentQuery()
             override fun search(query: TrackQuery, keywords: String, source: LyricsSource?, onStatus: (ProviderSearchStatus) -> Unit) =
                 checkNotNull(coordinator) { "歌词搜索尚未启用。" }.searchManual(query, keywords, source, onStatus)

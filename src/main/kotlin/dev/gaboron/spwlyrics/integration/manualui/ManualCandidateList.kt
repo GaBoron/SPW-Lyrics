@@ -20,8 +20,8 @@ import dev.gaboron.spwlyrics.integration.workspace.*
 @Composable
 internal fun ManualCandidateList(state: ManualSearchState, select: (CandidateScore) -> Unit, selectSort: (CandidateColumn) -> Unit, modifier: Modifier) {
     val sort = state.sort
-    val rows = remember(state.candidates, state.automatic, sort) {
-        sort.rows(state.candidates, state.automatic)
+    val rows = remember(state.candidates, state.automatic, state.applied, sort) {
+        sort.rows(state.candidates, state.automatic, state.applied)
     }
     val list = rememberLazyListState()
     val focus = remember { FocusRequester() }
@@ -55,7 +55,8 @@ internal fun ManualCandidateList(state: ManualSearchState, select: (CandidateSco
                     else -> {
                         LazyColumn(Modifier.fillMaxSize().padding(end = 10.dp), state = list, contentPadding = PaddingValues(4.dp)) {
                             items(rows) { row ->
-                                ManualCandidateRow(row, row == rows.getOrNull(selectedIndex), !state.mutating, state.isAutomatic(row)) {
+                                ManualCandidateRow(row, row == rows.getOrNull(selectedIndex), !state.mutating,
+                                    automatic = state.isAutomatic(row), applied = state.isApplied(row)) {
                                     focus.requestFocus(); select(row)
                                 }
                                 LyricsListDivider()

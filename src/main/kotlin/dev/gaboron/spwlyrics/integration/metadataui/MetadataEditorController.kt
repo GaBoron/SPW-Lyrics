@@ -30,6 +30,8 @@ import java.util.concurrent.TimeUnit
 internal interface MetadataEditorOperations {
     fun lyricsFormat(): MetadataLyricsFormat = MetadataLyricsFormat.TTML
     fun saveLyricsFormat(format: MetadataLyricsFormat): Boolean = true
+    fun metadataImportFillMissing(): Boolean = true
+    fun saveMetadataImportFillMissing(value: Boolean): Boolean = true
     fun currentAudioPath(): String?
     fun chooseAudioFile(): Path?
     fun chooseLyricsFile(): Path?
@@ -247,7 +249,11 @@ internal class MetadataEditorController(
     }
 
     private fun prepareOnlineImport(candidate: dev.gaboron.spwlyrics.domain.LyricsCandidate, document: LyricsDocument?) =
-        artworkImport.prepare(candidate).copy(lyricsText = document?.let { MetadataLyricsExport.encode(it, MetadataLyricsFormat.TTML) }, lyricsDocument = document)
+        artworkImport.prepare(candidate).copy(
+            fillMissing = operations.metadataImportFillMissing(),
+            lyricsText = document?.let { MetadataLyricsExport.encode(it, MetadataLyricsFormat.TTML) },
+            lyricsDocument = document,
+        )
 
     fun selectImport(field: AudioMetadataField, selected: Boolean) {
         val pending = state.onlineImport ?: return
@@ -255,7 +261,12 @@ internal class MetadataEditorController(
     }
 
     fun importMode(fillMissing: Boolean) {
-        if (!state.busy) state = state.copy(onlineImport = state.onlineImport?.copy(fillMissing = fillMissing))
+        val pending = state.onlineImport ?: return
+        if (closed || state.busy || pending.fillMissing == fillMissing) return
+        state = state.copy(onlineImport = pending.copy(fillMissing = fillMissing))
+        runCatching {
+            check(operations.saveMetadataImportFillMissing(fillMissing)) { "导入方式已切换，但未能记住本次选择，请检查本地数据目录权限。" }
+        }.onFailure { state = state.copy(error = true, status = it.message.orEmpty()) }
     }
 
     fun selectCoverImport() {

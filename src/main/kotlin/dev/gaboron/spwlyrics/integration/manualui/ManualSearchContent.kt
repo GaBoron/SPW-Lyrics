@@ -41,7 +41,8 @@ internal fun ManualSearchContent(controller: ManualSearchController) {
             DesktopButton("恢复自动匹配", controller::useAutomatic, enabled = state.canMutate)
             DesktopButton("切回本地歌词", controller::useLocal, enabled = state.canMutate)
             DesktopButton("导入元数据", controller::editMetadata, enabled = !state.busy && state.selected != null)
-            DesktopButton("应用歌词", controller::apply, enabled = state.canMutate && state.document != null,
+            DesktopButton(if (state.selectedIsApplied) "已应用" else "应用歌词", controller::apply,
+                enabled = state.canMutate && state.document != null && !state.selectedIsApplied,
                 primary = true, glyph = DesktopGlyph.Check)
         }
     }
