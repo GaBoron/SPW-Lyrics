@@ -11,6 +11,7 @@ import dev.gaboron.spwlyrics.application.LyricsBatchProcessor
 import dev.gaboron.spwlyrics.application.LyricsResolver
 import dev.gaboron.spwlyrics.application.LyricsPrecache
 import dev.gaboron.spwlyrics.application.LyricsOutputRouter
+import dev.gaboron.spwlyrics.application.LyricsStartupRecovery
 import dev.gaboron.spwlyrics.codec.MetadataLyricsFormat
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsDocument
@@ -56,7 +57,9 @@ object PluginRuntime {
         try {
             next.install(pluginId, channel)
             session = next
+            next.recoverCurrentLyrics()
         } catch (error: Throwable) {
+            if (session === next) session = null
             runCatching { next.close() }.onFailure(error::addSuppressed)
             throw error
         } finally {
@@ -93,6 +96,7 @@ private class PluginRuntimeSession : AutoCloseable {
         Thread(task, "spw-lyrics-maintenance").apply { isDaemon = true }
     }
     @Volatile private var coordinator: LyricsLoadCoordinator? = null
+    @Volatile private var startupRecovery: LyricsStartupRecovery? = null
     @Volatile private var batchProcessor: LyricsBatchProcessor? = null
     @Volatile private var precache: LyricsPrecache? = null
     @Volatile private var workspace: LyricsWorkspace? = null
@@ -147,6 +151,9 @@ private class PluginRuntimeSession : AutoCloseable {
             LyricsResolver(providers, preferences = { settings?.lyricsPreferences() ?: dev.gaboron.spwlyrics.domain.LyricsPreferences() })
         }
         val refreshBridge = ReflectiveLyricsRefreshBridge()
+        startupRecovery = LyricsStartupRecovery(maintenance, libraryTracks::current, refreshBridge) {
+            SpwLyricsExtension.discovered
+        }
         val output = LyricsOutputRouter(
             receiver = JmxTtmlReceiver(),
             isCurrent = { query ->
@@ -243,6 +250,8 @@ private class PluginRuntimeSession : AutoCloseable {
         maintenance.scheduleWithFixedDelay({ if (!closed) performance.report("running") }, 60, 60, java.util.concurrent.TimeUnit.SECONDS)
     }
 
+    fun recoverCurrentLyrics() = startupRecovery?.start()
+
     fun beforeLoad(mediaItem: PlaybackExtensionPoint.MediaItem): String? = performance.measure(Operation.BEFORE_LOAD) {
         load(mediaItem, LyricsLoadPhase.BEFORE_LOCAL) {
             localTtmlLyrics.load(mediaItem.path)
@@ -284,6 +293,8 @@ private class PluginRuntimeSession : AutoCloseable {
     override fun close() {
         if (closed) return
         closed = true
+        startupRecovery?.close()
+        startupRecovery = null
         maintenance.shutdownNow()
         val resources = listOfNotNull(hostUi, workspace, timingMedia, settings, batchProcessor, precache, coordinator)
         hostUi = null
@@ -316,6 +327,7 @@ private class PluginRuntimeSession : AutoCloseable {
             settings?.automaticReplacementPolicy() ?: AutomaticReplacementPolicy.ALWAYS,
             localTtml,
         )
+        if (phase == LyricsLoadPhase.BEFORE_LOCAL) startupRecovery?.beforeLoadCompleted(query)
         precache?.trackChanged(query)
         return result
     }
