@@ -34,9 +34,9 @@ internal enum class CandidateColumn(val title: String) {
         else -> compareBy { text(it) }
     }
 
-    /** Automatic and applied results stay visible across sorting, keywords, and source filtering. */
+    /** Applied and automatic results stay pinned in that order across sorting, keywords, and source filtering. */
     fun rows(candidates: List<CandidateScore>, automatic: CandidateScore?, applied: CandidateScore?): List<CandidateScore> {
-        val pinned = listOfNotNull(automatic, applied).distinctBy { it.candidate.source to it.candidate.remoteId }
+        val pinned = listOfNotNull(applied, automatic).distinctBy { it.candidate.source to it.candidate.remoteId }
         val manual = candidates.filterNot { row -> pinned.any { sameCandidate(it.candidate, row.candidate) } }
         val sorted = when (this) {
             PREFERENCE -> manual
