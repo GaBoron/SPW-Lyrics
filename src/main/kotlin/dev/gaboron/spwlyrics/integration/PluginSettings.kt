@@ -22,7 +22,6 @@ class PluginSettings(
     private val initialConfig = manager.getConfig(CONFIG_FILE)
     private val replacementPolicy = AtomicReference(readPolicy(initialConfig))
     private val selection = AtomicReference(readSelection(initialConfig).getOrDefault(LyricsPreferences()))
-    private val shareKey = AtomicReference(initialConfig.get("lrcshare_api_key", "").trim())
     private var invalidInput: String? = null
     private val lock = Any()
     @Volatile private var closed = false
@@ -54,7 +53,6 @@ class PluginSettings(
         if (!config.reload()) return
         val nextPolicy = readPolicy(config)
         val next = readSelection(config)
-        val key = config.get("lrcshare_api_key", "").trim()
         val selectionChanged = synchronized(lock) {
             if (closed || revision != expected) return
             val policyChanged = replacementPolicy.getAndSet(nextPolicy) != nextPolicy
@@ -62,7 +60,7 @@ class PluginSettings(
             val invalid = next.exceptionOrNull()?.message
             if (invalid != null && invalid != invalidInput) notify("排序未生效，已保留上一次有效设置。$invalid")
             invalidInput = invalid
-            shareKey.getAndSet(key) != key || changed || policyChanged
+            changed || policyChanged
         }
         if (!closed && selectionChanged) onSelectionChanged()
     }
@@ -74,7 +72,6 @@ class PluginSettings(
 
     fun automaticReplacementPolicy(): AutomaticReplacementPolicy = replacementPolicy.get()
     fun lyricsPreferences(): LyricsPreferences = selection.get()
-    fun lrcShareApiKey(): String = shareKey.get()
 
     private fun readSelection(config: ConfigHelper): Result<LyricsPreferences> = runCatching {
         LyricsPreferenceInput.parse(config.get("lyrics_priority_mode", "type_first"),

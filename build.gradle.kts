@@ -82,3 +82,5 @@ tasks.named<Zip>("plugin") {
     // SPW provides these; avoid bundling an older transitive Kotlin runtime.
     exclude("**/kotlin-stdlib-*.jar", "**/annotations-*.jar")
 }
+
+apply(from = "gradle/lrcshare-access.gradle.kts")

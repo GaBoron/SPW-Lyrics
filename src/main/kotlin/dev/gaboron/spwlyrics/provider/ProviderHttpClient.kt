@@ -32,6 +32,18 @@ class ProviderHttpClient(
         }
     }
 
+    /** Credential-bearing requests must not forward their headers to a redirect destination. */
+    @JvmName("getAuthenticated")
+    internal fun getAuthenticated(url: String, headers: Map<String, String>): String = try {
+        send(url, "GET", null, null, headers, followRedirects = false)
+    } catch (failure: Throwable) {
+        if (!url.startsWith("https://") || !failure.hasTlsFailure() || Thread.currentThread().isInterrupted) throw failure
+        runCatching { directHttpsFallback.get(url, headers, followRedirects = false) }.getOrElse { fallbackFailure ->
+            failure.addSuppressed(fallbackFailure)
+            throw failure
+        }
+    }
+
     override fun postJson(url: String, body: String, headers: Map<String, String>): String {
         val bytes = body.toByteArray(StandardCharsets.UTF_8)
         return try {
@@ -62,6 +74,7 @@ class ProviderHttpClient(
         contentType: String?,
         body: ByteArray?,
         headers: Map<String, String>,
+        followRedirects: Boolean = true,
     ): String {
         if (Thread.currentThread().isInterrupted) throw InterruptedException("Provider request cancelled")
         val connection = URI.create(url).toURL().openConnection() as HttpURLConnection
@@ -69,7 +82,7 @@ class ProviderHttpClient(
             connection.requestMethod = method
             connection.connectTimeout = connectTimeoutMs
             connection.readTimeout = readTimeoutMs
-            connection.instanceFollowRedirects = true
+            connection.instanceFollowRedirects = followRedirects
             connection.useCaches = false
             connection.setRequestProperty("User-Agent", USER_AGENT)
             connection.setRequestProperty("Accept-Encoding", "gzip")

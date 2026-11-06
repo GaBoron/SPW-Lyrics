@@ -58,13 +58,6 @@
           "on_click": "dev.gaboron.spwlyrics.integration.SpwLyricsActions.resetLyricsOrder"
         },
         {
-          "key": "lrcshare_api_key",
-          "type": "edittext",
-          "title": "LrcShare API Key",
-          "summary": "填写你自己的 LrcShare API Key 后启用请求；留空时显示未配置。",
-          "default_value": ""
-        },
-        {
           "type": "button",
           "title": "查看本地缓存文件夹",
           "summary": "在文件资源管理器中打开已缓存的歌词",

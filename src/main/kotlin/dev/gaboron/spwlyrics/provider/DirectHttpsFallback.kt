@@ -25,7 +25,8 @@ internal class DirectHttpsFallback(
     private val readTimeoutMs: Int,
     private val resolver: PublicDnsResolver = PublicDnsResolver(),
 ) {
-    fun get(url: String, headers: Map<String, String>): String = send(URI.create(url), "GET", null, headers, redirectsLeft = 3)
+    fun get(url: String, headers: Map<String, String>, followRedirects: Boolean = true): String =
+        send(URI.create(url), "GET", null, headers, redirectsLeft = if (followRedirects) 3 else 0)
 
     fun postJson(url: String, body: ByteArray, headers: Map<String, String>): String =
         send(URI.create(url), "POST", body, mapOf("Content-Type" to "application/json; charset=utf-8") + headers, redirectsLeft = 3)
@@ -104,10 +105,15 @@ internal class DirectHttpsFallback(
             requestHeaders.forEach { (name, value) -> append(name).append(": ").append(value).append("\r\n") }
             append("\r\n")
         }
-        socket.outputStream.apply {
-            write(request.toByteArray(StandardCharsets.US_ASCII))
-            body?.let(::write)
-            flush()
+        val encoded = request.toByteArray(StandardCharsets.US_ASCII)
+        try {
+            socket.outputStream.apply {
+                write(encoded)
+                body?.let(::write)
+                flush()
+            }
+        } finally {
+            encoded.fill(0)
         }
     }
 

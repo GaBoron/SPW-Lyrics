@@ -31,7 +31,7 @@
 | 批量管理 | 提前缓存歌词，按所选字段补充或覆盖音频标签 |
 | AMLL 互通 | 向 [AMLL into SPW](https://github.com/GaBoron/AMLL-into-SPW) 提供原始 TTML，保留来源中的声部、背景人声、翻译、音译和注音 |
 
-歌词来源包括 AMLL TTML DB、QQ 音乐、汽水音乐、酷狗音乐、网易云音乐、Apple Music 和 LrcShare；MusicBrainz 仅提供元数据。LrcShare 需要自己的 API Key，Apple Music 歌词依赖第三方服务。
+歌词来源包括 AMLL TTML DB、QQ 音乐、汽水音乐、酷狗音乐、网易云音乐、Apple Music 和 LrcShare；MusicBrainz 仅提供元数据，Apple Music 歌词依赖第三方服务。
 
 ## 📦 安装与开始使用
 
