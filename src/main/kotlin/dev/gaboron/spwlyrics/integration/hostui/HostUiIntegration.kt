@@ -26,6 +26,7 @@ internal class HostUiIntegration(
         val cached: Boolean,
         val bridge: HostUiBridge,
         val menu: Result<HostPlayerMenu>,
+        val captionMenuReady: Boolean,
     )
     private val worker = Executors.newSingleThreadScheduledExecutor { Thread(it, "spw-lyrics-host-ui").apply { isDaemon = true } }
     @Volatile private var stopped = false
@@ -108,12 +109,19 @@ internal class HostUiIntegration(
     ): Prepared = performance.measure(PluginPerformance.Operation.HOST_PREPARE) {
         checkActive()
         val bridge = HostUiBridge(targets.main, host.classLoader, workspace, targets.popup)
+        val captionMenu = runCatching {
+            bridge.prepareCaptionMenu(checkNotNull(targets.menu))
+        }
+        if (cached) captionMenu.getOrThrow()
+        else captionMenu.onFailure {
+            System.getLogger("SPW Lyrics").log(System.Logger.Level.WARNING, "宿主顶部菜单未接入，使用兼容菜单", it)
+        }
         val menu = runCatching {
             if (menuFailure != null) throw menuFailure
             HostPlayerMenu(checkNotNull(targets.menu), host.classLoader, workspace) { bridge.isDarkTheme() }
         }
         if (cached) menu.getOrThrow()
-        Prepared(targets, source, cached, bridge, menu)
+        Prepared(targets, source, cached, bridge, menu, captionMenu.isSuccess)
     }
 
     private fun install(prepared: Prepared) {
@@ -143,7 +151,7 @@ internal class HostUiIntegration(
                 checkActive()
                 workspace.beforeOpen = prepared.bridge::enter
                 workspace.available = true
-                if (!prepared.cached && menuInstalled && prepared.targets.complete) execute {
+                if (!prepared.cached && menuInstalled && prepared.captionMenuReady && prepared.targets.complete) execute {
                     checkActive()
                     prepared.source?.let { cache.write(it, prepared.targets) }
                 }

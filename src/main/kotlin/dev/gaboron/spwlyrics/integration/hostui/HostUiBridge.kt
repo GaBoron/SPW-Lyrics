@@ -37,12 +37,19 @@ internal class HostUiBridge(val targets: HostUiDiscovery.Targets, private val lo
     private val locals = targets.locals().map(::field)
     private val popupModifier = popup?.modifier()?.let(::method)
     private val popupMaterial = popup?.material()?.let(::field)?.get(null)
+    private val popupMenu = popup?.menu()?.let(::method)
+    private var captionMenu: HostNativeMenu? = null
     val popupSurface: (@Composable (Modifier) -> Modifier)? = popupModifier?.let { reflected ->
         { modifier -> reflected.invoke(null, modifier, popupMaterial, currentComposer, 0) as Modifier }
     }
     var replaying = false
         private set
     private var navigator: Any? = null
+
+    fun prepareCaptionMenu(targets: HostPlayerMenuDiscovery.Targets) {
+        captionMenu = HostNativeMenu(Class.forName(targets.scope().replace('/', '.'), false, loader),
+            method(targets.label()), checkNotNull(popupMenu) { "宿主顶部弹出菜单不可用" }, workspace, ::isDarkTheme)
+    }
 
     fun method(key: HostBytecodeIndex.Method): Method {
         val signature = MethodType.fromMethodDescriptorString(key.descriptor(), loader)
@@ -103,20 +110,27 @@ internal class HostUiBridge(val targets: HostUiDiscovery.Targets, private val lo
         val dark = isDarkTheme()
         val icon: @Composable BoxScope.() -> Unit = {
             DesktopIcon(DesktopGlyph.Lyrics, if (dark) Color.White else Color.Black,
-                Modifier.align(Alignment.Center).size(18.dp))
+                Modifier.align(Alignment.Center).size(20.dp))
         }
         Box {
             val openMenu: () -> Unit = { expanded = true }
             caption.invoke(null, openMenu, "歌词管理", Modifier, true, null, 0f, icon, currentComposer, 0, 32)
-            DesktopTheme(dark) {
-                CompositionLocalProvider(LocalDesktopPopupMaterial provides popupSurface) {
-                    DesktopPopupMenu(expanded, { expanded = false }) {
-                        for ((title, target) in listOf("手动搜索歌词" to LyricsToolPage.SEARCH,
-                            "编辑元数据" to LyricsToolPage.METADATA, "批量管理" to LyricsToolPage.BATCH)) {
-                            PopupMenuItem(onClick = {
-                                expanded = false
-                                workspace.open(target)
-                            }, text = title)
+            val actions = listOf("手动搜索歌词" to LyricsToolPage.SEARCH,
+                "编辑元数据" to LyricsToolPage.METADATA, "批量管理" to LyricsToolPage.BATCH)
+            val native = captionMenu
+            if (native != null) {
+                if (expanded) native.Popup({ expanded = false }, actions)
+            } else {
+                // Keep a working entry when a host update makes native popup discovery unavailable.
+                DesktopTheme(dark) {
+                    CompositionLocalProvider(LocalDesktopPopupMaterial provides popupSurface) {
+                        DesktopPopupMenu(expanded, { expanded = false }) {
+                            for ((title, target) in actions) {
+                                PopupMenuItem(onClick = {
+                                    expanded = false
+                                    workspace.open(target)
+                                }, text = title)
+                            }
                         }
                     }
                 }

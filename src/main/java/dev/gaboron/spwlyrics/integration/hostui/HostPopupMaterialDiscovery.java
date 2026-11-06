@@ -6,7 +6,8 @@ import static dev.gaboron.spwlyrics.integration.hostui.HostBytecodeIndex.*;
 
 /** Reuses the material chosen by the host's popup renderer, including its acrylic setting. */
 public final class HostPopupMaterialDiscovery {
-    public record Targets(Method modifier, Field material) {}
+    private static final String MENU = "(Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;II)V";
+    public record Targets(Method modifier, Field material, Method menu) {}
 
     public static Targets discover(HostBytecodeIndex index) {
         var modifier = unique(index.methods().stream().filter(b -> Modifier.isStatic(b.flags())
@@ -22,7 +23,10 @@ public final class HostPopupMaterialDiscovery {
         var descriptor = modifier.method().type().parameterType(1).descriptorString();
         var material = unique(popup.fields().stream().filter(f -> f.descriptor().equals(descriptor)
             && descriptor.equals("L" + f.owner() + ";")).distinct().toList(), "host popup material value");
-        return new Targets(modifier.method(), material);
+        var menu = unique(index.methods().stream().filter(b -> b.method().owner().equals(modifier.method().owner())
+            && b.method().descriptor().equals(MENU) && Modifier.isStatic(b.flags()))
+            .map(Body::method).toList(), "host caption popup renderer");
+        return new Targets(modifier.method(), material, menu);
     }
 
     private static <T> T unique(List<T> choices, String role) {

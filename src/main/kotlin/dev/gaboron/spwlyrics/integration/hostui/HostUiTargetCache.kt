@@ -48,7 +48,8 @@ internal class HostUiTargetCache(private val path: Path) {
                 values.items("main.locals") { values.field(it) },
                 HostThemeDiscovery.Targets(values.method("theme.configs"), values.method("theme.dark")),
             ),
-            popup = HostPopupMaterialDiscovery.Targets(values.method("popup.modifier"), values.field("popup.material")),
+            popup = HostPopupMaterialDiscovery.Targets(values.method("popup.modifier"), values.field("popup.material"),
+                values.method("popup.menu")),
             menu = HostPlayerMenuDiscovery.Targets(
                 values.method("menu.builder"), values.required("menu.scope"),
                 values.required("menu.scopeParameter").toInt(), values.required("menu.popupParameter").toInt(),
@@ -85,6 +86,7 @@ internal class HostUiTargetCache(private val path: Path) {
             val popup = checkNotNull(targets.popup)
             putMethod("popup.modifier", popup.modifier())
             putField("popup.material", popup.material())
+            putMethod("popup.menu", popup.menu())
             val menu = checkNotNull(targets.menu)
             putMethod("menu.builder", menu.builder())
             setProperty("menu.scope", menu.scope())
@@ -151,7 +153,7 @@ internal class HostUiTargetCache(private val path: Path) {
     }
 
     private companion object {
-        const val FORMAT = "1"
+        const val FORMAT = "2"
         const val MAX_BYTES = 128 * 1024
     }
 }
