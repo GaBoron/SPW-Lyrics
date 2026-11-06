@@ -12,6 +12,9 @@ interface NativeTtmlReceiver : AutoCloseable {
     /** Null means unavailable; the token changes when the receiver is registered again. */
     fun state(): Any?
     fun submit(query: TrackQuery, rawTtml: String, offsetMs: Long): Boolean
+    /** Select the host's active source. Null TTML means the receiver should follow host lyrics. */
+    fun select(query: TrackQuery, rawTtml: String?, offsetMs: Long): Boolean =
+        rawTtml != null && submit(query, rawTtml, offsetMs)
     fun clear(query: TrackQuery)
     override fun close() {}
 }
@@ -26,7 +29,7 @@ class LyricsOutputRouter(
     },
 ) : AutoCloseable {
     private enum class Delivery { PENDING, NATIVE, FALLBACK }
-    private data class Selection(val query: TrackQuery, val document: LyricsDocument, val delayMs: Int)
+    private data class Selection(val query: TrackQuery, val document: LyricsDocument?, val delayMs: Int)
 
     private val lock = Any()
     private var selection: Selection? = null
@@ -73,7 +76,21 @@ class LyricsOutputRouter(
 
     fun setDelay(query: TrackQuery, delayMs: Int) {
         val selected = synchronized(lock) { selection?.takeIf { sameTrack(it.query, query) } } ?: return
-        offer(query, selected.document, delayMs)
+        selected.document?.let { offer(query, it, delayMs) }
+    }
+
+    /** A local/ordinary LRC result must suppress an unrelated native TTML choice as well. */
+    fun followHost(query: TrackQuery) {
+        synchronized(lock) {
+            if (closed) return
+            val expected = Selection(query, null, 0)
+            if (selection == expected) return
+            selection = expected
+            fallback = null
+            delivery = Delivery.FALLBACK
+            revision++
+            worker.execute(::reconcileSafely)
+        }
     }
 
     /** Explicit handback also invalidates any submit already being parsed by the receiver. */
@@ -108,9 +125,9 @@ class LyricsOutputRouter(
             if (closed || revision != expectedRevision) return
             if (processedRevision == expectedRevision && receiverState == state) return
         }
-        val raw = selected.document.rawTtml?.takeUnless { selected.document.isInstrumental || selected.document.lines.isEmpty() }
-        val accepted = raw != null && state != null && runCatching {
-            receiver.submit(selected.query, raw, selected.delayMs.toLong())
+        val raw = selected.document?.takeUnless { it.isInstrumental || it.lines.isEmpty() }?.rawTtml
+        val accepted = state != null && runCatching {
+            receiver.select(selected.query, raw, if (raw == null) 0 else selected.delayMs.toLong())
         }.getOrDefault(false)
         if (!accepted) runCatching { receiver.clear(selected.query) }
         val stillCurrent = current(selected.query)
@@ -118,7 +135,7 @@ class LyricsOutputRouter(
             if (closed || revision != expectedRevision || !stillCurrent) {
                 false
             } else {
-                val next = if (accepted) Delivery.NATIVE else Delivery.FALLBACK
+                val next = if (accepted && raw != null) Delivery.NATIVE else Delivery.FALLBACK
                 val changed = delivery != next
                 delivery = next
                 processedRevision = expectedRevision

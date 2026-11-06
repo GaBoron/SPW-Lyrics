@@ -36,7 +36,7 @@ internal interface MetadataEditorOperations {
     fun chooseAudioFile(): Path?
     fun chooseLyricsFile(): Path?
     fun chooseCoverFile(): Path?
-    fun afterSave(path: Path)
+    fun afterSave(snapshot: AudioMetadataSnapshot, lyricsChanged: Boolean)
     fun openSearch(query: TrackQuery)
 }
 
@@ -385,12 +385,15 @@ internal class MetadataEditorController(
         run({
             val edited = request.document?.let { request.edited.copy(lyrics = MetadataLyricsExport.encode(it, request.format)) } ?: request.edited
             if (edited.lyrics.isNotBlank() && edited.lyrics != request.original.metadata.lyrics) MetadataLyricsImport.preview(edited.lyrics)
-            if (edited == request.original.metadata) AudioMetadataSaved(request.original) to false
-            else store.save(request.original, edited) to true
-        }, { (saved, written) ->
+            val written = edited != request.original.metadata
+            val saved = if (written) store.save(request.original, edited) else AudioMetadataSaved(request.original)
+            val refreshed = !written || runCatching {
+                operations.afterSave(saved.snapshot, saved.snapshot.metadata.lyrics != request.original.metadata.lyrics)
+            }.isSuccess
+            Triple(saved, written, refreshed)
+        }, { (saved, written, refresh) ->
             loaded(saved.snapshot, request.format)
             if (written) {
-                val refresh = runCatching { operations.afterSave(saved.snapshot.path) }.isSuccess
                 state = state.copy(status = "已写入。" +
                     (if (refresh) "歌曲信息可重新扫描曲库后更新。" else "请切歌后重试歌词显示，并重新扫描曲库更新歌曲信息。") + saved.notice)
             } else state = state.copy(status = "内容已符合所选格式，无需重复写入。")

@@ -35,6 +35,16 @@ internal class JmxTtmlReceiver(
             arrayOf("java.lang.String", "java.lang.String", "java.lang.String", "long"),
         ) == true
 
+    override fun select(query: TrackQuery, rawTtml: String?, offsetMs: Long): Boolean {
+        if (query.path.isBlank() || state() == null) return false
+        // The optional selection operation preserves protocol-1 compatibility with older receivers.
+        if (server.getMBeanInfo(NAME).operations.any { it.name == "selectLyrics" }) return server.invoke(
+            NAME, "selectLyrics", arrayOf<Any>(query.trackId, query.path, rawTtml.orEmpty(), offsetMs),
+            arrayOf("java.lang.String", "java.lang.String", "java.lang.String", "long"),
+        ) == true
+        return rawTtml != null && submit(query, rawTtml, offsetMs)
+    }
+
     override fun clear(query: TrackQuery) {
         if (query.path.isNotBlank() && state() != null) server.invoke(
             NAME, "clearTtml", arrayOf(query.trackId, query.path),

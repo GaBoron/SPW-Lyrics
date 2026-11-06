@@ -12,7 +12,7 @@ import java.util.Locale
 
 /** One definition of embedded lyric aliases for playback and the metadata editor. */
 internal object EmbeddedLyricsTags {
-    private val aliases = setOf("LYRICS", "UNSYNCEDLYRICS", "SYNCEDLYRICS", "TTMLLYRIC")
+    private val aliases = setOf("LYRICS", "UNSYNCEDLYRICS", "SYNCEDLYRICS", "TTML", "TTMLLYRIC", "TTML_LYRICS")
 
     fun read(tag: Tag): String {
         // ID3v1 has no lyric field and its generic field iterator is not implemented.

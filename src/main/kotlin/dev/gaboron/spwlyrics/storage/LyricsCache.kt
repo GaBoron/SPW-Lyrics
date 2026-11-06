@@ -35,6 +35,7 @@ data class ManualOverride(
     val source: LyricsSource? = null,
     val candidate: LyricsCandidate? = null,
     val modelVersion: Int = MANUAL_OVERRIDE_MODEL_VERSION,
+    val embedded: Boolean = false,
 )
 
 const val LYRICS_CACHE_MODEL_VERSION = 6
@@ -47,7 +48,20 @@ interface LyricsCache {
     fun getOverride(query: TrackQuery): ManualOverride?
     fun putOverride(query: TrackQuery, override: ManualOverride)
     fun removeOverride(query: TrackQuery)
+
+    fun getSelection(query: TrackQuery): ManualOverride? =
+        getOverride(savedLyricsQuery(query))?.takeIf { it.local && it.embedded } ?: getOverride(query)
+
+    fun selectSavedLyrics(query: TrackQuery) = putOverride(savedLyricsQuery(query), ManualOverride(local = true, embedded = true))
+
+    fun clearSavedLyrics(query: TrackQuery) {
+        val saved = savedLyricsQuery(query)
+        if (getOverride(saved)?.embedded == true) putOverride(saved, ManualOverride(local = false))
+    }
 }
+
+/** File selection survives rescans that change the library's title and artist metadata. */
+private fun savedLyricsQuery(query: TrackQuery) = TrackQuery("", emptyList(), "", path = query.path)
 
 class FileLyricsCache(
     private val root: Path,

@@ -23,6 +23,7 @@ internal class BatchMetadataWriter(
     private val resolver: LyricsResolver,
     private val store: AudioMetadataStore = FileAudioMetadataStore(),
     private val artwork: OnlineArtworkImport = OnlineArtworkImport(),
+    private val afterLyricsSaved: (dev.gaboron.spwlyrics.storage.AudioMetadataSnapshot) -> Unit = {},
 ) {
     fun write(query: TrackQuery, resolved: ResolvedLyrics, options: BatchMetadataOptions): String {
         val original = store.read(Path.of(query.path))
@@ -42,6 +43,10 @@ internal class BatchMetadataWriter(
         val edited = pending.apply(original.metadata)
         if (edited == original.metadata) return "此来源没有可补充的所选数据"
         val saved = store.save(original, edited)
-        return "已写入元数据。${saved.notice}"
+        val refreshNotice = if (saved.snapshot.metadata.lyrics != original.metadata.lyrics) {
+            runCatching { afterLyricsSaved(saved.snapshot) }.exceptionOrNull()
+                ?.let { "歌词已写入，但播放刷新失败，请切歌后重试。" }.orEmpty()
+        } else ""
+        return "已写入元数据。${saved.notice}$refreshNotice"
     }
 }

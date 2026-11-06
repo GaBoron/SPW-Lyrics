@@ -206,6 +206,13 @@ internal class ManualSearchController(private val operations: ManualSearchOperat
         }
     }
 
+    fun localLyricsSaved(path: String) {
+        if (closed || state.query?.path != path) return
+        // An earlier apply request must not restore its badge after a later file write.
+        trackGeneration++
+        state = state.copy(applied = null, mutating = false)
+    }
+
     fun useAutomatic() {
         val query = state.query ?: return
         mutate("已清除手动选择，正在重新自动匹配。", action = { operations.useAutomatic(query) }) {
