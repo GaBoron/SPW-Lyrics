@@ -25,9 +25,6 @@ internal class LyricsUiStateStore(private val path: Path) {
     fun searchSource(): String = values.getProperty("searchSource", "")
 
     @Synchronized
-    fun metadataImportFillMissing(): Boolean = values.getProperty("metadataImportFillMissing")?.toBooleanStrictOrNull() ?: true
-
-    @Synchronized
     fun rememberLyricsFormat(value: String): Boolean = write("lyricsFormat", value)
 
     @Synchronized
@@ -35,9 +32,6 @@ internal class LyricsUiStateStore(private val path: Path) {
 
     @Synchronized
     fun rememberSearchSource(value: String?): Boolean = write("searchSource", value.orEmpty())
-
-    @Synchronized
-    fun rememberMetadataImportFillMissing(value: Boolean): Boolean = write("metadataImportFillMissing", value.toString())
 
     private fun write(key: String, value: String): Boolean {
         val updated = Properties().apply {

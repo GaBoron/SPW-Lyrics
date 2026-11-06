@@ -4,7 +4,6 @@ internal data class OnlineMetadataImport(
     val source: String,
     val fields: Map<AudioMetadataField, String>,
     val selected: Set<AudioMetadataField> = fields.keys,
-    val fillMissing: Boolean = true,
     val notice: String? = null,
     val coverUrl: String? = null,
     val cover: AudioArtwork? = null,
@@ -12,13 +11,24 @@ internal data class OnlineMetadataImport(
     val coverNotice: String? = null,
     val lyricsText: String? = null,
     val lyricsDocument: LyricsDocument? = null,
+    val lyricsMainAgent: String = "v1",
     val lyricsSelected: Boolean = true,
 ) {
+    val hasSelection get() = fields.any { (field, value) -> field in selected && value.isNotBlank() } ||
+        coverSelected && cover != null || lyricsSelected && !lyricsText.isNullOrBlank()
+
+    /** Presets only change checkboxes; every selected, nonempty value replaces the draft. */
+    fun selectFor(draft: AudioMetadata, onlyMissing: Boolean = true) = copy(
+        selected = fields.filter { (field, value) -> value.isNotBlank() && (!onlyMissing || draft[field].isBlank()) }.keys,
+        coverSelected = cover != null && (!onlyMissing || draft.cover == null),
+        lyricsSelected = !lyricsText.isNullOrBlank() && (!onlyMissing || draft.lyrics.isBlank()),
+    )
+
     fun apply(draft: AudioMetadata): AudioMetadata {
         val updated = draft.copy(fields = draft.fields + fields.filter { (field, value) ->
-            field in selected && value.isNotBlank() && (!fillMissing || draft[field].isBlank())
-        }, lyrics = if (lyricsSelected && lyricsText != null && (!fillMissing || draft.lyrics.isBlank())) lyricsText else draft.lyrics)
-        return if (coverSelected && cover != null && (!fillMissing || draft.cover == null)) updated.withCover(cover) else updated
+            field in selected && value.isNotBlank()
+        }, lyrics = if (lyricsSelected && !lyricsText.isNullOrBlank()) lyricsText else draft.lyrics)
+        return if (coverSelected && cover != null) updated.withCover(cover) else updated
     }
     companion object {
         fun from(candidate: LyricsCandidate): OnlineMetadataImport {

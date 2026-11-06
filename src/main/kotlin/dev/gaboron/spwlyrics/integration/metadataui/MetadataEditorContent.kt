@@ -18,9 +18,12 @@ import dev.gaboron.spwlyrics.integration.timingui.LyricsTimingController
 internal fun MetadataEditorContent(controller: MetadataEditorController, timing: LyricsTimingController,
     view: MetadataLyricsView, selectView: (MetadataLyricsView) -> Unit) {
     val state = controller.state
-    val focused = view == MetadataLyricsView.TIMING
+    val importing = state.onlineImport != null
+    val focused = view == MetadataLyricsView.TIMING && !importing
     var page by rememberSaveable { mutableStateOf(0) }
+    var importPage by rememberSaveable { mutableStateOf(1) }
     var metadataExpanded by rememberSaveable { mutableStateOf(true) }
+    LaunchedEffect(state.importId) { importPage = 1 }
     val gap by animateDpAsState(if (focused) 4.dp else 16.dp, tween(220), label = "editor density")
     val paneGap by animateDpAsState(if (focused) 0.dp else 12.dp, tween(220), label = "editor pane gap")
     Column(Modifier.fillMaxSize().onPreviewKeyEvent {
@@ -47,29 +50,44 @@ internal fun MetadataEditorContent(controller: MetadataEditorController, timing:
         }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val wide = maxWidth >= 1000.dp
+            val importWidth = (maxWidth - 24.dp) / 2
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(paneGap)) {
                 AnimatedVisibility(!wide && !focused, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
-                    LyricsTabs(listOf("歌曲信息", "内嵌歌词"), page, { page = it })
+                    if (importing) LyricsTabs(listOf("当前草稿", "在线元数据"), importPage, { importPage = it })
+                    else LyricsTabs(listOf("歌曲信息", "内嵌歌词"), page, { page = it })
                 }
                 Row(Modifier.weight(1f).fillMaxWidth()) {
                     AnimatedVisibility(wide && !focused, enter = fadeIn() + expandHorizontally(), exit = fadeOut() + shrinkHorizontally()) {
                         Row {
-                            MetadataSidebar(controller, metadataExpanded, { metadataExpanded = it }, Modifier.fillMaxHeight())
+                            MetadataSidebar(controller, metadataExpanded, { metadataExpanded = it }, Modifier.fillMaxHeight(),
+                                importWidth = if (importing) importWidth else null)
                             Spacer(Modifier.width(24.dp))
                         }
                     }
                     Box(Modifier.weight(1f).fillMaxHeight()) {
                         if (wide || focused) {
-                            MetadataLyricsPanel(controller, timing, view, { page = 1; selectView(it) }, Modifier.fillMaxSize())
-                        } else LyricsPageTransition(page, { it }, Modifier.fillMaxSize()) { selected ->
-                            if (selected == 0) MetadataFieldsPanel(controller, Modifier.fillMaxSize())
-                            else MetadataLyricsPanel(controller, timing, view, { page = 1; selectView(it) }, Modifier.fillMaxSize())
+                            MetadataContentTransition(state.onlineImport, Modifier.fillMaxSize(), contentKey = { it != null }) { pending ->
+                                if (pending != null) MetadataImportPanel(controller, pending, Modifier.fillMaxSize())
+                                else MetadataLyricsPanel(controller, timing, view, { page = 1; selectView(it) }, Modifier.fillMaxSize())
+                            }
+                        } else MetadataContentTransition(state.onlineImport, Modifier.fillMaxSize(), contentKey = { it != null }) { pending ->
+                            if (pending != null) LyricsPageTransition(importPage, { it }, Modifier.fillMaxSize()) { selected ->
+                                if (selected == 0) MetadataFieldsPanel(controller, Modifier.fillMaxSize(), includeLyrics = true)
+                                else MetadataImportPanel(controller, pending, Modifier.fillMaxSize())
+                            } else LyricsPageTransition(page, { it }, Modifier.fillMaxSize()) { selected ->
+                                if (selected == 0) MetadataFieldsPanel(controller, Modifier.fillMaxSize())
+                                else MetadataLyricsPanel(controller, timing, view, { page = 1; selectView(it) }, Modifier.fillMaxSize())
+                            }
                         }
                     }
                 }
             }
         }
-        MetadataEditorActions(controller, focused)
+        MetadataEditorActions(controller, focused) {
+            importPage = 0
+            page = 1
+            controller.applyImport()
+        }
     }
 }
 
@@ -81,10 +99,11 @@ internal fun MetadataDiscardDialog(controller: MetadataEditorController) {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("有未保存的修改")
             Text(state.loaded?.path?.fileName?.toString().orEmpty())
-            Text("保存后继续，或放弃本次修改；继续编辑会取消离开。")
+            Text(if (state.onlineImport != null) "当前正在确认导入。返回编辑页完成或取消导入后，可保存草稿。"
+                else "保存后继续，或放弃本次修改；继续编辑会取消离开。")
             (state.previewError ?: state.status.takeIf { state.error })?.let { LyricsStatus(it, true) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DesktopButton("保存并继续", controller::saveAndContinue, enabled = state.canSaveAndContinue,
+                if (state.onlineImport == null) DesktopButton("保存并继续", controller::saveAndContinue, enabled = state.canSaveAndContinue,
                     loading = state.busy, primary = true)
                 DesktopButton("放弃修改", controller::discard, enabled = !state.busy)
                 DesktopButton("继续编辑", controller::cancelDiscard, enabled = !state.busy)

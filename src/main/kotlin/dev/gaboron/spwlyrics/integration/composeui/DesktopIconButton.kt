@@ -17,15 +17,21 @@ import com.moriafly.salt.ui.Text
 @Composable
 internal fun DesktopIconButton(label: String, glyph: DesktopGlyph, click: () -> Unit,
     modifier: Modifier = Modifier, enabled: Boolean = true) {
-    TooltipArea(tooltip = {
-        Box(Modifier.background(SaltTheme.colors.popup, SaltTheme.shapes.medium).padding(8.dp)) {
-            Text(label, style = SaltTheme.textStyles.sub)
-        }
-    }) {
+    DesktopTooltip(label) {
         Box(modifier.size(36.dp).desktopControlMotion(enabled).clip(SaltTheme.shapes.medium)
             .semantics { contentDescription = label }.clickable(enabled, role = Role.Button, onClick = click),
             contentAlignment = Alignment.Center) {
             DesktopIcon(glyph, SaltTheme.colors.text.copy(alpha = if (enabled) 1f else .4f), Modifier.size(18.dp))
         }
     }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+internal fun DesktopTooltip(label: String, content: @Composable () -> Unit) {
+    TooltipArea(tooltip = {
+        Box(Modifier.background(SaltTheme.colors.popup, SaltTheme.shapes.medium).padding(8.dp)) {
+            Text(label, style = SaltTheme.textStyles.sub)
+        }
+    }, content = content)
 }

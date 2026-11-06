@@ -2,6 +2,7 @@
 package dev.gaboron.spwlyrics.integration.hostui
 
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Alignment
 import androidx.compose.runtime.*
@@ -10,6 +11,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import dev.gaboron.spwlyrics.integration.composeui.DesktopGlyph
 import dev.gaboron.spwlyrics.integration.composeui.DesktopIcon
+import dev.gaboron.spwlyrics.integration.composeui.DesktopTheme
+import dev.gaboron.spwlyrics.integration.composeui.DesktopPopupMenu
+import dev.gaboron.spwlyrics.integration.composeui.LocalDesktopPopupMaterial
+import com.moriafly.salt.ui.popup.PopupMenuItem
 import dev.gaboron.spwlyrics.integration.workspace.LyricsWorkspace
 import dev.gaboron.spwlyrics.integration.workspace.LyricsToolPage
 import java.lang.invoke.MethodType
@@ -38,7 +43,6 @@ internal class HostUiBridge(val targets: HostUiDiscovery.Targets, private val lo
     var replaying = false
         private set
     private var navigator: Any? = null
-    private val openPage: () -> Unit = { workspace.open(LyricsToolPage.BATCH) }
 
     fun method(key: HostBytecodeIndex.Method): Method {
         val signature = MethodType.fromMethodDescriptorString(key.descriptor(), loader)
@@ -93,11 +97,30 @@ internal class HostUiBridge(val targets: HostUiDiscovery.Targets, private val lo
     }
 
     @Composable
+    @OptIn(com.moriafly.salt.ui.UnstableSaltUiApi::class)
     fun Entry() {
+        var expanded by remember { mutableStateOf(false) }
+        val dark = isDarkTheme()
         val icon: @Composable BoxScope.() -> Unit = {
-            DesktopIcon(DesktopGlyph.Lyrics, if (isDarkTheme()) Color.White else Color.Black,
+            DesktopIcon(DesktopGlyph.Lyrics, if (dark) Color.White else Color.Black,
                 Modifier.align(Alignment.Center).size(18.dp))
         }
-        caption.invoke(null, openPage, "歌词管理", Modifier, true, null, 0f, icon, currentComposer, 0, 32)
+        Box {
+            val openMenu: () -> Unit = { expanded = true }
+            caption.invoke(null, openMenu, "歌词管理", Modifier, true, null, 0f, icon, currentComposer, 0, 32)
+            DesktopTheme(dark) {
+                CompositionLocalProvider(LocalDesktopPopupMaterial provides popupSurface) {
+                    DesktopPopupMenu(expanded, { expanded = false }) {
+                        for ((title, target) in listOf("手动搜索歌词" to LyricsToolPage.SEARCH,
+                            "编辑元数据" to LyricsToolPage.METADATA, "批量管理" to LyricsToolPage.BATCH)) {
+                            PopupMenuItem(onClick = {
+                                expanded = false
+                                workspace.open(target)
+                            }, text = title)
+                        }
+                    }
+                }
+            }
+        }
     }
 }

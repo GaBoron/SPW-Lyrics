@@ -32,7 +32,7 @@ internal class BatchMetadataWriter(
         if (fields.isEmpty() && !cover && !lyrics) return "已有所选数据，无需补充"
 
         val candidate = if (fields.isNotEmpty() || cover) resolver.metadata(resolved.candidate) else resolved.candidate
-        var pending = OnlineMetadataImport.from(candidate).copy(selected = fields, fillMissing = options.fillMissing,
+        var pending = OnlineMetadataImport.from(candidate).copy(selected = fields,
             coverSelected = cover, lyricsSelected = lyrics,
             lyricsText = if (lyrics) MetadataLyricsExport.encode(resolved.document, MetadataLyricsFormat.TTML) else null)
         if (cover) {

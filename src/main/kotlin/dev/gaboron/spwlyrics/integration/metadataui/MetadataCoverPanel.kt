@@ -17,7 +17,9 @@ internal fun MetadataCoverPanel(controller: MetadataEditorController) {
     val enabled = state.loaded != null && !state.busy
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("封面", color = SaltTheme.colors.subText)
-        MetadataCoverPreview(state.draft.cover, "歌曲封面")
+        MetadataImportValue(state.draft.cover, state.importBefore?.cover, state.importBefore != null, { it == null }) {
+            MetadataCoverPreview(it, "歌曲封面")
+        }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             DesktopButton("选图", controller::importCover,
                 Modifier.weight(1f).semantics { contentDescription = "选择封面图片" }, enabled = enabled)

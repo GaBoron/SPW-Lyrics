@@ -10,6 +10,7 @@ import dev.gaboron.spwlyrics.codec.TtmlEditCodec
 import dev.gaboron.spwlyrics.codec.TtmlLyricRows
 import dev.gaboron.spwlyrics.codec.LyricEditTime
 import dev.gaboron.spwlyrics.codec.AudioArtworkImages
+import dev.gaboron.spwlyrics.codec.TtmlVocalParts
 import dev.gaboron.spwlyrics.application.OnlineArtworkImport
 import dev.gaboron.spwlyrics.codec.TimingWordPreparation
 import dev.gaboron.spwlyrics.domain.TimingSplit
@@ -18,6 +19,7 @@ import dev.gaboron.spwlyrics.domain.EditableLyrics
 import dev.gaboron.spwlyrics.domain.LyricsDocument
 import dev.gaboron.spwlyrics.domain.TrackQuery
 import dev.gaboron.spwlyrics.domain.AudioMetadataField
+import dev.gaboron.spwlyrics.domain.OnlineMetadataImport
 import dev.gaboron.spwlyrics.storage.AudioMetadataSnapshot
 import dev.gaboron.spwlyrics.storage.AudioMetadataSaved
 import dev.gaboron.spwlyrics.storage.AudioMetadataStore
@@ -30,8 +32,6 @@ import java.util.concurrent.TimeUnit
 internal interface MetadataEditorOperations {
     fun lyricsFormat(): MetadataLyricsFormat = MetadataLyricsFormat.TTML
     fun saveLyricsFormat(format: MetadataLyricsFormat): Boolean = true
-    fun metadataImportFillMissing(): Boolean = true
-    fun saveMetadataImportFillMissing(value: Boolean): Boolean = true
     fun currentAudioPath(): String?
     fun chooseAudioFile(): Path?
     fun chooseLyricsFile(): Path?
@@ -53,6 +53,8 @@ internal class MetadataEditorController(
     private val parser = Executors.newSingleThreadScheduledExecutor { Thread(it, "spw-lyrics-metadata-preview").apply { isDaemon = true } }
     private var previewTask: ScheduledFuture<*>? = null
     private var previewGeneration = 0
+    private var importGeneration = 0
+    private var importAnimation: javax.swing.Timer? = null
     @Volatile private var closed = false
 
     fun current() = requestDiscard {
@@ -79,12 +81,15 @@ internal class MetadataEditorController(
 
     fun field(field: AudioMetadataField, value: String) {
         if (closed || state.busy || state.loaded == null) return
-        state = state.copy(draft = state.draft.copy(fields = state.draft.fields + (field to value)), error = false)
+        if (state.draft[field] == value) return
+        state = state.copy(draft = state.draft.copy(fields = state.draft.fields + (field to value)),
+            onlineImport = state.onlineImport?.let { it.copy(selected = it.selected - field) }, error = false)
     }
 
     fun lyrics(text: String) {
         if (closed || state.busy || state.loaded == null) return
         state = state.copy(draft = state.draft.copy(lyrics = text),
+            onlineImport = state.onlineImport?.copy(lyricsSelected = false),
             structured = null, structuredError = null, lineEdits = emptyMap(), error = false)
         preview()
     }
@@ -140,7 +145,8 @@ internal class MetadataEditorController(
         val edits = (state.lineEdits + updated).filter { (id, line) -> line != base.lines.first { it.id == id } }
         previewTask?.cancel(false)
         val generation = ++previewGeneration
-        state = state.copy(lineEdits = edits, validating = true, previewError = null, error = false)
+        state = state.copy(lineEdits = edits, onlineImport = state.onlineImport?.copy(lyricsSelected = false),
+            validating = true, previewError = null, error = false)
         previewTask = parser.schedule({
             val result = runCatching {
                 val raw = if (edits.isEmpty()) base.raw else TtmlEditCodec.apply(base, edits)
@@ -195,7 +201,7 @@ internal class MetadataEditorController(
         val snapshot = state
         previewTask?.cancel(false)
         val generation = ++previewGeneration
-        state = state.copy(validating = true)
+        state = state.copy(validating = true, onlineImport = state.onlineImport?.copy(lyricsSelected = false))
         previewTask = parser.schedule({
             val result = runCatching { change(snapshot)?.let { (base, id) ->
                 Triple(base, id, runCatching { MetadataLyricsImport.preview(base.raw) })
@@ -229,13 +235,13 @@ internal class MetadataEditorController(
     }
 
     fun importSearch(query: TrackQuery, candidate: dev.gaboron.spwlyrics.domain.LyricsCandidate, document: LyricsDocument?, preserveDraft: Boolean = false) {
-        if (closed || state.busy) return
+        if (closed || state.busy || state.pendingWrite != null || state.pendingDiscard != null) return
         val sameFile = state.loaded?.path?.let { path ->
             runCatching { java.nio.file.Files.isSameFile(path, Path.of(query.path)) }.getOrDefault(false)
         } == true
-        if (preserveDraft && sameFile) {
+        if (sameFile && (preserveDraft || state.dirty)) {
             run({ prepareOnlineImport(candidate, document) }, { pending ->
-                state = state.copy(onlineImport = pending, status = "已读取在线信息、封面与可用歌词，原草稿已保留。请勾选并应用。")
+                beginImport(pending)
             })
         } else requestDiscard { loadSearch(query, candidate, document) }
     }
@@ -243,30 +249,32 @@ internal class MetadataEditorController(
     private fun loadSearch(query: TrackQuery, candidate: dev.gaboron.spwlyrics.domain.LyricsCandidate, document: LyricsDocument?) {
         run({ store.read(Path.of(query.path)) to prepareOnlineImport(candidate, document) }, { (snapshot, pending) ->
             loaded(snapshot)
-            state = state.copy(onlineImport = pending,
-                status = "已读取在线信息。请勾选字段、封面或歌词并应用到草稿；核对后写入歌曲文件。")
+            beginImport(pending)
         })
     }
 
     private fun prepareOnlineImport(candidate: dev.gaboron.spwlyrics.domain.LyricsCandidate, document: LyricsDocument?) =
         artworkImport.prepare(candidate).copy(
-            fillMissing = operations.metadataImportFillMissing(),
             lyricsText = document?.let { MetadataLyricsExport.encode(it, MetadataLyricsFormat.TTML) },
             lyricsDocument = document,
+            lyricsMainAgent = document?.let(TtmlVocalParts::mainAgent) ?: "v1",
         )
+
+    private fun beginImport(pending: OnlineMetadataImport) {
+        state = state.copy(onlineImport = pending.selectFor(state.draft), importId = ++importGeneration,
+            status = "勾选即替换，未勾选即保留。默认仅补充空项；应用到草稿后再核对并写入歌曲文件。")
+    }
 
     fun selectImport(field: AudioMetadataField, selected: Boolean) {
         val pending = state.onlineImport ?: return
-        if (!state.busy) state = state.copy(onlineImport = pending.copy(selected = if (selected) pending.selected + field else pending.selected - field))
+        if (!closed && !state.busy && !pending.fields[field].isNullOrBlank()) {
+            state = state.copy(onlineImport = pending.copy(selected = if (selected) pending.selected + field else pending.selected - field))
+        }
     }
 
-    fun importMode(fillMissing: Boolean) {
+    fun selectImportPreset(onlyMissing: Boolean) {
         val pending = state.onlineImport ?: return
-        if (closed || state.busy || pending.fillMissing == fillMissing) return
-        state = state.copy(onlineImport = pending.copy(fillMissing = fillMissing))
-        runCatching {
-            check(operations.saveMetadataImportFillMissing(fillMissing)) { "导入方式已切换，但未能记住本次选择，请检查本地数据目录权限。" }
-        }.onFailure { state = state.copy(error = true, status = it.message.orEmpty()) }
+        if (!closed && !state.busy) state = state.copy(onlineImport = pending.selectFor(state.draft, onlyMissing))
     }
 
     fun selectCoverImport() {
@@ -281,36 +289,51 @@ internal class MetadataEditorController(
 
     fun retryCoverImport() {
         val pending = state.onlineImport ?: return
-        run({ artworkImport.retry(pending) }, { state = state.copy(onlineImport = it, status = "在线封面已重新读取，请核对后应用。") })
+        run({ artworkImport.retry(pending) }, {
+            state = state.copy(onlineImport = it.copy(coverSelected = it.cover != null && state.draft.cover == null),
+                status = "在线封面已重新读取，请核对后应用。")
+        })
     }
 
     fun importCover() {
         if (closed || state.busy || state.loaded == null) return
         val path = operations.chooseCoverFile() ?: return
         run({ AudioArtworkImages.read(path) }, { image ->
-            state = state.copy(draft = state.draft.withCover(image), status = "封面已替换到草稿。点击“写入歌曲文件”保存。")
+            state = state.copy(draft = state.draft.withCover(image), onlineImport = state.onlineImport?.copy(coverSelected = false),
+                status = "封面已替换到草稿。点击“写入歌曲文件”保存。")
         })
     }
 
     fun removeCover() {
         if (!closed && !state.busy && state.loaded != null) state = state.copy(draft = state.draft.copy(artwork = emptyList()),
-            error = false, status = "草稿中的全部内嵌图片已移除。点击“写入歌曲文件”保存。")
+            onlineImport = state.onlineImport?.copy(coverSelected = false), error = false,
+            status = "草稿中的全部内嵌图片已移除。点击“写入歌曲文件”保存。")
     }
 
     fun restoreCover() {
         val original = state.loaded ?: return
         if (!closed && !state.busy) state = state.copy(draft = state.draft.copy(artwork = original.metadata.artwork),
-            error = false, status = "已恢复本次读取时的封面，其他草稿保留。")
+            onlineImport = state.onlineImport?.copy(coverSelected = false), error = false, status = "已恢复本次读取时的封面，其他草稿保留。")
     }
 
     fun applyImport() {
         val pending = state.onlineImport ?: return
-        if (state.busy || state.loaded == null) return
+        if (closed || state.busy || state.loaded == null || !pending.hasSelection) return
+        val before = state.draft
         val updated = pending.apply(state.draft)
-        val replacingLyrics = pending.lyricsSelected && pending.lyricsText != null && (!pending.fillMissing || state.draft.lyrics.isBlank())
-        if (replacingLyrics) lyrics(updated.lyrics)
-        state = state.copy(draft = updated, error = false,
-            status = "所选字段、封面和歌词已按导入模式应用到草稿。请核对后写入歌曲文件。")
+        if (updated.lyrics != before.lyrics) lyrics(updated.lyrics)
+        state = state.copy(draft = updated, onlineImport = pending, importBefore = before, busy = true, error = false,
+            status = "所选内容已应用到草稿。核对后点击“写入歌曲文件”保存。")
+        // Keep the comparison mounted until changed draft values finish moving in from the right.
+        importAnimation = javax.swing.Timer(420) {
+            if (!closed) state = state.copy(onlineImport = null, importBefore = null, busy = false)
+            importAnimation = null
+        }.apply { isRepeats = false; start() }
+    }
+
+    fun cancelImport() {
+        if (!closed && !state.busy) state = state.copy(onlineImport = null, error = false,
+            status = "已取消导入，手动修改已保留。")
     }
 
     fun openSearch() {
@@ -351,7 +374,7 @@ internal class MetadataEditorController(
 
     fun confirmWrite() {
         val request = state.pendingWrite ?: return
-        if (closed || state.busy) return
+        if (closed || state.busy || state.onlineImport != null) return
         state = state.copy(pendingWrite = null)
         write(request)
     }
@@ -435,6 +458,7 @@ internal class MetadataEditorController(
 
     override fun close() {
         closed = true
+        importAnimation?.stop()
         previewTask?.cancel(true)
         parser.shutdownNow()
         // An in-flight verified file write is allowed to finish when the plugin closes.

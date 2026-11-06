@@ -13,8 +13,19 @@ import dev.gaboron.spwlyrics.integration.composeui.*
 import dev.gaboron.spwlyrics.integration.workspace.*
 
 @Composable
-internal fun MetadataEditorActions(controller: MetadataEditorController, focused: Boolean = false) {
+internal fun MetadataEditorActions(controller: MetadataEditorController, focused: Boolean = false,
+    applyImport: () -> Unit = controller::applyImport) {
     val state = controller.state
+    val pending = state.onlineImport
+    if (pending != null) {
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            DesktopButton("取消导入", controller::cancelImport, enabled = !state.busy)
+            DesktopButton("应用到草稿", applyImport, enabled = !state.busy && pending.hasSelection,
+                primary = true, loading = state.importBefore != null, glyph = DesktopGlyph.Check)
+        }
+        return
+    }
     ProvideControlSize(if (focused) ControlSize.Small else ControlSize.Regular) {
         Row(Modifier.fillMaxWidth().animateContentSize(tween(240)), horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically) {

@@ -194,8 +194,6 @@ private class PluginRuntimeSession : AutoCloseable {
         val metadataOperations = object : MetadataEditorOperations {
             override fun lyricsFormat() = MetadataLyricsFormat.fromStorageValue(uiState.lyricsFormat())
             override fun saveLyricsFormat(format: MetadataLyricsFormat) = uiState.rememberLyricsFormat(format.storageValue)
-            override fun metadataImportFillMissing() = uiState.metadataImportFillMissing()
-            override fun saveMetadataImportFillMissing(value: Boolean) = uiState.rememberMetadataImportFillMissing(value)
             override fun currentAudioPath() = currentQuery()?.path
             override fun chooseAudioFile() = MetadataFilePicker.audio()
             override fun chooseLyricsFile() = MetadataFilePicker.lyrics()

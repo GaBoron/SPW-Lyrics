@@ -21,6 +21,8 @@ internal data class MetadataWriteRequest(
 internal data class MetadataEditorState(
     val loaded: AudioMetadataSnapshot? = null,
     val onlineImport: dev.gaboron.spwlyrics.domain.OnlineMetadataImport? = null,
+    val importId: Int = 0,
+    val importBefore: AudioMetadata? = null,
     val draft: AudioMetadata = AudioMetadata(),
     val format: MetadataLyricsFormat = MetadataLyricsFormat.TTML,
     val lyricsWritingEnabled: Boolean = true,
@@ -42,7 +44,7 @@ internal data class MetadataEditorState(
     val dirty get() = loaded != null && (draft != loaded.metadata || lineEdits.isNotEmpty())
     val lyricsChanged get() = loaded != null && draft.lyrics != loaded.metadata.lyrics
     val canEditRows get() = loaded != null && !busy && structuredError == null && (structured != null || draft.lyrics.isBlank())
-    private val canWrite get() = loaded != null && (dirty || lyricsWritingEnabled && preview != null) && !busy && pendingWrite == null &&
+    private val canWrite get() = loaded != null && onlineImport == null && (dirty || lyricsWritingEnabled && preview != null) && !busy && pendingWrite == null &&
         (draft.lyrics.isBlank() || !validating && (previewError == null || !lyricsChanged && lineEdits.isEmpty()))
     val canSave get() = canWrite && pendingDiscard == null
     val canSaveAndContinue get() = canWrite && pendingDiscard != null

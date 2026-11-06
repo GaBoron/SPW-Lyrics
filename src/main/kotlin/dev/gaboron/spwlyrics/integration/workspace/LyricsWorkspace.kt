@@ -3,6 +3,7 @@ package dev.gaboron.spwlyrics.integration.workspace
 import androidx.compose.runtime.*
 import dev.gaboron.spwlyrics.domain.LyricsDocument
 import dev.gaboron.spwlyrics.domain.TrackQuery
+import dev.gaboron.spwlyrics.integration.metadataui.MetadataLyricsView
 import java.awt.EventQueue
 
 /** Owns the host page session. Hook integration supplies readiness and navigation activation. */
@@ -31,6 +32,7 @@ internal class LyricsWorkspace(private val createSession: () -> LyricsWorkspaceS
         open()
         session?.let { active ->
             active.select(LyricsToolPage.METADATA, initialize = false)
+            if (active.lyricsView == MetadataLyricsView.TIMING) active.selectLyricsView(MetadataLyricsView.STRUCTURED)
             if (active.metadata.state.busy) onFailure("元数据正在读写，请完成后重试导入。")
             else active.metadata.importSearch(query, candidate, document, preserveDraft)
         }
