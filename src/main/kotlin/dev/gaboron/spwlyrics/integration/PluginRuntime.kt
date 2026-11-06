@@ -143,7 +143,10 @@ private class PluginRuntimeSession : AutoCloseable {
                 performance.measure(Operation.SODA) { SodaMusicProvider(http) },
                 performance.measure(Operation.APPLE) { AppleMusicProvider(http) },
                 performance.measure(Operation.LRCSHARE) {
-                    LrcShareProvider(http, cacheDirectory.resolve("LrcShare 目录"))
+                    LrcShareProvider(
+                        ProviderHttpClient(connectTimeout = Duration.ofSeconds(5), requestTimeout = Duration.ofSeconds(12)),
+                        cacheDirectory.resolve("LrcShare 目录"),
+                    )
                 },
                 performance.measure(Operation.MUSICBRAINZ) { MusicBrainzProvider(http) },
                 performance.measure(Operation.LOCAL) { LocalLyricsProvider() },

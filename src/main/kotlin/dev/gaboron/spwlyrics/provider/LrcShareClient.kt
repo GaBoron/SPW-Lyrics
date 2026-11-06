@@ -19,6 +19,10 @@ internal class LrcShareClient(
     private var retryAfter: Long? = null
     private var rejectedSession: String? = null
     private var loaded = false
+    private data class Response(val data: JsonObject, val expires: Long)
+    private val responses = object : LinkedHashMap<String, Response>(32, .75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Response>?): Boolean = size > 64
+    }
 
     fun search(title: String, artists: List<String>, limit: Int): JsonObject? {
         val requestedArtists = artists.map(String::trim).filter(String::isNotBlank)
@@ -81,6 +85,7 @@ internal class LrcShareClient(
 
     private fun raw(path: String, session: String? = null): JsonObject {
         if (Thread.currentThread().isInterrupted) throw InterruptedException("LrcShare request cancelled")
+        responses[path]?.takeIf { it.expires > clock.millis() }?.let { return it.data }
         check(retryAfter?.let { System.nanoTime() - it < 0 } != true) { "LrcShare 请求失败，稍后重试。" }
         completedAt?.let { previous ->
             val remaining = REQUEST_INTERVAL_NANOS - (System.nanoTime() - previous)
@@ -90,7 +95,12 @@ internal class LrcShareClient(
             val root = providerJson.parseToJsonElement(LrcShareAccess.request(http, path, session)) as JsonObject
             val code = root.long("code")
             check(code == 200L) { "LrcShare HTTP $code" }
-            checkNotNull(root.obj("data")) { "LrcShare 响应缺少数据" }
+            val data = checkNotNull(root.obj("data")) { "LrcShare 响应缺少数据" }
+            if (path != "/catalog") {
+                val lifetime = if (path.startsWith("/song/")) TimeUnit.HOURS.toMillis(1) else TimeUnit.MINUTES.toMillis(10)
+                responses[path] = Response(data, clock.millis() + lifetime)
+            }
+            data
         } catch (error: Exception) {
             if (error !is InterruptedException && !Thread.currentThread().isInterrupted) {
                 // Avoid per-song retries during an outage, rejected session, or rate limit.

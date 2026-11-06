@@ -13,12 +13,13 @@ class LrcShareProvider(
     http: ProviderHttpClient,
     cacheDirectory: Path,
     clock: Clock = Clock.systemUTC(),
-) : LyricsProvider {
+) : LyricsProvider, AutoCloseable {
     override val source = LyricsSource.LRCSHARE
     private val details = MetadataEnrichment()
     override fun configurationStatus(): ProviderSearchStatus? = if (LrcShareAccess.available) null else
         ProviderSearchStatus(source, ProviderSearchPhase.NOT_CONFIGURED, "此构建未包含 LrcShare 凭据，请使用正式安装包。")
     private val client = LrcShareClient(http, cacheDirectory, clock)
+    private val manual = LrcShareManualSearch(client::searchKeywords)
 
     override fun automaticSearchQueries(query: TrackQuery): List<String> =
         listOf(query.title, TextNormalizer.removeVersionNoise(query.title)).map(String::trim).filter(String::isNotBlank).distinct()
@@ -37,7 +38,8 @@ class LrcShareProvider(
 
     override fun searchManual(query: TrackQuery, keywords: String, limit: Int,
         onStatus: (ProviderSearchStatus) -> Unit): List<LyricsCandidate> {
-        val data = client.searchKeywords(keywords, limit)
+        val result = manual.search(keywords, limit, onStatus) ?: return emptyList()
+        val data = result.data
         val candidates = candidates(data, limit)
         val detail = when {
             data == null -> "本地目录中没有匹配文本，已跳过在线搜索。"
@@ -95,4 +97,6 @@ class LrcShareProvider(
         }.onFailure { if (it is InterruptedException || Thread.currentThread().isInterrupted) throw it }.getOrNull() else null
         LrcShareLyricsCodec.parse(detail, full, source)?.let { LyricsContentFilter.clean(it, candidate) }
     }.onFailure { if (it is InterruptedException || Thread.currentThread().isInterrupted) throw it }.getOrNull()
+
+    override fun close() = manual.close()
 }
