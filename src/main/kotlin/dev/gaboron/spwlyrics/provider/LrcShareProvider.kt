@@ -15,6 +15,7 @@ class LrcShareProvider(
     clock: Clock = Clock.systemUTC(),
 ) : LyricsProvider, AutoCloseable {
     override val source = LyricsSource.LRCSHARE
+    override val automaticSearchBudgetMillis = 30_000L
     private val details = MetadataEnrichment()
     override fun configurationStatus(): ProviderSearchStatus? = if (LrcShareAccess.available) null else
         ProviderSearchStatus(source, ProviderSearchPhase.NOT_CONFIGURED, "此构建未包含 LrcShare 凭据，请使用正式安装包。")

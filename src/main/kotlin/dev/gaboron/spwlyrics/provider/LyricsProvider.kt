@@ -9,6 +9,8 @@ import dev.gaboron.spwlyrics.domain.ProviderSearchPhase
 
 interface LyricsProvider {
     val source: LyricsSource
+    /** Soft budget for metadata lookup and lyric fetch; individual HTTP requests remain bounded. */
+    val automaticSearchBudgetMillis: Long get() = 12_000
     /** Local configuration only; this check must never wait for network work. */
     fun configurationStatus(): ProviderSearchStatus? = null
     fun automaticSearchQueries(query: TrackQuery): List<String> = query.searchQueries()

@@ -55,7 +55,6 @@ class LyricsResolver(
             minimumQuality = LyricsQuality.PLAIN,
             onSnapshot = {},
             onProgress = onProgress,
-            completionDeadlineNanos = now + TimeUnit.MILLISECONDS.toNanos(FULL_SEARCH_TIMEOUT_MILLIS),
         )
     }
 
@@ -70,6 +69,8 @@ class LyricsResolver(
     ): ResolvedLyrics? {
         val order = preferences()
         val selected = order.sources.filter { it != LyricsSource.LOCAL && it.hasLyrics }.mapNotNull(providers::get)
+        val fullTimeoutMillis = maxOf(FULL_SEARCH_TIMEOUT_MILLIS,
+            (selected.maxOfOrNull { it.automaticSearchBudgetMillis } ?: 0) + PROVIDER_FINISH_ALLOWANCE_MILLIS)
         onProgress(LyricsResolutionProgress(LyricsResolutionStage.SEARCHING, 0.04, "开始并行搜索 ${selected.size} 个歌词来源"))
         val completed = taskPool.collectProgressively(
             tasks = selected.map { provider ->
@@ -77,14 +78,14 @@ class LyricsResolver(
                     resolveProvider(
                         provider,
                         query,
-                        System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(PROVIDER_SEARCH_BUDGET_MILLIS),
+                        System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(provider.automaticSearchBudgetMillis),
                         minimumQuality,
                     )
                 }
             },
             snapshotDeadlineNanos = snapshotDeadlineNanos,
             completionDeadlineNanos = minOf(completionDeadlineNanos,
-                System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(FULL_SEARCH_TIMEOUT_MILLIS)),
+                System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(fullTimeoutMillis)),
             snapshotWhen = { results, _ -> results.isNotEmpty() },
             stopWhen = { results, pending -> unbeatable(results, pending, selected, order) },
             onProgress = { results, pending ->
@@ -217,7 +218,7 @@ class LyricsResolver(
     }
 
     private companion object {
-        const val PROVIDER_SEARCH_BUDGET_MILLIS = 12_000L
+        const val PROVIDER_FINISH_ALLOWANCE_MILLIS = 8_000L
         const val FULL_SEARCH_TIMEOUT_MILLIS = 20_000L
     }
 }
