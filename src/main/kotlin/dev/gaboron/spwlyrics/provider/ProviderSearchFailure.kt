@@ -6,7 +6,6 @@ import dev.gaboron.spwlyrics.domain.ProviderSearchStatus
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
-import java.net.http.HttpTimeoutException
 import java.util.concurrent.TimeoutException
 import javax.net.ssl.SSLException
 
@@ -14,7 +13,7 @@ import javax.net.ssl.SSLException
 internal object ProviderSearchFailure {
     fun status(source: LyricsSource, error: Throwable): ProviderSearchStatus {
         val causes = generateSequence(error) { it.cause }.take(12).toList()
-        val timeout = causes.any { it is SocketTimeoutException || it is HttpTimeoutException || it is TimeoutException }
+        val timeout = causes.any { it is SocketTimeoutException || it is TimeoutException }
         val detail = when {
             timeout -> "请求超时，请稍后重试。"
             causes.any { it is SSLException } -> "TLS 握手失败，请检查网络或代理。"
