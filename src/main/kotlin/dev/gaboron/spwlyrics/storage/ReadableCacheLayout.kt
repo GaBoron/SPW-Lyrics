@@ -21,6 +21,10 @@ internal class ReadableCacheLayout(private val root: Path) {
     fun override(query: TrackQuery): Path = overridesDirectory.resolve(fileName(query))
 
     private fun fileName(query: TrackQuery): String {
+        if (query.isExternalPlayback) {
+            val identity = sanitize("${query.playbackProvider} - ${query.playbackUri}").take(MAX_READABLE_LENGTH)
+            return "$identity [${query.key.take(KEY_SUFFIX_LENGTH)}].json"
+        }
         val artist = query.artists.take(3).joinToString("、").ifBlank { "未知歌手" }
         val title = query.title.ifBlank { "未知曲名" }
         val readable = sanitize("$artist - $title").take(MAX_READABLE_LENGTH).trimEnd(' ', '.')

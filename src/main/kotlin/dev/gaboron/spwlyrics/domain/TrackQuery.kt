@@ -14,10 +14,16 @@ data class TrackQuery(
     val durationMs: Long? = null,
     val externalIds: Map<String, String> = emptyMap(),
     val trackId: String = "",
+    val playbackProvider: String = "",
+    val playbackUri: String = "",
+    val playbackSessionId: String = "",
+    val playbackTrackRevision: Long = 0,
 ) {
+    val isExternalPlayback: Boolean get() = playbackUri.isNotBlank()
+
     val key: String
         get() {
-            val identity = listOf(
+            val identity = if (isExternalPlayback) "$playbackProvider|$playbackUri" else listOf(
                 path.trim().lowercase(),
                 TextNormalizer.normalize(title),
                 artists.joinToString("/") { TextNormalizer.normalize(it) },

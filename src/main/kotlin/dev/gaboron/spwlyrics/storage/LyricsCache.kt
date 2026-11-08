@@ -61,7 +61,8 @@ interface LyricsCache {
 }
 
 /** File selection survives rescans that change the library's title and artist metadata. */
-private fun savedLyricsQuery(query: TrackQuery) = TrackQuery("", emptyList(), "", path = query.path)
+private fun savedLyricsQuery(query: TrackQuery) = if (query.isExternalPlayback) query
+    else TrackQuery("", emptyList(), "", path = query.path)
 
 class FileLyricsCache(
     private val root: Path,

@@ -11,7 +11,7 @@ import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
 
 /** Keeps library IDs only for the current plugin session; cache keys remain recording based. */
-internal class SpwLibraryTrackSource {
+internal class SpwLibraryTrackSource(private val external: () -> TrackQuery? = { null }) {
     private val byId = ConcurrentHashMap<String, MediaItem>()
 
     fun load(): List<TrackQuery> = load(timeoutSeconds = null)
@@ -43,6 +43,7 @@ internal class SpwLibraryTrackSource {
 
     /** Only resolution workers may wait for library metadata; cache hits never need it. */
     fun prepare(query: TrackQuery): TrackQuery {
+        if (query.isExternalPlayback) return query
         if (query.durationMs != null || query.trackId.isBlank()) return query
         val cached = byId[query.trackId]?.takeIf { it.path == query.path && it.title == query.title }
         val found = cached ?: lookupMetadata(query) ?: return query
@@ -50,6 +51,7 @@ internal class SpwLibraryTrackSource {
     }
 
     fun current(): TrackQuery? {
+        external()?.let { return it }
         requirePermission()
         return WorkshopApi.playback.getCurrentMediaItem()?.also { item ->
             if (item.id.isNotBlank()) byId[item.id] = item

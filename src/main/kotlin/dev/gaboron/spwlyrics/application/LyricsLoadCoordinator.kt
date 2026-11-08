@@ -70,38 +70,46 @@ class LyricsLoadCoordinator(
         localTtml: (() -> LyricsDocument?)? = null,
         localEmbedded: (() -> LyricsDocument?)? = null,
     ): String? {
-        synchronized(selectionLock) {
+        val expectedRevision = synchronized(selectionLock) {
             if (closed) return null
-            if (current.getAndSet(query)?.key != query.key) {
+            val previous = current.getAndSet(query)
+            val externalChanged = query.isExternalPlayback && (previous?.playbackSessionId != query.playbackSessionId ||
+                previous.playbackTrackRevision != query.playbackTrackRevision)
+            if (previous?.key != query.key || externalChanged) {
                 selectionRevision++
-                tasks.cancelExcept(query.key, upgradeKey(query))
+                if (externalChanged) tasks.cancelAll() else tasks.cancelExcept(query.key, upgradeKey(query))
             }
+            selectionRevision
         }
         val override = cache.getSelection(query)
-        if (phase == LyricsLoadPhase.BEFORE_LOCAL) {
-            val local = when {
-                override?.embedded == true -> localEmbedded?.invoke()
-                override?.candidate == null -> localTtml?.invoke()
-                else -> null
+        return synchronized(selectionLock) {
+            if (closed || !isCurrent(query) || selectionRevision != expectedRevision) return@synchronized null
+            if (phase == LyricsLoadPhase.BEFORE_LOCAL) {
+                val local = when {
+                    override?.embedded == true -> localEmbedded?.invoke()
+                    override?.candidate == null -> localTtml?.invoke()
+                    else -> null
+                }
+                localLyrics.set(local?.let { query.key to it })
+                if (local != null) return@synchronized render(query, local)
+            } else if (override?.candidate == null) {
+                // Reuse the local TTML document if SPW also invokes its after-missing hook.
+                localLyrics.get()?.takeIf { it.first == query.key }?.let { return@synchronized render(query, it.second) }
             }
-            localLyrics.set(local?.let { query.key to it })
-            if (local != null) return render(query, local)
-        } else if (override?.candidate == null) {
-            // Reuse the local TTML document if SPW also invokes its after-missing hook.
-            localLyrics.get()?.takeIf { it.first == query.key }?.let { return render(query, it.second) }
-        }
-        if (override?.local == true) return followHost(query)
-        val automaticLoadAllowed = replacementPolicy.allowsAutomaticLoad(phase)
-        if (override?.candidate == null && !automaticLoadAllowed) return followHost(query)
-        cache.getLyrics(query)?.takeIf { override?.candidate != null || it.selectionKey == resolver.selectionKey() }?.let { cached ->
-            notifiedFailures.remove(query.key)
-            if (override?.candidate == null && !tasks.contains(query.key)) {
-                startQualityUpgradeIfNeeded(query, resolvedFromCache(query, cached))
+            if (override?.local == true) return@synchronized followHost(query)
+            val automaticLoadAllowed = replacementPolicy.allowsAutomaticLoad(phase)
+            if (override?.candidate == null && !automaticLoadAllowed) return@synchronized followHost(query)
+            cache.getLyrics(query)?.takeIf { override?.candidate != null || it.selectionKey == resolver.selectionKey() }?.let { cached ->
+                notifiedFailures.remove(query.key)
+                if (override?.candidate == null && !tasks.contains(query.key)) {
+                    startQualityUpgradeIfNeeded(query, resolvedFromCache(query, cached))
+                }
+                return@synchronized render(query, cached.document, cached.encoded)
             }
-            return render(query, cached.document, cached.encoded)
+            startLoad(query, override?.candidate)
+            // Delivery takes the same lock, so a fast result follows this initial handback.
+            followHost(query)
         }
-        startLoad(query, override?.candidate)
-        return followHost(query)
     }
 
     /** Warms disk entries and shares an unfinished speculative search with later playback. */
@@ -131,14 +139,14 @@ class LyricsLoadCoordinator(
 
     fun applyManual(query: TrackQuery, candidate: LyricsCandidate): Boolean {
         val expectedRevision = synchronized(selectionLock) {
-            if (closed || current.get()?.key != query.key) return false
+            if (closed || !isCurrent(query)) return false
             ++selectionRevision
         }
         tasks.cancel(upgradeKey(query))
         val resolved = resolver.fetchManual(candidate) ?: return false
         val cached = resolver.toCache(resolved)
         synchronized(selectionLock) {
-            if (closed || current.get()?.key != query.key || selectionRevision != expectedRevision) return false
+            if (closed || !isCurrent(query) || selectionRevision != expectedRevision) return false
             tasks.cancel(query.key)
             tasks.cancel(upgradeKey(query))
             cache.putOverride(query, ManualOverride(local = false, source = candidate.source, candidate = candidate))
@@ -214,7 +222,7 @@ class LyricsLoadCoordinator(
     }
 
     private fun followHost(query: TrackQuery): String? {
-        output?.followHost(query)
+        if (isCurrent(query)) output?.followHost(query)
         return null
     }
 
@@ -316,6 +324,7 @@ class LyricsLoadCoordinator(
     }
 
     private fun render(query: TrackQuery, document: LyricsDocument, encoded: String? = null): String? {
+        if (!isCurrent(query)) return null
         val delay = delays?.get(query) ?: 0
         if (output != null) return output.render(query, document, delay, encoded)
         if (document.isInstrumental) return ""
@@ -323,8 +332,13 @@ class LyricsLoadCoordinator(
     }
 
     private fun offer(query: TrackQuery, document: LyricsDocument) {
-        output?.offer(query, document, delays?.get(query) ?: 0)
+        if (isCurrent(query)) output?.offer(query, document, delays?.get(query) ?: 0)
     }
+
+    private fun isCurrent(query: TrackQuery): Boolean = current.get()?.let {
+        it.key == query.key && it.playbackSessionId == query.playbackSessionId &&
+            it.playbackTrackRevision == query.playbackTrackRevision
+    } == true
 
     override fun close() {
         synchronized(selectionLock) {

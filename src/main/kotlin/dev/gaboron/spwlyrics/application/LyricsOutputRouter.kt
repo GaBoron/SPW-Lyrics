@@ -16,6 +16,8 @@ interface NativeTtmlReceiver : AutoCloseable {
     fun select(query: TrackQuery, rawTtml: String?, offsetMs: Long): Boolean =
         rawTtml != null && submit(query, rawTtml, offsetMs)
     fun clear(query: TrackQuery)
+    /** A playback provider can accept the complete document without a host lyric reload. */
+    fun selectDocument(query: TrackQuery, document: LyricsDocument?, offsetMs: Int): Boolean? = null
     override fun close() {}
 }
 
@@ -126,9 +128,10 @@ class LyricsOutputRouter(
             if (processedRevision == expectedRevision && receiverState == state) return
         }
         val raw = selected.document?.takeUnless { it.isInstrumental || it.lines.isEmpty() }?.rawTtml
-        val accepted = state != null && runCatching {
+        val accepted = runCatching { receiver.selectDocument(selected.query, selected.document, selected.delayMs) }.getOrNull()
+            ?: (state != null && runCatching {
             receiver.select(selected.query, raw, if (raw == null) 0 else selected.delayMs.toLong())
-        }.getOrDefault(false)
+        }.getOrDefault(false))
         if (!accepted) runCatching { receiver.clear(selected.query) }
         val stillCurrent = current(selected.query)
         val shouldRefresh = synchronized(lock) {
@@ -168,5 +171,7 @@ class LyricsOutputRouter(
     }
 
     private fun sameTrack(left: TrackQuery, right: TrackQuery): Boolean =
-        left.path == right.path && (left.trackId.isBlank() || right.trackId.isBlank() || left.trackId == right.trackId)
+        if (left.isExternalPlayback || right.isExternalPlayback) left.playbackUri == right.playbackUri &&
+            left.playbackSessionId == right.playbackSessionId && left.playbackTrackRevision == right.playbackTrackRevision
+        else left.path == right.path && (left.trackId.isBlank() || right.trackId.isBlank() || left.trackId == right.trackId)
 }

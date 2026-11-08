@@ -2,6 +2,8 @@ package dev.gaboron.spwlyrics.integration
 
 import dev.gaboron.spwlyrics.application.NativeTtmlReceiver
 import dev.gaboron.spwlyrics.domain.TrackQuery
+import dev.gaboron.spwlyrics.domain.LyricsDocument
+import dev.gaboron.spwlyrics.codec.SpwLyricsEncoder
 import java.lang.management.ManagementFactory
 import java.util.concurrent.atomic.AtomicLong
 import javax.management.MBeanServer
@@ -13,6 +15,7 @@ import javax.management.ObjectName
 /** Protocol 1 uses JDK types only, across the two plugins' isolated PF4J class loaders. */
 internal class JmxTtmlReceiver(
     private val server: MBeanServer = ManagementFactory.getPlatformMBeanServer(),
+    private val external: ExternalPlaybackClient = ExternalPlaybackClient(),
 ) : NativeTtmlReceiver {
     private val generation = AtomicLong()
     private val listener = NotificationListener { notification, _ ->
@@ -21,6 +24,7 @@ internal class JmxTtmlReceiver(
     private var listening = false
 
     override fun state(): Any? {
+        external.snapshot()?.let { return it.identity }
         if (!listening) {
             server.addNotificationListener(MBeanServerDelegate.DELEGATE_NAME, listener, null, null)
             listening = true
@@ -46,10 +50,28 @@ internal class JmxTtmlReceiver(
     }
 
     override fun clear(query: TrackQuery) {
+        if (query.isExternalPlayback) {
+            matchingExternal(query)?.let(external::clear)
+            return
+        }
         if (query.path.isNotBlank() && state() != null) server.invoke(
             NAME, "clearTtml", arrayOf(query.trackId, query.path),
             arrayOf("java.lang.String", "java.lang.String"),
         )
+    }
+
+    override fun selectDocument(query: TrackQuery, document: LyricsDocument?, offsetMs: Int): Boolean? {
+        if (!query.isExternalPlayback) return null
+        val track = matchingExternal(query) ?: return false
+        val empty = document == null || document.isInstrumental || document.lines.isEmpty()
+        val spl = if (empty) "" else SpwLyricsEncoder.encode(checkNotNull(document))
+        val raw = document?.rawTtml.takeUnless { empty }
+        return external.submit(track, if (empty) "empty" else if (raw != null) "ttml" else "lrc",
+            raw ?: spl, spl, offsetMs.toLong())
+    }
+
+    private fun matchingExternal(query: TrackQuery): ExternalPlayback? = external.snapshot()?.takeIf {
+        it.sessionId == query.playbackSessionId && it.trackRevision == query.playbackTrackRevision && it.uri == query.playbackUri
     }
 
     override fun close() {

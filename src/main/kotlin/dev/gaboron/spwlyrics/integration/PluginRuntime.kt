@@ -11,6 +11,7 @@ import dev.gaboron.spwlyrics.application.LyricsBatchProcessor
 import dev.gaboron.spwlyrics.application.LyricsResolver
 import dev.gaboron.spwlyrics.application.LyricsPrecache
 import dev.gaboron.spwlyrics.application.LyricsOutputRouter
+import dev.gaboron.spwlyrics.application.LyricsRefreshBridge
 import dev.gaboron.spwlyrics.application.LyricsStartupRecovery
 import dev.gaboron.spwlyrics.codec.MetadataLyricsFormat
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
@@ -105,7 +106,9 @@ private class PluginRuntimeSession : AutoCloseable {
     @Volatile private var hostUi: HostUiIntegration? = null
     @Volatile private var settings: PluginSettings? = null
     @Volatile private var cacheFolderOpener: CacheFolderOpener? = null
-    private val libraryTracks = SpwLibraryTrackSource()
+    private val externalPlayback = ExternalPlaybackClient()
+    @Volatile private var externalTrack: ExternalPlayback? = null
+    private val libraryTracks = SpwLibraryTrackSource { externalPlayback.snapshot()?.toQuery() }
     private val localTtmlLyrics = LocalTtmlLyricsLoader()
 
     @Synchronized
@@ -155,16 +158,30 @@ private class PluginRuntimeSession : AutoCloseable {
         val resolver = performance.measure(Operation.RESOLVER) {
             LyricsResolver(providers, preferences = { settings?.lyricsPreferences() ?: dev.gaboron.spwlyrics.domain.LyricsPreferences() })
         }
-        val refreshBridge = ReflectiveLyricsRefreshBridge()
+        val hostRefreshBridge = ReflectiveLyricsRefreshBridge()
+        val refreshBridge = object : LyricsRefreshBridge {
+            override fun reloadCurrentLyrics(): Boolean {
+                val track = externalPlayback.snapshot()
+                if (track != null) {
+                    loadExternal(track)
+                    return true
+                }
+                return hostRefreshBridge.reloadCurrentLyrics()
+            }
+        }
         startupRecovery = LyricsStartupRecovery(maintenance, libraryTracks::current, refreshBridge) {
             SpwLyricsExtension.discovered
         }
         val output = LyricsOutputRouter(
-            receiver = JmxTtmlReceiver(),
+            receiver = JmxTtmlReceiver(external = externalPlayback),
             isCurrent = { query ->
-                WorkshopApi.playback.getCurrentMediaItem()?.let { item ->
-                    item.path == query.path && (query.trackId.isBlank() || item.id.isBlank() || query.trackId == item.id)
-                } == true
+                if (query.isExternalPlayback) externalPlayback.snapshot()?.let {
+                    it.uri == query.playbackUri && it.sessionId == query.playbackSessionId &&
+                        it.trackRevision == query.playbackTrackRevision
+                } == true else externalPlayback.snapshot() == null &&
+                    WorkshopApi.playback.getCurrentMediaItem()?.let { item ->
+                        item.path == query.path && (query.trackId.isBlank() || item.id.isBlank() || query.trackId == item.id)
+                    } == true
             },
             refresh = { refreshBridge.reloadCurrentLyrics() },
         )
@@ -214,7 +231,7 @@ private class PluginRuntimeSession : AutoCloseable {
         val metadataOperations = object : MetadataEditorOperations {
             override fun lyricsFormat() = MetadataLyricsFormat.fromStorageValue(uiState.lyricsFormat())
             override fun saveLyricsFormat(format: MetadataLyricsFormat) = uiState.rememberLyricsFormat(format.storageValue)
-            override fun currentAudioPath() = currentQuery()?.path
+            override fun currentAudioPath() = currentQuery()?.path?.takeIf(String::isNotBlank)
             override fun chooseAudioFile() = MetadataFilePicker.audio()
             override fun chooseLyricsFile() = MetadataFilePicker.lyrics()
             override fun chooseCoverFile() = MetadataFilePicker.cover()
@@ -244,6 +261,7 @@ private class PluginRuntimeSession : AutoCloseable {
                 isCurrentTrack(query) && coordinator?.setDelay(query, delayMs) == true
             override fun metadata(candidate: LyricsCandidate) = resolver.metadata(candidate)
             override fun editMetadata(query: TrackQuery, candidate: LyricsCandidate, document: LyricsDocument?, preserveDraft: Boolean) {
+                check(!query.isExternalPlayback) { "Spotify 歌曲的标签与歌词选择保存在插件中。写入文件请先打开本地歌曲。" }
                 workspace?.importSearch(query, candidate, document, preserveDraft)
             }
         }
@@ -268,6 +286,17 @@ private class PluginRuntimeSession : AutoCloseable {
             }
         }
         maintenance.scheduleWithFixedDelay({ if (!closed) performance.report("running") }, 60, 60, java.util.concurrent.TimeUnit.SECONDS)
+        maintenance.scheduleWithFixedDelay({
+            if (!closed) runCatching {
+                val next = externalPlayback.snapshot()
+                val previous = externalTrack
+                externalTrack = next
+                val selected = coordinator?.currentQuery()
+                if (next != null && (next.identity != previous?.identity || selected?.playbackSessionId != next.sessionId ||
+                    selected.playbackTrackRevision != next.trackRevision || selected.playbackUri != next.uri)) loadExternal(next)
+                else if (next == null && previous != null) hostRefreshBridge.reloadCurrentLyrics()
+            }
+        }, 0, 500, java.util.concurrent.TimeUnit.MILLISECONDS)
     }
 
     fun recoverCurrentLyrics() = startupRecovery?.start()
@@ -340,6 +369,7 @@ private class PluginRuntimeSession : AutoCloseable {
         localTtml: (() -> LyricsDocument?)? = null,
     ): String? {
         if (closed) return null
+        if (externalPlayback.snapshot() != null) return null
         val query = libraryTracks.fromLyricsCallback(mediaItem)
         val result = coordinator?.onLoad(
             query,
@@ -352,6 +382,19 @@ private class PluginRuntimeSession : AutoCloseable {
         precache?.trackChanged(query)
         return result
     }
+
+    private fun loadExternal(track: ExternalPlayback) {
+        if (closed || externalPlayback.snapshot()?.identity != track.identity) return
+        val query = track.toQuery()
+        val policy = settings?.automaticReplacementPolicy() ?: AutomaticReplacementPolicy.ALWAYS
+        coordinator?.onLoad(query, LyricsLoadPhase.BEFORE_LOCAL, policy)
+        if (policy == AutomaticReplacementPolicy.WHEN_LOCAL_MISSING)
+            coordinator?.onLoad(query, LyricsLoadPhase.AFTER_LOCAL_MISSING, policy)
+    }
+
+    private fun ExternalPlayback.toQuery() = TrackQuery(title, TrackQuery.splitArtists(artist), album,
+        durationMs = durationMs.takeIf { it > 0 }, trackId = uri,
+        playbackProvider = provider, playbackUri = uri, playbackSessionId = sessionId, playbackTrackRevision = trackRevision)
 
     private fun isCurrentTrack(query: TrackQuery): Boolean = currentQuery()?.key == query.key
 
