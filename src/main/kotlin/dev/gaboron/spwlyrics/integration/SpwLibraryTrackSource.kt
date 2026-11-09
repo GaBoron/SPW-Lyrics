@@ -43,7 +43,7 @@ internal class SpwLibraryTrackSource(private val external: () -> TrackQuery? = {
 
     /** Only resolution workers may wait for library metadata; cache hits never need it. */
     fun prepare(query: TrackQuery): TrackQuery {
-        if (query.isExternalPlayback) return query
+        if (query.isExternalPlayback || localMediaPath(query.path) == null) return query
         if (query.durationMs != null || query.trackId.isBlank()) return query
         val cached = byId[query.trackId]?.takeIf { it.path == query.path && it.title == query.title }
         val found = cached ?: lookupMetadata(query) ?: return query

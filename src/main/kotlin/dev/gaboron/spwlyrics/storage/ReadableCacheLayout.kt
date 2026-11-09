@@ -16,14 +16,22 @@ internal class ReadableCacheLayout(private val root: Path) {
         writeInstructions()
     }
 
-    fun lyrics(query: TrackQuery): Path = lyricsDirectory.resolve(fileName(query))
+    fun lyrics(query: TrackQuery): Path = cachePath(lyricsDirectory, query)
 
-    fun override(query: TrackQuery): Path = overridesDirectory.resolve(fileName(query))
+    fun override(query: TrackQuery): Path = cachePath(overridesDirectory, query)
+
+    private fun cachePath(directory: Path, query: TrackQuery): Path {
+        val path = directory.resolve(fileName(query))
+        if (!query.isExternalPlayback || Files.exists(path)) return path
+        // Preserve selections written by the original protocol-1 integration.
+        val previous = sanitize("${query.playbackProvider} - ${query.playbackUri}").take(MAX_READABLE_LENGTH)
+        val legacy = directory.resolve("$previous [${query.key.take(KEY_SUFFIX_LENGTH)}].json")
+        return legacy.takeIf(Files::isRegularFile) ?: path
+    }
 
     private fun fileName(query: TrackQuery): String {
         if (query.isExternalPlayback) {
-            val identity = sanitize("${query.playbackProvider} - ${query.playbackUri}").take(MAX_READABLE_LENGTH)
-            return "$identity [${query.key.take(KEY_SUFFIX_LENGTH)}].json"
+            return "外部歌词 [${query.key.take(KEY_SUFFIX_LENGTH)}].json"
         }
         val artist = query.artists.take(3).joinToString("、").ifBlank { "未知歌手" }
         val title = query.title.ifBlank { "未知曲名" }

@@ -18,6 +18,7 @@ data class TrackQuery(
     val playbackUri: String = "",
     val playbackSessionId: String = "",
     val playbackTrackRevision: Long = 0,
+    val playbackObjectName: String = "",
 ) {
     val isExternalPlayback: Boolean get() = playbackUri.isNotBlank()
 

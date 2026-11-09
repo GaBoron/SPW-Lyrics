@@ -172,6 +172,7 @@ class LyricsOutputRouter(
 
     private fun sameTrack(left: TrackQuery, right: TrackQuery): Boolean =
         if (left.isExternalPlayback || right.isExternalPlayback) left.playbackUri == right.playbackUri &&
-            left.playbackSessionId == right.playbackSessionId && left.playbackTrackRevision == right.playbackTrackRevision
+            left.playbackSessionId == right.playbackSessionId && left.playbackTrackRevision == right.playbackTrackRevision &&
+            left.playbackProvider == right.playbackProvider && left.playbackObjectName == right.playbackObjectName
         else left.path == right.path && (left.trackId.isBlank() || right.trackId.isBlank() || left.trackId == right.trackId)
 }

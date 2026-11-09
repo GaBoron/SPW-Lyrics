@@ -14,6 +14,9 @@ import dev.gaboron.spwlyrics.application.LyricsOutputRouter
 import dev.gaboron.spwlyrics.application.LyricsRefreshBridge
 import dev.gaboron.spwlyrics.application.LyricsStartupRecovery
 import dev.gaboron.spwlyrics.codec.MetadataLyricsFormat
+import dev.gaboron.spwlyrics.codec.TtmlCodec
+import dev.gaboron.spwlyrics.codec.MetadataTimedLyricsReader
+import dev.gaboron.spwlyrics.domain.LyricsFormat
 import dev.gaboron.spwlyrics.domain.LyricsCandidate
 import dev.gaboron.spwlyrics.domain.LyricsDocument
 import dev.gaboron.spwlyrics.domain.LyricsSource
@@ -108,6 +111,9 @@ private class PluginRuntimeSession : AutoCloseable {
     @Volatile private var cacheFolderOpener: CacheFolderOpener? = null
     private val externalPlayback = ExternalPlaybackClient()
     @Volatile private var externalTrack: ExternalPlayback? = null
+    private var externalSourceRevision = -1L
+    private var hostRestorePending = false
+    private var hostRestoreAt = 0L
     private val libraryTracks = SpwLibraryTrackSource { externalPlayback.snapshot()?.toQuery() }
     private val localTtmlLyrics = LocalTtmlLyricsLoader()
 
@@ -177,7 +183,8 @@ private class PluginRuntimeSession : AutoCloseable {
             isCurrent = { query ->
                 if (query.isExternalPlayback) externalPlayback.snapshot()?.let {
                     it.uri == query.playbackUri && it.sessionId == query.playbackSessionId &&
-                        it.trackRevision == query.playbackTrackRevision
+                        it.trackRevision == query.playbackTrackRevision && it.provider == query.playbackProvider &&
+                        it.sourceName.canonicalName == query.playbackObjectName
                 } == true else externalPlayback.snapshot() == null &&
                     WorkshopApi.playback.getCurrentMediaItem()?.let { item ->
                         item.path == query.path && (query.trackId.isBlank() || item.id.isBlank() || query.trackId == item.id)
@@ -261,7 +268,9 @@ private class PluginRuntimeSession : AutoCloseable {
                 isCurrentTrack(query) && coordinator?.setDelay(query, delayMs) == true
             override fun metadata(candidate: LyricsCandidate) = resolver.metadata(candidate)
             override fun editMetadata(query: TrackQuery, candidate: LyricsCandidate, document: LyricsDocument?, preserveDraft: Boolean) {
-                check(!query.isExternalPlayback) { "Spotify 歌曲的标签与歌词选择保存在插件中。写入文件请先打开本地歌曲。" }
+                check(!query.isExternalPlayback && localMediaPath(query.path) != null) {
+                    "外部音源的歌词选择保存在插件中。写入文件请先打开本地歌曲。"
+                }
                 workspace?.importSearch(query, candidate, document, preserveDraft)
             }
         }
@@ -292,9 +301,31 @@ private class PluginRuntimeSession : AutoCloseable {
                 val previous = externalTrack
                 externalTrack = next
                 val selected = coordinator?.currentQuery()
+                val sourceRevision = next?.let(externalPlayback::sourceLyrics)?.revision ?: -1L
                 if (next != null && (next.identity != previous?.identity || selected?.playbackSessionId != next.sessionId ||
-                    selected.playbackTrackRevision != next.trackRevision || selected.playbackUri != next.uri)) loadExternal(next)
-                else if (next == null && previous != null) hostRefreshBridge.reloadCurrentLyrics()
+                    selected.playbackTrackRevision != next.trackRevision || selected.playbackUri != next.uri ||
+                    next.title != previous.title || next.artist != previous.artist || next.album != previous.album ||
+                    next.durationMs != previous.durationMs || sourceRevision != externalSourceRevision)) loadExternal(next)
+                else if (next == null) {
+                    if (previous != null) hostRestorePending = true
+                    if (selected != null && !selected.isExternalPlayback) hostRestorePending = false
+                    val now = System.nanoTime()
+                    if (hostRestorePending && now >= hostRestoreAt) {
+                        hostRestorePending = !runCatching { hostRefreshBridge.reloadCurrentLyrics() }.getOrDefault(false)
+                        hostRestoreAt = now + 2_000_000_000L
+                    }
+                    // Native callbacks are primary. This recovers virtual tracks published only to host state.
+                    val host = libraryTracks.current()
+                    if (host != null && localMediaPath(host.path) == null && host != selected) {
+                        val policy = settings?.automaticReplacementPolicy() ?: AutomaticReplacementPolicy.ALWAYS
+                        val missing = runCatching { WorkshopApi.playback.getLyricsLines().isEmpty() }.getOrDefault(false)
+                        val phase = if (policy == AutomaticReplacementPolicy.WHEN_LOCAL_MISSING && missing)
+                            LyricsLoadPhase.AFTER_LOCAL_MISSING else LyricsLoadPhase.BEFORE_LOCAL
+                        coordinator?.onLoad(host, phase, policy)
+                    }
+                }
+                if (next != null) hostRestorePending = false
+                externalSourceRevision = sourceRevision
             }
         }, 0, 500, java.util.concurrent.TimeUnit.MILLISECONDS)
     }
@@ -387,19 +418,39 @@ private class PluginRuntimeSession : AutoCloseable {
         if (closed || externalPlayback.snapshot()?.identity != track.identity) return
         val query = track.toQuery()
         val policy = settings?.automaticReplacementPolicy() ?: AutomaticReplacementPolicy.ALWAYS
-        coordinator?.onLoad(query, LyricsLoadPhase.BEFORE_LOCAL, policy)
-        if (policy == AutomaticReplacementPolicy.WHEN_LOCAL_MISSING)
+        val original = externalPlayback.sourceLyrics(track)?.document()
+        coordinator?.onLoad(query, LyricsLoadPhase.BEFORE_LOCAL, policy,
+            localTtml = if (policy == AutomaticReplacementPolicy.ALWAYS) null else ({ original }),
+            localEmbedded = { original })
+        if (policy == AutomaticReplacementPolicy.WHEN_LOCAL_MISSING && original == null)
             coordinator?.onLoad(query, LyricsLoadPhase.AFTER_LOCAL_MISSING, policy)
     }
 
+    private fun ExternalLyrics.document(): LyricsDocument? = runCatching {
+        if (content.length > 2_000_000 || spl.length > 2_000_000) return null
+        val document = when (format) {
+            "empty" -> LyricsDocument(LyricsSource.LOCAL, LyricsFormat.PLAIN, emptyList())
+            "ttml" -> TtmlCodec().parse(content, LyricsSource.LOCAL)
+            "lrc" -> MetadataTimedLyricsReader.parse(spl.ifBlank { content }, mergeSameTimeRows = spl.isNotBlank())
+            else -> return null
+        }
+        document.copy(metadata = document.metadata +
+            (EXTERNAL_SOURCE_OFFSET to listOf(offsetMs.coerceIn(-600_000, 600_000).toString())))
+    }.getOrNull()
+
     private fun ExternalPlayback.toQuery() = TrackQuery(title, TrackQuery.splitArtists(artist), album,
         durationMs = durationMs.takeIf { it > 0 }, trackId = uri,
-        playbackProvider = provider, playbackUri = uri, playbackSessionId = sessionId, playbackTrackRevision = trackRevision)
+        playbackProvider = provider, playbackUri = uri, playbackSessionId = sessionId, playbackTrackRevision = trackRevision,
+        playbackObjectName = sourceName.canonicalName)
 
-    private fun isCurrentTrack(query: TrackQuery): Boolean = currentQuery()?.key == query.key
+    private fun isCurrentTrack(query: TrackQuery): Boolean = currentQuery()?.let {
+        if (query.isExternalPlayback) it == query else it.key == query.key
+    } == true
 
     private fun toastWarning(message: String) {
         if (closed) return
         runCatching { WorkshopApi.ui.toast(message, WorkshopApi.Ui.ToastType.Warning) }
     }
 }
+
+internal const val EXTERNAL_SOURCE_OFFSET = "spw.externalSourceOffsetMs"

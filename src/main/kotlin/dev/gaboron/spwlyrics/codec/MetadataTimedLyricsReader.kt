@@ -11,7 +11,7 @@ internal object MetadataTimedLyricsReader {
     private val marker = Regex("""([\[<])(\d{1,3}):(\d{1,2})(?:[.:](\d{1,6}))?[\]>]""")
     private val attributes = Regex("""^\[([A-Za-z][\w-]*):(.*)]$""")
 
-    fun parse(raw: String): LyricsDocument {
+    fun parse(raw: String, mergeSameTimeRows: Boolean = false): LyricsDocument {
         val lines = mutableListOf<LyricLine>()
         val metadata = linkedMapOf<String, MutableList<String>>()
         var offset = 0L
@@ -66,7 +66,10 @@ internal object MetadataTimedLyricsReader {
             }
         }
         require(lines.isNotEmpty()) { "未找到有效的歌词正文。" }
-        val sorted = TimedSecondaryLyrics.merge(lines).sortedBy { it.startMs }
+        val merged = if (mergeSameTimeRows) lines.groupBy { it.startMs }.values.map { rows ->
+            rows.first().copy(translation = rows.drop(1).joinToString("\n") { it.text }.takeIf(String::isNotBlank))
+        } else TimedSecondaryLyrics.merge(lines)
+        val sorted = merged.sortedBy { it.startMs }
         var groupStart: Long? = null
         var nextStart: Long? = null
         val completed = sorted.asReversed().map { line ->

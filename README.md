@@ -50,6 +50,7 @@
 - [使用说明](docs/使用说明.md)：选择歌词、编辑与打轴、批量管理、缓存和隐私。
 - [常见问题](docs/常见问题.md)：入口缺失、匹配错误、显示与写入问题的恢复步骤。
 - [开发与构建](docs/开发说明.md)：构建、架构边界、Hook 缓存、TTML 互通和诊断。
+- [外部播放 API](docs/external-playback-api.md)：为网络音源和独立播放器接入歌曲、进度、歌词与控制。
 - [问题反馈](https://github.com/GaBoron/SPW-Lyrics/issues)：附 SPW / 插件版本、复现步骤及相关异常。
 
 ## 📄 许可证

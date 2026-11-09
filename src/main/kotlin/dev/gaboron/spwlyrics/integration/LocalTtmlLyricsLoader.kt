@@ -29,12 +29,12 @@ internal class LocalTtmlLyricsLoader(
     fun loadEmbedded(audioPath: String): LyricsDocument? = load(audioPath, embeddedOnly = true)
 
     fun invalidate(audioPath: String) {
-        val audio = Path.of(audioPath)
+        val audio = localMediaPath(audioPath) ?: return
         synchronized(snapshots) { snapshots.keys.removeAll { it.audio == audio } }
     }
 
     private fun load(audioPath: String, embeddedOnly: Boolean): LyricsDocument? = runCatching {
-        val audio = Path.of(audioPath)
+        val audio = localMediaPath(audioPath) ?: return null
         val key = Key(audio, embeddedOnly)
         val stem = audio.fileName.toString().substringBeforeLast('.', audio.fileName.toString())
         val lrc = audio.resolveSibling("$stem.lrc")

@@ -34,13 +34,13 @@ internal class JmxTtmlReceiver(
     }
 
     override fun submit(query: TrackQuery, rawTtml: String, offsetMs: Long): Boolean =
-        query.path.isNotBlank() && state() != null && server.invoke(
+        (query.path.isNotBlank() || query.trackId.isNotBlank()) && state() != null && server.invoke(
             NAME, "submitTtml", arrayOf<Any>(query.trackId, query.path, rawTtml, offsetMs),
             arrayOf("java.lang.String", "java.lang.String", "java.lang.String", "long"),
         ) == true
 
     override fun select(query: TrackQuery, rawTtml: String?, offsetMs: Long): Boolean {
-        if (query.path.isBlank() || state() == null) return false
+        if ((query.path.isBlank() && query.trackId.isBlank()) || state() == null) return false
         // The optional selection operation preserves protocol-1 compatibility with older receivers.
         if (server.getMBeanInfo(NAME).operations.any { it.name == "selectLyrics" }) return server.invoke(
             NAME, "selectLyrics", arrayOf<Any>(query.trackId, query.path, rawTtml.orEmpty(), offsetMs),
@@ -54,7 +54,7 @@ internal class JmxTtmlReceiver(
             matchingExternal(query)?.let(external::clear)
             return
         }
-        if (query.path.isNotBlank() && state() != null) server.invoke(
+        if ((query.path.isNotBlank() || query.trackId.isNotBlank()) && state() != null) server.invoke(
             NAME, "clearTtml", arrayOf(query.trackId, query.path),
             arrayOf("java.lang.String", "java.lang.String"),
         )
@@ -63,15 +63,19 @@ internal class JmxTtmlReceiver(
     override fun selectDocument(query: TrackQuery, document: LyricsDocument?, offsetMs: Int): Boolean? {
         if (!query.isExternalPlayback) return null
         val track = matchingExternal(query) ?: return false
-        val empty = document == null || document.isInstrumental || document.lines.isEmpty()
-        val spl = if (empty) "" else SpwLyricsEncoder.encode(checkNotNull(document))
-        val raw = document?.rawTtml.takeUnless { empty }
+        if (document == null) return external.clear(track)
+        val empty = document.isInstrumental || document.lines.isEmpty()
+        val spl = if (empty) "" else SpwLyricsEncoder.encode(document)
+        val raw = document.rawTtml.takeUnless { empty }
+        val sourceOffset = document.metadata[EXTERNAL_SOURCE_OFFSET]?.firstOrNull()?.toLongOrNull() ?: 0
+        val offset = (offsetMs.toLong() + sourceOffset).coerceIn(-600_000, 600_000)
         return external.submit(track, if (empty) "empty" else if (raw != null) "ttml" else "lrc",
-            raw ?: spl, spl, offsetMs.toLong())
+            raw ?: spl, spl, offset)
     }
 
     private fun matchingExternal(query: TrackQuery): ExternalPlayback? = external.snapshot()?.takeIf {
-        it.sessionId == query.playbackSessionId && it.trackRevision == query.playbackTrackRevision && it.uri == query.playbackUri
+        it.sessionId == query.playbackSessionId && it.trackRevision == query.playbackTrackRevision && it.uri == query.playbackUri &&
+            it.provider == query.playbackProvider && it.sourceName.canonicalName == query.playbackObjectName
     }
 
     override fun close() {
