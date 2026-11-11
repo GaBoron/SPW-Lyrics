@@ -9,6 +9,7 @@ import dev.gaboron.spwlyrics.integration.workspace.*
 import dev.gaboron.spwlyrics.integration.composeui.DesktopButton
 import dev.gaboron.spwlyrics.integration.composeui.DesktopCheck
 import dev.gaboron.spwlyrics.domain.OnlineMetadataImport
+import dev.gaboron.spwlyrics.domain.AudioMetadataField
 
 @Composable
 internal fun MetadataImportPanel(controller: MetadataEditorController, pending: OnlineMetadataImport, modifier: Modifier) {
@@ -24,7 +25,8 @@ internal fun MetadataImportPanel(controller: MetadataEditorController, pending: 
         LyricsScroll(Modifier.weight(1f).fillMaxWidth()) {
             pending.notice?.let { LyricsStatus(it) }
             pending.fields.filterValues(String::isNotBlank).forEach { (field, value) ->
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                val target = if (field == AudioMetadataField.YEAR) Modifier.metadataTutorialTarget(MetadataTutorialTarget.IMPORT_PREVIEW) else Modifier
+                Column(target, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     DesktopCheck(field in pending.selected, { controller.selectImport(field, field !in pending.selected) }, enabled, field.label)
                     Text(value, Modifier.padding(start = 28.dp), color = SaltTheme.colors.text)
                 }

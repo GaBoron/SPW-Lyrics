@@ -23,7 +23,7 @@ internal fun MetadataLyricLineEditor(controller: MetadataEditorController, modif
     val line = state.selectedLineId?.takeIf { count == 1 }?.let(state::line)
     val enabled = !state.busy && count > 0
     val scroll = rememberScrollState()
-    Box(modifier) {
+    Box(modifier.metadataTutorialTarget(MetadataTutorialTarget.LINE)) {
         Column(Modifier.fillMaxSize().padding(end = 12.dp).verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text(if (line != null) "第 ${state.lineNumbers[line.id]} 句" else "已选 $count 句",
                 fontSize = 14.sp, fontWeight = FontWeight.SemiBold)

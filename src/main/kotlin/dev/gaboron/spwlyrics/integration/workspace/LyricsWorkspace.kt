@@ -49,6 +49,8 @@ internal class LyricsWorkspace(private val createSession: () -> LyricsWorkspaceS
         }
     }
 
+    fun resetMetadataTutorial() = onEdt { session?.metadataTutorial?.reset() }
+
     fun requestLeave(action: () -> Unit): Boolean {
         val active = session ?: return false
         active.requestClose { dismiss(); action() }

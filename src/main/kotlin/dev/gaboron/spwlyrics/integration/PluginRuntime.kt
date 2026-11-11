@@ -90,6 +90,7 @@ object PluginRuntime {
     fun timingSeeked() { session?.timingSeeked() }
     fun openCacheFolder() { session?.openCacheFolder() }
     fun resetLyricsOrder() { session?.resetLyricsOrder() }
+    fun resetMetadataTutorial() { session?.resetMetadataTutorial() }
 }
 
 /** Callbacks capture this enable's objects, never a later enable's global state. */
@@ -109,6 +110,7 @@ private class PluginRuntimeSession : AutoCloseable {
     @Volatile private var hostUi: HostUiIntegration? = null
     @Volatile private var settings: PluginSettings? = null
     @Volatile private var cacheFolderOpener: CacheFolderOpener? = null
+    @Volatile private var resetTutorialState: (() -> Boolean)? = null
     private val externalPlayback = ExternalPlaybackClient()
     @Volatile private var externalTrack: ExternalPlayback? = null
     private var externalSourceRevision = -1L
@@ -129,6 +131,7 @@ private class PluginRuntimeSession : AutoCloseable {
             FileLyricsCache(cacheDirectory) to FileLyricsDelaySettings(root.resolve("歌词延迟"))
         }
         val uiState by lazy { LyricsUiStateStore(root.resolve("界面状态.properties")) }
+        resetTutorialState = { uiState.rememberMetadataTutorialCompleted(false) }
         cacheFolderOpener = CacheFolderOpener(cacheDirectory)
         settings = performance.measure(Operation.CONFIG) { PluginSettings(WorkshopApi.manager.createConfigManager(), {
             if (closed) return@PluginSettings
@@ -236,6 +239,8 @@ private class PluginRuntimeSession : AutoCloseable {
             else "批量处理失败：${error.message ?: "未知错误"}"
         }
         val metadataOperations = object : MetadataEditorOperations {
+            override fun tutorialCompleted() = uiState.metadataTutorialCompleted()
+            override fun saveTutorialCompleted(value: Boolean) = uiState.rememberMetadataTutorialCompleted(value)
             override fun lyricsFormat() = MetadataLyricsFormat.fromStorageValue(uiState.lyricsFormat())
             override fun saveLyricsFormat(format: MetadataLyricsFormat) = uiState.rememberLyricsFormat(format.storageValue)
             override fun currentAudioPath() = currentQuery()?.path?.takeIf(String::isNotBlank)
@@ -369,6 +374,13 @@ private class PluginRuntimeSession : AutoCloseable {
         toastWarning(if (settings?.resetSelection() == true) "已恢复默认歌词排序。关闭并重新打开设置可查看默认顺序。" else "重置未完成，请重新打开设置后重试。")
     }
 
+    fun resetMetadataTutorial() {
+        if (resetTutorialState?.invoke() == true) {
+            workspace?.resetMetadataTutorial()
+            toastWarning("已重置元数据编辑教程，进入元数据编辑页即可从头查看。")
+        } else toastWarning("教程重置未完成，请检查插件数据目录的写入权限后重试。")
+    }
+
     @Synchronized
     override fun close() {
         if (closed) return
@@ -382,6 +394,7 @@ private class PluginRuntimeSession : AutoCloseable {
         timingMedia = null
         timingPlayback = null
         cacheFolderOpener = null
+        resetTutorialState = null
         settings = null
         batchProcessor = null
         precache = null

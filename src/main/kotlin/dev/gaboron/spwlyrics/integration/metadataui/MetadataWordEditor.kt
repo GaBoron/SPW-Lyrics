@@ -12,7 +12,7 @@ import dev.gaboron.spwlyrics.integration.composeui.*
 
 @Composable
 internal fun MetadataWordEditor(line: EditableLyricLine, controller: MetadataEditorController, enabled: Boolean) {
-    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+    Column(Modifier.metadataTutorialTarget(MetadataTutorialTarget.WORDS), verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Text("逐字时间与文本", fontSize = 13.sp, fontWeight = FontWeight.Medium)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("开始", fontSize = 10.sp, color = DesktopColors.Muted, modifier = Modifier.width(98.dp))

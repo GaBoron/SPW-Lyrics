@@ -41,13 +41,18 @@ internal fun MetadataEditorActions(controller: MetadataEditorController, focused
                 androidx.compose.animation.AnimatedVisibility(!focused, enter = fadeIn() + slideInHorizontally { -it / 8 },
                     exit = fadeOut() + slideOutHorizontally { -it / 8 }) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        DesktopButton("在线匹配信息与封面", controller::openSearch, enabled = state.loaded != null && !state.busy, glyph = DesktopGlyph.Search)
-                        DesktopButton("导入歌词", controller::importLyrics, enabled = state.loaded != null && !state.busy)
-                        MetadataFormatPicker(state.format, controller::format, enabled = !state.busy)
+                        DesktopButton("在线匹配信息与封面", controller::openSearch, Modifier.metadataTutorialTarget(MetadataTutorialTarget.ONLINE),
+                            enabled = state.loaded != null && !state.busy, glyph = DesktopGlyph.Search)
+                        DesktopButton("导入歌词", controller::importLyrics, Modifier.metadataTutorialTarget(MetadataTutorialTarget.IMPORT),
+                            enabled = state.loaded != null && !state.busy)
+                        Box(Modifier.metadataTutorialTarget(MetadataTutorialTarget.FORMAT)) {
+                            MetadataFormatPicker(state.format, controller::format, enabled = !state.busy)
+                        }
                     }
                 }
             }
-            DesktopButton("写入歌曲文件", controller::save, enabled = state.canSave, primary = true, glyph = DesktopGlyph.Check)
+            DesktopButton("写入歌曲文件", controller::save, Modifier.metadataTutorialTarget(MetadataTutorialTarget.SAVE),
+                enabled = state.canSave, primary = true, glyph = DesktopGlyph.Check)
         }
     }
 }

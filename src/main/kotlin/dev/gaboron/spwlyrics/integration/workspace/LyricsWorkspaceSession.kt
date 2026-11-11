@@ -10,6 +10,7 @@ import dev.gaboron.spwlyrics.integration.manualui.ManualSearchOperations
 import dev.gaboron.spwlyrics.integration.metadataui.MetadataEditorController
 import dev.gaboron.spwlyrics.integration.metadataui.MetadataEditorOperations
 import dev.gaboron.spwlyrics.integration.metadataui.MetadataLyricsView
+import dev.gaboron.spwlyrics.integration.metadataui.MetadataTutorialController
 import dev.gaboron.spwlyrics.storage.FileAudioMetadataStore
 import dev.gaboron.spwlyrics.application.TimingPlayback
 import dev.gaboron.spwlyrics.application.TimingAudioDecoder
@@ -32,6 +33,9 @@ internal class LyricsWorkspaceSession(
 ) : AutoCloseable {
     val manual = ManualSearchController(manualOperations)
     val metadata = MetadataEditorController(FileAudioMetadataStore(), metadataOperations)
+    val metadataTutorial = MetadataTutorialController(metadataOperations::tutorialCompleted, metadataOperations::saveTutorialCompleted) {
+        if (metadata.state.loaded == null && !metadata.state.busy) metadata.current()
+    }
     val batchMetadata = MetadataEditorController(FileAudioMetadataStore(), metadataOperations, lyricsWritingEnabled = false)
     val timing = LyricsTimingController(metadata, timingPlayback, calibrationStore, timingAudio)
     val batch = BatchProcessingController(processor, describeFailure)
@@ -50,7 +54,7 @@ internal class LyricsWorkspaceSession(
         when (value) {
             LyricsToolPage.SEARCH -> manual.refreshTrack()
             LyricsToolPage.BATCH -> batch.load()
-            LyricsToolPage.METADATA -> if (metadata.state.loaded == null && !metadata.state.busy) metadata.current()
+            LyricsToolPage.METADATA -> if (!metadataTutorial.active && metadata.state.loaded == null && !metadata.state.busy) metadata.current()
         }
     }
 

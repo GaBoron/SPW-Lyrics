@@ -59,6 +59,13 @@
         },
         {
           "type": "button",
+          "title": "重置元数据编辑教程",
+          "summary": "下次进入元数据编辑页时，从头显示首次使用教程。",
+          "arrow_type": "none",
+          "on_click": "dev.gaboron.spwlyrics.integration.SpwLyricsActions.resetMetadataTutorial"
+        },
+        {
+          "type": "button",
           "title": "查看本地缓存文件夹",
           "summary": "在文件资源管理器中打开已缓存的歌词",
           "arrow_type": "none",

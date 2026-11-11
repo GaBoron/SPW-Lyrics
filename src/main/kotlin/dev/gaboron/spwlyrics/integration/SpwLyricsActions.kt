@@ -18,4 +18,7 @@ object SpwLyricsActions {
 
     @JvmStatic
     fun resetLyricsOrder() = PluginRuntime.resetLyricsOrder()
+
+    @JvmStatic
+    fun resetMetadataTutorial() = PluginRuntime.resetMetadataTutorial()
 }

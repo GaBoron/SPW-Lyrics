@@ -14,6 +14,8 @@ import dev.gaboron.spwlyrics.integration.manualui.ManualSearchContent
 import dev.gaboron.spwlyrics.integration.metadataui.MetadataDiscardDialog
 import dev.gaboron.spwlyrics.integration.metadataui.MetadataEditorContent
 import dev.gaboron.spwlyrics.integration.metadataui.MetadataWriteDialog
+import dev.gaboron.spwlyrics.integration.metadataui.MetadataTutorialHost
+import dev.gaboron.spwlyrics.integration.metadataui.MetadataTutorialStep
 
 @Composable
 internal fun LyricsWorkspaceContent(session: LyricsWorkspaceSession, close: () -> Unit) {
@@ -28,11 +30,22 @@ internal fun LyricsWorkspaceContent(session: LyricsWorkspaceSession, close: () -
             LyricsWorkspaceHeader(session.page, focused, session::select) { session.requestClose(close) }
             LyricsPageTransition(session.page, { it.ordinal }, Modifier.weight(1f).fillMaxWidth()) { page ->
                 pages.SaveableStateProvider(page.name) {
-                    LyricsViewport(Modifier.fillMaxSize()) {
+                    if (page == LyricsToolPage.METADATA) {
+                        val state = session.metadata.state
+                        MetadataTutorialHost(session.metadataTutorial,
+                            available = !state.busy && state.onlineImport == null && state.pendingWrite == null && state.pendingDiscard == null) { step, demo ->
+                            LyricsViewport(Modifier.fillMaxSize()) {
+                                val editor = if (step == MetadataTutorialStep.ONLINE_PREVIEW)
+                                    demo?.importingEditor else demo?.editor
+                                MetadataEditorContent(editor ?: session.metadata, demo?.timing ?: session.timing,
+                                    session.lyricsView, session::selectLyricsView, step)
+                            }
+                        }
+                    } else LyricsViewport(Modifier.fillMaxSize()) {
                         when (page) {
                             LyricsToolPage.SEARCH -> ManualSearchContent(session.manual)
-                            LyricsToolPage.METADATA -> MetadataEditorContent(session.metadata, session.timing, session.lyricsView, session::selectLyricsView)
                             LyricsToolPage.BATCH -> BatchProcessingContent(session.batch, session.batchMetadata)
+                            LyricsToolPage.METADATA -> Unit
                         }
                     }
                 }

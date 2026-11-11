@@ -13,7 +13,7 @@ internal fun MetadataLyricActions(controller: MetadataEditorController) {
     val state = controller.state
     val enabled = state.canEditRows
     val selected = enabled && state.selectedLineIds.isNotEmpty()
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.metadataTutorialTarget(MetadataTutorialTarget.LYRIC_ACTIONS), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         FlowRow(verticalArrangement = Arrangement.spacedBy(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             DesktopButton("添加歌词", controller::addLine, enabled = enabled && !state.validating)
             DesktopButton("删除所选", controller::deleteSelected, enabled = selected && !state.validating)

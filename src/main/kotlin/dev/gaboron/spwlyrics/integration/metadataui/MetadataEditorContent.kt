@@ -16,13 +16,15 @@ import dev.gaboron.spwlyrics.integration.timingui.LyricsTimingController
 
 @Composable
 internal fun MetadataEditorContent(controller: MetadataEditorController, timing: LyricsTimingController,
-    view: MetadataLyricsView, selectView: (MetadataLyricsView) -> Unit) {
+    view: MetadataLyricsView, selectView: (MetadataLyricsView) -> Unit, tutorial: MetadataTutorialStep? = null) {
     val state = controller.state
     val importing = state.onlineImport != null
-    val focused = view == MetadataLyricsView.TIMING && !importing
+    val shownView = tutorial?.view ?: view
+    val focused = shownView == MetadataLyricsView.TIMING && !importing
     var page by rememberSaveable { mutableStateOf(0) }
     var importPage by rememberSaveable { mutableStateOf(1) }
     var metadataExpanded by rememberSaveable { mutableStateOf(true) }
+    val shownPage = tutorial?.let { if (it.fields) 0 else 1 } ?: page
     LaunchedEffect(state.importId) { importPage = 1 }
     val gap by animateDpAsState(if (focused) 4.dp else 16.dp, tween(220), label = "editor density")
     val paneGap by animateDpAsState(if (focused) 0.dp else 12.dp, tween(220), label = "editor pane gap")
@@ -32,7 +34,7 @@ internal fun MetadataEditorContent(controller: MetadataEditorController, timing:
         else false
     }, verticalArrangement = Arrangement.spacedBy(gap)) {
         AnimatedVisibility(!focused, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.metadataTutorialTarget(MetadataTutorialTarget.FILE), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     DesktopButton("打开歌曲", controller::openFile, enabled = !state.busy, glyph = DesktopGlyph.Library)
                     DesktopButton("读取当前歌曲", controller::current, enabled = !state.busy, loading = state.busy)
@@ -54,12 +56,12 @@ internal fun MetadataEditorContent(controller: MetadataEditorController, timing:
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(paneGap)) {
                 AnimatedVisibility(!wide && !focused, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
                     if (importing) LyricsTabs(listOf("当前草稿", "在线元数据"), importPage, { importPage = it })
-                    else LyricsTabs(listOf("歌曲信息", "内嵌歌词"), page, { page = it })
+                    else LyricsTabs(listOf("歌曲信息", "内嵌歌词"), shownPage, { page = it })
                 }
                 Row(Modifier.weight(1f).fillMaxWidth()) {
                     AnimatedVisibility(wide && !focused, enter = fadeIn() + expandHorizontally(), exit = fadeOut() + shrinkHorizontally()) {
                         Row {
-                            MetadataSidebar(controller, metadataExpanded, { metadataExpanded = it }, Modifier.fillMaxHeight(),
+                            MetadataSidebar(controller, metadataExpanded || tutorial?.fields == true, { metadataExpanded = it }, Modifier.fillMaxHeight(),
                                 importWidth = if (importing) importWidth else null)
                             Spacer(Modifier.width(24.dp))
                         }
@@ -68,15 +70,15 @@ internal fun MetadataEditorContent(controller: MetadataEditorController, timing:
                         if (wide || focused) {
                             MetadataContentTransition(state.onlineImport, Modifier.fillMaxSize(), contentKey = { it != null }) { pending ->
                                 if (pending != null) MetadataImportPanel(controller, pending, Modifier.fillMaxSize())
-                                else MetadataLyricsPanel(controller, timing, view, { page = 1; selectView(it) }, Modifier.fillMaxSize())
+                                else MetadataLyricsPanel(controller, timing, shownView, { page = 1; selectView(it) }, Modifier.fillMaxSize())
                             }
                         } else MetadataContentTransition(state.onlineImport, Modifier.fillMaxSize(), contentKey = { it != null }) { pending ->
                             if (pending != null) LyricsPageTransition(importPage, { it }, Modifier.fillMaxSize()) { selected ->
                                 if (selected == 0) MetadataFieldsPanel(controller, Modifier.fillMaxSize(), includeLyrics = true)
                                 else MetadataImportPanel(controller, pending, Modifier.fillMaxSize())
-                            } else LyricsPageTransition(page, { it }, Modifier.fillMaxSize()) { selected ->
+                            } else LyricsPageTransition(shownPage, { it }, Modifier.fillMaxSize()) { selected ->
                                 if (selected == 0) MetadataFieldsPanel(controller, Modifier.fillMaxSize())
-                                else MetadataLyricsPanel(controller, timing, view, { page = 1; selectView(it) }, Modifier.fillMaxSize())
+                                else MetadataLyricsPanel(controller, timing, shownView, { page = 1; selectView(it) }, Modifier.fillMaxSize())
                             }
                         }
                     }

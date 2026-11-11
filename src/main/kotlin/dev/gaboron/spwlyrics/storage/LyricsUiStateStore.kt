@@ -25,6 +25,12 @@ internal class LyricsUiStateStore(private val path: Path) {
     fun searchSource(): String = values.getProperty("searchSource", "")
 
     @Synchronized
+    fun metadataTutorialCompleted(): Boolean = values.getProperty("metadataTutorialCompleted", "false").toBoolean()
+
+    @Synchronized
+    fun rememberMetadataTutorialCompleted(value: Boolean): Boolean = write("metadataTutorialCompleted", value.toString())
+
+    @Synchronized
     fun rememberLyricsFormat(value: String): Boolean = write("lyricsFormat", value)
 
     @Synchronized

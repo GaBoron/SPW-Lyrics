@@ -18,7 +18,7 @@ import kotlinx.coroutines.isActive
 private enum class TimingToolView { LYRICS, SETTINGS, CALIBRATION }
 
 @Composable
-internal fun TimingPanel(controller: LyricsTimingController) {
+internal fun TimingPanel(controller: LyricsTimingController, controlsModifier: Modifier = Modifier) {
     val state = controller.state
     val focus = remember { FocusRequester() }
     val keyboard = remember(controller) { TimingKeyboard(controller) }
@@ -44,7 +44,7 @@ internal fun TimingPanel(controller: LyricsTimingController) {
             } else if (keyboardActive && tool == TimingToolView.LYRICS) keyboard.event(it) else false
         }, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             AnimatedVisibility(tool == TimingToolView.LYRICS, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
-                RoundedColumn(paddingValues = PaddingValues(0.dp)) {
+                RoundedColumn(modifier = controlsModifier, paddingValues = PaddingValues(0.dp)) {
                     TimingTransport(controller)
                     ItemDivider()
                     TimingCaptureControls(controller, keyboardActive, { focusRequest++ },

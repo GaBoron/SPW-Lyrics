@@ -30,6 +30,8 @@ import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 
 internal interface MetadataEditorOperations {
+    fun tutorialCompleted(): Boolean = false
+    fun saveTutorialCompleted(value: Boolean): Boolean = true
     fun lyricsFormat(): MetadataLyricsFormat = MetadataLyricsFormat.TTML
     fun saveLyricsFormat(format: MetadataLyricsFormat): Boolean = true
     fun currentAudioPath(): String?
@@ -46,8 +48,9 @@ internal class MetadataEditorController(
     private val operations: MetadataEditorOperations,
     private val artworkImport: OnlineArtworkImport = OnlineArtworkImport(),
     private val lyricsWritingEnabled: Boolean = true,
+    initialState: MetadataEditorState? = null,
 ) : AutoCloseable {
-    var state by mutableStateOf(MetadataEditorState(format = operations.lyricsFormat(), lyricsWritingEnabled = lyricsWritingEnabled))
+    var state by mutableStateOf(initialState ?: MetadataEditorState(format = operations.lyricsFormat(), lyricsWritingEnabled = lyricsWritingEnabled))
         private set
     private val worker = Executors.newSingleThreadExecutor { Thread(it, "spw-lyrics-metadata").apply { isDaemon = true } }
     private val parser = Executors.newSingleThreadScheduledExecutor { Thread(it, "spw-lyrics-metadata-preview").apply { isDaemon = true } }

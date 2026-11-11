@@ -16,7 +16,8 @@ internal fun MetadataFieldsPanel(controller: MetadataEditorController, modifier:
     LyricsScroll(modifier) {
         MetadataCoverPanel(controller)
         AudioMetadataField.entries.forEach { field ->
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            val target = if (field == AudioMetadataField.TITLE) Modifier.metadataTutorialTarget(MetadataTutorialTarget.FIELDS) else Modifier
+            Column(target, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(field.label, color = SaltTheme.colors.subText, style = SaltTheme.textStyles.sub)
                 val multiple = field in listOf(AudioMetadataField.ARTIST, AudioMetadataField.ALBUM_ARTIST, AudioMetadataField.COMPOSER, AudioMetadataField.LYRICIST, AudioMetadataField.GENRE, AudioMetadataField.COMMENT)
                 MetadataImportValue(state.draft[field], state.importBefore?.get(field).orEmpty(),
