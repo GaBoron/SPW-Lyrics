@@ -3,7 +3,7 @@ package dev.gaboron.spwlyrics.domain
 /** Classifies parsed timing units without guessing whether each unit is a word or character. */
 internal object LyricsGranularityClassifier {
     fun classify(lines: List<LyricLine>): LyricsQuality {
-        val primary = lines.filter { !it.background && it.text.isNotBlank() }
+        val primary = lines.filter { !it.background && !it.sourceCredit && it.text.isNotBlank() }
         if (primary.isEmpty()) return LyricsQuality.PLAIN
         val timed = primary.filter { it.startMs != null }
         if (timed.isEmpty()) return LyricsQuality.PLAIN

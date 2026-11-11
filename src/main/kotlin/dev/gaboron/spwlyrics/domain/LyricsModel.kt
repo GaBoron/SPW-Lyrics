@@ -35,6 +35,7 @@ data class LyricLine(
     val romanization: String? = null,
     val background: Boolean = false,
     val agent: String? = null,
+    val sourceCredit: Boolean = false,
 ) {
     fun effectiveEndMs(): Long? = endMs ?: words.maxOfOrNull(LyricWord::endMs)
 }

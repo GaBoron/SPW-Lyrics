@@ -7,9 +7,10 @@ import org.w3c.dom.Node
 /** Resolves both inline secondary text and Apple metadata tracks linked by itunes:key. */
 internal class TtmlSecondaryText(private val xml: Document) {
     private val linked = buildMap<Pair<String, String>, MutableList<Element>> {
-        val texts = xml.getElementsByTagNameNS(ITUNES, "text")
+        val texts = xml.getElementsByTagNameNS("*", "text")
         for (index in 0 until texts.length) {
             val text = texts.item(index) as Element
+            if (text.namespaceURI !in SOURCE_NAMESPACES) continue
             val parent = text.parentNode as? Element ?: continue
             val kind = when (parent.localName) {
                 "translation" -> "x-translation"
@@ -53,7 +54,9 @@ internal class TtmlSecondaryText(private val xml: Document) {
             }
         }
         visit(element)
-        val key = element.getAttributeNS(ITUNES, "key")
+        val key = SOURCE_NAMESPACES.firstNotNullOfOrNull { namespace ->
+            element.getAttributeNS(namespace, "key").takeIf(String::isNotBlank)
+        }.orEmpty()
         val kind = if ("x-translation" in roles) "x-translation" else "x-roman"
         return inline + linked[key to kind].orEmpty().filter { it.parentNode != null }
     }
@@ -74,6 +77,7 @@ internal class TtmlSecondaryText(private val xml: Document) {
         private const val TT = "http://www.w3.org/ns/ttml"
         private const val TTM = "http://www.w3.org/ns/ttml#metadata"
         private const val ITUNES = "http://music.apple.com/lyric-ttml-internal"
+        private val SOURCE_NAMESPACES = listOf(ITUNES, "http://lrc.red/lyric-ttml-internal")
         val TRANSLATIONS = setOf("translation", "x-translation")
         val ROMANIZATIONS = setOf("romanization", "transliteration", "x-roman")
         private val SECONDARY_ROLES = TRANSLATIONS + ROMANIZATIONS

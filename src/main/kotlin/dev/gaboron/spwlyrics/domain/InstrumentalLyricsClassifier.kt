@@ -14,7 +14,8 @@ internal object InstrumentalLyricsClassifier {
     )
 
     fun matches(lines: List<LyricLine>): Boolean {
-        val text = lines.flatMap { listOfNotNull(it.text, it.translation, it.romanization) }.filter(String::isNotBlank)
+        val text = lines.filterNot { it.sourceCredit }
+            .flatMap { listOfNotNull(it.text, it.translation, it.romanization) }.filter(String::isNotBlank)
         return text.isNotEmpty() && text.all { normalize(it) in notices }
     }
 

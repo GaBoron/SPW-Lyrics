@@ -48,7 +48,7 @@
           "type": "edittext",
           "title": "歌词来源顺序",
           "summary": "按填写顺序优先，用逗号分隔；未填写的来源不参加全部来源搜索。MusicBrainz 仅提供元数据。名称错误或重复时保留上一次有效设置。",
-          "default_value": "AMLL TTML DB, QQ音乐, 汽水音乐, 酷狗音乐, 网易云音乐, Apple Music, LrcShare, MusicBrainz"
+          "default_value": "AMLL TTML DB, QQ音乐, 汽水音乐, 酷狗音乐, 网易云音乐, Apple Music / lrc.red, LrcShare, MusicBrainz"
         },
         {
           "type": "button",

@@ -31,7 +31,8 @@ internal object ManualMetadataPresentation {
     private val labels = AudioMetadataField.entries.associate { it.onlineKey to it.label } + mapOf(
         "musicname" to "歌曲名", "artists" to "歌手", "ti" to "歌曲名", "ar" to "歌手", "al" to "专辑",
         "by" to "制作者", "re" to "制作工具", "ve" to "工具版本", "offset" to "歌词偏移（ms）",
-        "source" to "来源", "duration" to "时长", "length" to "时长", "desc" to "说明", "credits" to "制作信息",
+        "source" to "来源", "source_name" to "歌词来源", "source_url" to "来源链接",
+        "duration" to "时长", "length" to "时长", "desc" to "说明", "credits" to "制作信息",
         "author" to "作者", "songwriters" to "词曲作者", "cover_url" to "封面地址",
         "ncmusicid" to "网易云歌曲 ID", "ncmmusicid" to "网易云歌曲 ID", "neteaseid" to "网易云歌曲 ID",
         "qqmusicid" to "QQ 音乐歌曲 ID", "qqmusicmid" to "QQ 音乐歌曲 MID", "spotifyid" to "Spotify 歌曲 ID",

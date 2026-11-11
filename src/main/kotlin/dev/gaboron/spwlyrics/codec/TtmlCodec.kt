@@ -137,6 +137,7 @@ class TtmlCodec : LyricCodec {
             romanization = secondary.read(element, TtmlSecondaryText.ROMANIZATIONS).takeIf(String::isNotBlank),
             background = background,
             agent = agent,
+            sourceCredit = element.role() == "x-credit",
         )
     }
 

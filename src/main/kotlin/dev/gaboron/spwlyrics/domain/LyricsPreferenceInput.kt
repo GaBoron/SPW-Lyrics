@@ -6,7 +6,8 @@ internal object LyricsPreferenceInput {
     val DEFAULT_SOURCES = LyricsPreferences().sources.joinToString(", ") { if (it == LyricsSource.MUSICBRAINZ) "MusicBrainz" else it.displayName }
     private val qualityNames = mapOf("逐字" to LyricsQuality.KARAOKE_SYNCED, "逐行" to LyricsQuality.LINE_SYNCED, "普通" to LyricsQuality.PLAIN)
     private val sourceNames = mapOf("amll" to LyricsSource.AMLL, "qq" to LyricsSource.QQ, "网易" to LyricsSource.NETEASE, "网易云" to LyricsSource.NETEASE,
-        "酷狗" to LyricsSource.KUGOU, "汽水" to LyricsSource.SODA, "apple" to LyricsSource.APPLE, "musicbrainz" to LyricsSource.MUSICBRAINZ)
+        "酷狗" to LyricsSource.KUGOU, "汽水" to LyricsSource.SODA, "apple" to LyricsSource.APPLE,
+        "apple music" to LyricsSource.APPLE, "lrc.red" to LyricsSource.APPLE, "musicbrainz" to LyricsSource.MUSICBRAINZ)
 
     fun parse(mode: String, qualities: String, sources: String): LyricsPreferences {
         val quality = values(qualities, "歌词类型") { name -> qualityNames[name] ?: LyricsQuality.entries.find { it.name.equals(name, true) } }

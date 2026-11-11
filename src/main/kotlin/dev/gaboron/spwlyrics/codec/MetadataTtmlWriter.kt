@@ -34,6 +34,7 @@ internal object MetadataTtmlWriter {
             body.child("p").apply {
                 time("begin", line.startMs)
                 time("end", line.effectiveEndMs())
+                if (line.sourceCredit) setAttributeNS(TTM, "ttm:role", "x-credit")
                 agents[line.agent]?.let { setAttributeNS(TTM, "ttm:agent", it) }
                 var cursor = 0
                 line.words.forEach { word ->

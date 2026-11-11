@@ -9,7 +9,7 @@ enum class LyricsSource(val displayName: String, val priority: Int, val hasLyric
     SODA("汽水音乐", 2),
     KUGOU("酷狗音乐", 3),
     NETEASE("网易云音乐", 4),
-    APPLE("Apple Music", 5),
+    APPLE("Apple Music / lrc.red", 5),
     LRCSHARE("LrcShare", 6),
     MUSICBRAINZ("MusicBrainz（元数据）", 7, false),
     LOCAL("本地歌词", 8),
