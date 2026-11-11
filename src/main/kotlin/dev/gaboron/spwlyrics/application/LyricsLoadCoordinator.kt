@@ -41,9 +41,19 @@ class LyricsLoadCoordinator(
     private val notifiedFailures = ConcurrentHashMap.newKeySet<String>()
     private val selectionLock = Any()
     private var selectionRevision = 0L
+    private var trackGeneration = 0L
     @Volatile private var closed = false
 
     fun currentQuery(): TrackQuery? = current.get()
+
+    fun currentLyrics(): CurrentLyricsSelection? = synchronized(selectionLock) {
+        if (closed) return null
+        val query = current.get() ?: return null
+        val selected = output?.currentSelection()?.takeIf { it.query == query }
+        CurrentLyricsSelection(query, selected?.document, delays?.get(query) ?: 0,
+            tasks.contains(query.key) || tasks.contains(upgradeKey(query)), trackGeneration,
+            selected != null && selected.document == null, cache.getSelection(query)?.embedded == true)
+    }
 
     /** Restores the applied identity and its cached preview without requiring another provider request. */
     fun manualSelection(query: TrackQuery): LyricsCandidate? {
@@ -76,6 +86,7 @@ class LyricsLoadCoordinator(
             val externalChanged = query.isExternalPlayback && previous != query
             if (previous?.key != query.key || externalChanged) {
                 selectionRevision++
+                trackGeneration++
                 if (externalChanged) tasks.cancelAll() else tasks.cancelExcept(query.key, upgradeKey(query))
             }
             selectionRevision

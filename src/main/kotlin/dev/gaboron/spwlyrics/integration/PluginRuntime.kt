@@ -110,12 +110,15 @@ private class PluginRuntimeSession : AutoCloseable {
     @Volatile private var timingPlayback: SpwTimingPlayback? = null
     @Volatile private var timingMedia: TimingMediaRuntime? = null
     @Volatile private var hostUi: HostUiIntegration? = null
+    @Volatile private var currentLyricsApi: CurrentLyricsBridge? = null
     @Volatile private var settings: PluginSettings? = null
     @Volatile private var cacheFolderOpener: CacheFolderOpener? = null
     @Volatile private var resetTutorialState: (() -> Boolean)? = null
     private val externalPlayback = ExternalPlaybackClient()
     @Volatile private var externalTrack: ExternalPlayback? = null
     private var externalSourceRevision = -1L
+    private data class ExternalOriginal(val identity: String, val revision: Long, val document: LyricsDocument?)
+    @Volatile private var externalOriginal: ExternalOriginal? = null
     private var hostRestorePending = false
     private var hostRestoreAt = 0L
     private val libraryTracks = SpwLibraryTrackSource { externalPlayback.snapshot()?.toQuery() }
@@ -296,6 +299,24 @@ private class PluginRuntimeSession : AutoCloseable {
                 HostUiTargetCache(cacheDirectory.resolve("宿主Hook.properties")),
             ).also { it.start() }
         }
+        currentLyricsApi = CurrentLyricsBridge(
+            current = { if (closed) null else runCatching { libraryTracks.current() }.getOrNull() },
+            selection = { coordinator?.currentLyrics() },
+            original = { query, embedded ->
+                if (query.isExternalPlayback) externalPlayback.snapshot()?.takeIf {
+                    it.identity == externalTrackIdentity(query)
+                }?.let(::originalExternalLyrics)
+                else localTtmlLyrics.original(query.path, embedded)
+            },
+            canOpenSearch = { !closed && workspace?.available == true },
+            open = { _, stillCurrent -> java.awt.EventQueue.invokeLater {
+                if (!closed && stillCurrent() && workspace?.available == true) {
+                    workspace?.open(LyricsToolPage.SEARCH)
+                    workspace?.session?.manual?.refreshTrack()
+                }
+            } },
+            match = { query, stillCurrent -> if (!closed && stillCurrent()) coordinator?.useAutomatic(query) },
+        ).also { it.start() }
         maintenance.execute {
             if (!closed) runCatching {
                 performance.measure(Operation.STORAGE_PREPARE) { cache.prepare() }
@@ -392,7 +413,8 @@ private class PluginRuntimeSession : AutoCloseable {
         startupRecovery?.close()
         startupRecovery = null
         maintenance.shutdownNow()
-        val resources = listOfNotNull(hostUi, workspace, timingMedia, settings, batchProcessor, precache, coordinator)
+        val resources = listOfNotNull(currentLyricsApi, hostUi, workspace, timingMedia, settings, batchProcessor, precache, coordinator)
+        currentLyricsApi = null
         hostUi = null
         workspace = null
         timingMedia = null
@@ -409,6 +431,7 @@ private class PluginRuntimeSession : AutoCloseable {
             }
         }
         libraryTracks.clear()
+        externalOriginal = null
     }
 
     private fun load(
@@ -435,7 +458,7 @@ private class PluginRuntimeSession : AutoCloseable {
         if (closed || externalPlayback.snapshot()?.identity != track.identity) return
         val query = track.toQuery()
         val policy = settings?.automaticReplacementPolicy() ?: AutomaticReplacementPolicy.ALWAYS
-        val original = externalPlayback.sourceLyrics(track)?.document()
+        val original = originalExternalLyrics(track)
         coordinator?.onLoad(query, LyricsLoadPhase.BEFORE_LOCAL, policy,
             localTtml = if (policy == AutomaticReplacementPolicy.ALWAYS) null else ({ original }),
             localEmbedded = { original })
@@ -455,6 +478,13 @@ private class PluginRuntimeSession : AutoCloseable {
             (EXTERNAL_SOURCE_OFFSET to listOf(offsetMs.coerceIn(-600_000, 600_000).toString())))
     }.getOrNull()
 
+    private fun originalExternalLyrics(track: ExternalPlayback): LyricsDocument? {
+        val source = externalPlayback.sourceLyrics(track)
+        val revision = source?.revision ?: -1L
+        externalOriginal?.takeIf { it.identity == track.identity && it.revision == revision }?.let { return it.document }
+        return source?.document().also { externalOriginal = ExternalOriginal(track.identity, revision, it) }
+    }
+
     private fun ExternalPlayback.toQuery() = TrackQuery(title, TrackQuery.splitArtists(artist), album,
         durationMs = durationMs.takeIf { it > 0 }, trackId = uri,
         playbackProvider = provider, playbackUri = uri, playbackSessionId = sessionId, playbackTrackRevision = trackRevision,
@@ -463,6 +493,9 @@ private class PluginRuntimeSession : AutoCloseable {
     private fun isCurrentTrack(query: TrackQuery): Boolean = currentQuery()?.let {
         if (query.isExternalPlayback) it == query else it.key == query.key
     } == true
+
+    private fun externalTrackIdentity(query: TrackQuery): String = listOf(query.playbackObjectName, query.playbackProvider,
+        query.playbackSessionId, query.playbackTrackRevision.toString(), query.playbackUri).joinToString("") { "${it.length}:$it" }
 
     private fun toastWarning(message: String) {
         if (closed) return

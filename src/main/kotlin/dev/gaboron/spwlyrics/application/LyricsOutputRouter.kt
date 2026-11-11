@@ -21,6 +21,8 @@ interface NativeTtmlReceiver : AutoCloseable {
     override fun close() {}
 }
 
+data class LyricsOutputSelection(val query: TrackQuery, val document: LyricsDocument?, val delayMs: Int)
+
 /** One current-song output slot. Native TTML delivery supplements the ordinary SPW lyric timeline. */
 class LyricsOutputRouter(
     private val receiver: NativeTtmlReceiver,
@@ -44,6 +46,10 @@ class LyricsOutputRouter(
 
     init {
         worker.scheduleWithFixedDelay(::reconcileSafely, 500, 500, TimeUnit.MILLISECONDS)
+    }
+
+    fun currentSelection(): LyricsOutputSelection? = synchronized(lock) {
+        if (closed) null else selection?.let { LyricsOutputSelection(it.query, it.document, it.delayMs) }
     }
 
     fun render(query: TrackQuery, document: LyricsDocument, delayMs: Int, encoded: String? = null): String? {
