@@ -1,4 +1,4 @@
-package dev.gaboron.spwlyrics.integration.metadataui
+package dev.gaboron.spwlyrics.integration.tutorialui
 
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent

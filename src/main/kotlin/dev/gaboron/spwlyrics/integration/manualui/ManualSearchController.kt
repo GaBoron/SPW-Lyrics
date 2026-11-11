@@ -18,8 +18,8 @@ import java.util.concurrent.Executors
 import java.util.concurrent.Future
 
 /** Owns asynchronous requests and presentation state; domain rules stay behind operations. */
-internal class ManualSearchController(private val operations: ManualSearchOperations) : AutoCloseable {
-    var state by mutableStateOf(ManualSearchState(
+internal class ManualSearchController(private val operations: ManualSearchOperations, initialState: ManualSearchState? = null) : AutoCloseable {
+    var state by mutableStateOf(initialState ?: ManualSearchState(
         sort = CandidateColumn.entries.firstOrNull { it.name == operations.candidateSort() } ?: CandidateColumn.PREFERENCE,
         source = LyricsSource.entries.firstOrNull { it.name == operations.searchSource() },
     ))

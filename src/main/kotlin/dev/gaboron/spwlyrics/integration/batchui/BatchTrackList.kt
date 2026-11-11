@@ -18,6 +18,7 @@ import dev.gaboron.spwlyrics.application.LyricsBatchItemState
 import dev.gaboron.spwlyrics.integration.composeui.*
 import dev.gaboron.spwlyrics.integration.workspace.LyricsSection
 import dev.gaboron.spwlyrics.integration.workspace.LyricsListDivider
+import dev.gaboron.spwlyrics.integration.tutorialui.tutorialTarget
 
 @OptIn(UnstableSaltUiApi::class)
 @Composable
@@ -48,7 +49,8 @@ internal fun BatchTrackList(state: BatchProcessingState, select: (String) -> Uni
             else {
                 LazyColumn(Modifier.fillMaxSize().padding(end = 12.dp), state = list, contentPadding = PaddingValues(4.dp)) {
                     itemsIndexed(state.snapshot.items, key = { index, _ -> "$index:${state.keys[index]}" }) { index, item ->
-                        Column(Modifier.animateItem()) {
+                        val target = if (index == 0) Modifier.tutorialTarget(BatchTutorialTarget.TRACKS) else Modifier
+                        Column(target.animateItem()) {
                             BatchTrackRow(item, state.keys[index] in state.selectedKeys,
                                 cursor == index || item.state == LyricsBatchItemState.SEARCHING, state.editable, { edit(item.query) }) {
                                 focus.requestFocus(); cursor = index; select(state.keys[index])

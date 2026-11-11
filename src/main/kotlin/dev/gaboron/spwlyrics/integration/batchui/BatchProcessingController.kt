@@ -16,8 +16,8 @@ import java.util.concurrent.TimeUnit
 internal class BatchProcessingController(
     private val processor: LyricsBatchProcessor,
     private val describeFailure: (Throwable) -> String,
-) : AutoCloseable {
-    var state by mutableStateOf(BatchProcessingState())
+) : BatchProcessingActions, AutoCloseable {
+    override var state by mutableStateOf(BatchProcessingState())
         private set
     @Volatile private var closed = false
     private var polling = false
@@ -34,30 +34,30 @@ internal class BatchProcessingController(
     }
 
     fun load() = request { processor.snapshot(loadLibrary = true) }
-    fun refresh() { if (state.editable) request { processor.reloadLibrary() } }
-    fun includeCached(value: Boolean) { if (state.editable) state = state.copy(includeCached = value) }
-    fun select(key: String) {
+    override fun refresh() { if (state.editable) request { processor.reloadLibrary() } }
+    override fun includeCached(value: Boolean) { if (state.editable) state = state.copy(includeCached = value) }
+    override fun select(key: String) {
         if (state.editable) state = state.copy(selectedKeys = if (key in state.selectedKeys) state.selectedKeys - key else state.selectedKeys + key)
     }
-    fun selectAll(value: Boolean) {
+    override fun selectAll(value: Boolean) {
         if (state.editable) state = state.copy(selectedKeys = if (value) state.keys.toSet() else emptySet())
     }
 
-    fun start(metadata: BatchMetadataOptions? = null) {
+    override fun start(metadata: BatchMetadataOptions?) {
         if (!state.editable || state.selectedKeys.isEmpty()) return
         val selected = state.selectedKeys
         val includeCached = state.includeCached
         request(preserveSelection = false) { processor.start(includeCached, selected, writeMetadata = metadata) }
     }
 
-    fun pauseOrResume() {
+    override fun pauseOrResume() {
         if (state.busy || !state.active) return
         val resume = state.snapshot.state == LyricsBatchState.PAUSED
         request(preserveSelection = false) { if (resume) processor.resume() else processor.pause() }
     }
 
-    fun stop() { if (!state.busy && state.active) request(preserveSelection = false) { processor.cancel() } }
-    fun retry() {
+    override fun stop() { if (!state.busy && state.active) request(preserveSelection = false) { processor.cancel() } }
+    override fun retry() {
         if (state.editable && state.snapshot.items.any { it.state == LyricsBatchItemState.FAILED }) {
             request(preserveSelection = false) { processor.start(includeCached = false, retryFailed = true) }
         }

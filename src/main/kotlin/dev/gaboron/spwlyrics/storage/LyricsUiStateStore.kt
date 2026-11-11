@@ -25,10 +25,13 @@ internal class LyricsUiStateStore(private val path: Path) {
     fun searchSource(): String = values.getProperty("searchSource", "")
 
     @Synchronized
-    fun metadataTutorialCompleted(): Boolean = values.getProperty("metadataTutorialCompleted", "false").toBoolean()
+    fun tutorialCompleted(page: String): Boolean = values.getProperty("${page}TutorialCompleted", "false").toBoolean()
 
     @Synchronized
-    fun rememberMetadataTutorialCompleted(value: Boolean): Boolean = write("metadataTutorialCompleted", value.toString())
+    fun rememberTutorialCompleted(page: String, value: Boolean): Boolean = write("${page}TutorialCompleted", value.toString())
+
+    @Synchronized
+    fun resetTutorials(): Boolean = write(listOf("search", "metadata", "batch").associate { "${it}TutorialCompleted" to "false" })
 
     @Synchronized
     fun rememberLyricsFormat(value: String): Boolean = write("lyricsFormat", value)
@@ -39,10 +42,12 @@ internal class LyricsUiStateStore(private val path: Path) {
     @Synchronized
     fun rememberSearchSource(value: String?): Boolean = write("searchSource", value.orEmpty())
 
-    private fun write(key: String, value: String): Boolean {
+    private fun write(key: String, value: String): Boolean = write(mapOf(key to value))
+
+    private fun write(changes: Map<String, String>): Boolean {
         val updated = Properties().apply {
             putAll(this@LyricsUiStateStore.values)
-            setProperty(key, value)
+            putAll(changes)
         }
         return runCatching {
             Files.createDirectories(path.parent)

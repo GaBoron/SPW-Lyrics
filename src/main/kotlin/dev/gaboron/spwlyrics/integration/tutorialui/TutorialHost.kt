@@ -1,7 +1,10 @@
-package dev.gaboron.spwlyrics.integration.metadataui
+package dev.gaboron.spwlyrics.integration.tutorialui
 
 import androidx.compose.foundation.*
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateRectAsState
 import androidx.compose.animation.core.spring
@@ -43,14 +46,14 @@ import kotlinx.coroutines.delay
 
 private data class TutorialAnchor(val owner: Any, val bounds: Rect)
 private class TutorialAnchors {
-    val positions = mutableStateMapOf<MetadataTutorialTarget, TutorialAnchor>()
+    val positions = mutableStateMapOf<TutorialTarget, TutorialAnchor>()
 }
-private data class TutorialContext(val anchors: TutorialAnchors, val step: MetadataTutorialStep)
+private data class TutorialContext(val anchors: TutorialAnchors, val step: TutorialStep)
 private val LocalTutorialContext = staticCompositionLocalOf<TutorialContext?> { null }
 
 /** Register real, clipped layout bounds; scroll the requested control into view after pane transitions. */
 @Composable
-internal fun Modifier.metadataTutorialTarget(target: MetadataTutorialTarget): Modifier {
+internal fun Modifier.tutorialTarget(target: TutorialTarget): Modifier {
     val context = LocalTutorialContext.current ?: return this
     val anchors = context.anchors
     val owner = remember { Any() }
@@ -70,10 +73,10 @@ internal fun Modifier.metadataTutorialTarget(target: MetadataTutorialTarget): Mo
 }
 
 @Composable
-internal fun MetadataTutorialHost(controller: MetadataTutorialController, available: Boolean,
-    content: @Composable (MetadataTutorialStep?, MetadataTutorialDemo?) -> Unit) {
+internal fun <S : TutorialStep, D : AutoCloseable> TutorialHost(controller: TutorialController<S>, available: Boolean, createDemo: () -> D,
+    content: @Composable (S?, D?) -> Unit) {
     val step = controller.step.takeIf { controller.active && available }
-    val demo = remember(step != null) { if (step != null) MetadataTutorialDemo() else null }
+    val demo = remember(step != null) { if (step != null) createDemo() else null }
     val anchors = remember(demo) { TutorialAnchors() }
     var retainedTarget by remember(demo) { mutableStateOf<Rect?>(null) }
     DisposableEffect(demo) { onDispose { demo?.close() } }
@@ -98,14 +101,14 @@ internal fun MetadataTutorialHost(controller: MetadataTutorialController, availa
             } }
             Popup(position, properties = PopupProperties(focusable = true, dismissOnBackPress = false,
                 dismissOnClickOutside = false)) {
-                MetadataTutorialOverlay(controller, target, placementTarget, Modifier.size(maxWidth, maxHeight))
+                TutorialOverlay(controller, target, placementTarget, Modifier.size(maxWidth, maxHeight))
             }
         }
     }
 }
 
 @Composable
-private fun MetadataTutorialOverlay(controller: MetadataTutorialController, target: Rect, placementTarget: Rect, modifier: Modifier) {
+private fun <S : TutorialStep> TutorialOverlay(controller: TutorialController<S>, target: Rect, placementTarget: Rect, modifier: Modifier) {
     val accent = SaltTheme.colors.highlight
     val corners = SaltTheme.shapes.large
     val material = LocalDesktopPopupMaterial.current
@@ -115,6 +118,8 @@ private fun MetadataTutorialOverlay(controller: MetadataTutorialController, targ
     val position = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
     var positioned by remember { mutableStateOf(false) }
     val scroll = rememberScrollState()
+    val progress by animateFloatAsState((controller.index + 1f) / controller.steps.size,
+        tween(300), label = "tutorial progress")
     LaunchedEffect(controller.index) {
         scroll.scrollTo(0)
         withFrameNanos { }
@@ -166,25 +171,42 @@ private fun MetadataTutorialOverlay(controller: MetadataTutorialController, targ
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("虚拟歌曲演示", color = SaltTheme.colors.subText, style = SaltTheme.textStyles.sub)
-                Text("${controller.index + 1} / ${MetadataTutorialStep.entries.size}", color = accent)
+                Text("虚拟数据演示", color = SaltTheme.colors.subText, style = SaltTheme.textStyles.sub)
+                TutorialPageText(controller.index, "tutorial counter") { index ->
+                    Text("${index + 1} / ${controller.steps.size}", color = accent)
+                }
             }
-            LinearProgressIndicator((controller.index + 1f) / MetadataTutorialStep.entries.size,
+            LinearProgressIndicator(progress,
                 Modifier.fillMaxWidth().height(3.dp), color = accent, backgroundColor = accent.copy(alpha = .15f))
             Column(Modifier.weight(1f, fill = false).verticalScroll(scroll)
                 .semantics { liveRegion = LiveRegionMode.Polite }, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(controller.step.title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                Text(controller.step.detail)
+                TutorialPageText(controller.index, "tutorial explanation") { index ->
+                    val step = controller.steps[index]
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(step.title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                        Text(step.detail)
+                    }
+                }
                 controller.error?.let { Text(it, color = SaltTheme.colors.error) }
             }
             FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 DesktopButton("跳过教程", controller::finish)
                 DesktopButton("上一步", controller::previous, enabled = controller.index > 0)
-                DesktopButton(if (controller.index == MetadataTutorialStep.entries.lastIndex) "完成教程" else "下一步",
+                DesktopButton(if (controller.index == controller.steps.lastIndex) "完成教程" else "下一步",
                     controller::next, primary = true)
             }
             Text("← / → 切换，Enter 下一步，Esc 跳过", color = SaltTheme.colors.subText, style = SaltTheme.textStyles.sub)
         }
     }
+}
+
+@Composable
+private fun TutorialPageText(index: Int, label: String, content: @Composable (Int) -> Unit) {
+    AnimatedContent(index, label = label, transitionSpec = {
+        val direction = if (targetState > initialState) 1 else -1
+        ((fadeIn(tween(180, 40)) + slideInVertically(tween(240)) { direction * it / 8 }) togetherWith
+            (fadeOut(tween(120)) + slideOutVertically(tween(200)) { -direction * it / 8 })).using(
+            SizeTransform(clip = true, sizeAnimationSpec = { _, _ -> tween(240) }))
+    }, content = { content(it) })
 }

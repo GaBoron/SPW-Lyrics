@@ -10,7 +10,10 @@ import dev.gaboron.spwlyrics.integration.manualui.ManualSearchOperations
 import dev.gaboron.spwlyrics.integration.metadataui.MetadataEditorController
 import dev.gaboron.spwlyrics.integration.metadataui.MetadataEditorOperations
 import dev.gaboron.spwlyrics.integration.metadataui.MetadataLyricsView
-import dev.gaboron.spwlyrics.integration.metadataui.MetadataTutorialController
+import dev.gaboron.spwlyrics.integration.metadataui.MetadataTutorialStep
+import dev.gaboron.spwlyrics.integration.manualui.ManualTutorialStep
+import dev.gaboron.spwlyrics.integration.batchui.BatchTutorialStep
+import dev.gaboron.spwlyrics.integration.tutorialui.*
 import dev.gaboron.spwlyrics.storage.FileAudioMetadataStore
 import dev.gaboron.spwlyrics.application.TimingPlayback
 import dev.gaboron.spwlyrics.application.TimingAudioDecoder
@@ -25,6 +28,7 @@ internal enum class LyricsToolPage(val title: String) {
 internal class LyricsWorkspaceSession(
     manualOperations: ManualSearchOperations,
     metadataOperations: MetadataEditorOperations,
+    private val tutorialPreferences: TutorialPreferences,
     processor: LyricsBatchProcessor,
     describeFailure: (Throwable) -> String,
     timingPlayback: TimingPlayback,
@@ -33,12 +37,18 @@ internal class LyricsWorkspaceSession(
 ) : AutoCloseable {
     val manual = ManualSearchController(manualOperations)
     val metadata = MetadataEditorController(FileAudioMetadataStore(), metadataOperations)
-    val metadataTutorial = MetadataTutorialController(metadataOperations::tutorialCompleted, metadataOperations::saveTutorialCompleted) {
+    val batch = BatchProcessingController(processor, describeFailure)
+    val metadataTutorial = tutorial(TutorialKind.METADATA, MetadataTutorialStep.entries) {
         if (metadata.state.loaded == null && !metadata.state.busy) metadata.current()
+    }
+    val manualTutorial = tutorial(TutorialKind.SEARCH, ManualTutorialStep.entries) {
+        if (manual.state.query == null && !manual.state.mutating) manual.refreshTrack()
+    }
+    val batchTutorial = tutorial(TutorialKind.BATCH, BatchTutorialStep.entries) {
+        if (batch.state.keys.isEmpty()) batch.load()
     }
     val batchMetadata = MetadataEditorController(FileAudioMetadataStore(), metadataOperations, lyricsWritingEnabled = false)
     val timing = LyricsTimingController(metadata, timingPlayback, calibrationStore, timingAudio)
-    val batch = BatchProcessingController(processor, describeFailure)
     var page by mutableStateOf(LyricsToolPage.SEARCH)
         private set
     var lyricsView by mutableStateOf(MetadataLyricsView.STRUCTURED)
@@ -52,10 +62,19 @@ internal class LyricsWorkspaceSession(
         page = value
         if (!initialized.add(value) || !initialize) return
         when (value) {
-            LyricsToolPage.SEARCH -> manual.refreshTrack()
-            LyricsToolPage.BATCH -> batch.load()
+            LyricsToolPage.SEARCH -> if (!manualTutorial.active) manual.refreshTrack()
+            LyricsToolPage.BATCH -> if (!batchTutorial.active) batch.load()
             LyricsToolPage.METADATA -> if (!metadataTutorial.active && metadata.state.loaded == null && !metadata.state.busy) metadata.current()
         }
+    }
+
+    private fun <S : TutorialStep> tutorial(kind: TutorialKind, steps: List<S>, finished: () -> Unit) =
+        TutorialController(steps, { tutorialPreferences.completed(kind) }, { tutorialPreferences.saveCompleted(kind, it) }, finished)
+
+    fun resetTutorials() {
+        manualTutorial.reset()
+        metadataTutorial.reset()
+        batchTutorial.reset()
     }
 
     fun selectLyricsView(value: MetadataLyricsView) {

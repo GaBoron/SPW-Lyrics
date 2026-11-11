@@ -59,10 +59,10 @@
         },
         {
           "type": "button",
-          "title": "重置元数据编辑教程",
-          "summary": "下次进入元数据编辑页时，从头显示首次使用教程。",
+          "title": "重置全部教程",
+          "summary": "重新显示手动搜索、元数据编辑和批量管理的首次使用教程。",
           "arrow_type": "none",
-          "on_click": "dev.gaboron.spwlyrics.integration.SpwLyricsActions.resetMetadataTutorial"
+          "on_click": "dev.gaboron.spwlyrics.integration.SpwLyricsActions.resetTutorials"
         },
         {
           "type": "button",

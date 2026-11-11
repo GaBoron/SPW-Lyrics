@@ -44,6 +44,8 @@ import dev.gaboron.spwlyrics.integration.hostui.HostUiTargetCache
 import dev.gaboron.spwlyrics.storage.FileLyricsDelaySettings
 import dev.gaboron.spwlyrics.storage.FileTimingCalibrationStore
 import dev.gaboron.spwlyrics.storage.LyricsUiStateStore
+import dev.gaboron.spwlyrics.integration.tutorialui.TutorialPreferences
+import dev.gaboron.spwlyrics.integration.tutorialui.TutorialKind
 import java.time.Duration
 import dev.gaboron.spwlyrics.diagnostics.PluginPerformance
 import dev.gaboron.spwlyrics.diagnostics.PluginPerformance.Operation
@@ -90,7 +92,7 @@ object PluginRuntime {
     fun timingSeeked() { session?.timingSeeked() }
     fun openCacheFolder() { session?.openCacheFolder() }
     fun resetLyricsOrder() { session?.resetLyricsOrder() }
-    fun resetMetadataTutorial() { session?.resetMetadataTutorial() }
+    fun resetTutorials() { session?.resetTutorials() }
 }
 
 /** Callbacks capture this enable's objects, never a later enable's global state. */
@@ -131,7 +133,7 @@ private class PluginRuntimeSession : AutoCloseable {
             FileLyricsCache(cacheDirectory) to FileLyricsDelaySettings(root.resolve("歌词延迟"))
         }
         val uiState by lazy { LyricsUiStateStore(root.resolve("界面状态.properties")) }
-        resetTutorialState = { uiState.rememberMetadataTutorialCompleted(false) }
+        resetTutorialState = { uiState.resetTutorials() }
         cacheFolderOpener = CacheFolderOpener(cacheDirectory)
         settings = performance.measure(Operation.CONFIG) { PluginSettings(WorkshopApi.manager.createConfigManager(), {
             if (closed) return@PluginSettings
@@ -239,8 +241,6 @@ private class PluginRuntimeSession : AutoCloseable {
             else "批量处理失败：${error.message ?: "未知错误"}"
         }
         val metadataOperations = object : MetadataEditorOperations {
-            override fun tutorialCompleted() = uiState.metadataTutorialCompleted()
-            override fun saveTutorialCompleted(value: Boolean) = uiState.rememberMetadataTutorialCompleted(value)
             override fun lyricsFormat() = MetadataLyricsFormat.fromStorageValue(uiState.lyricsFormat())
             override fun saveLyricsFormat(format: MetadataLyricsFormat) = uiState.rememberLyricsFormat(format.storageValue)
             override fun currentAudioPath() = currentQuery()?.path?.takeIf(String::isNotBlank)
@@ -282,8 +282,12 @@ private class PluginRuntimeSession : AutoCloseable {
         val timingTransport = SpwTimingPlayback().also { timingPlayback = it }
         val timingRuntime = TimingMediaRuntime(pluginId, performance).also { timingMedia = it }
         val calibration by lazy { FileTimingCalibrationStore(root.resolve("打轴输入校准.properties")) }
+        val tutorialPreferences = object : TutorialPreferences {
+            override fun completed(kind: TutorialKind) = uiState.tutorialCompleted(kind.storageKey)
+            override fun saveCompleted(kind: TutorialKind, value: Boolean) = uiState.rememberTutorialCompleted(kind.storageKey, value)
+        }
         workspace = performance.measure(Operation.WORKSPACE) {
-            LyricsWorkspace({ LyricsWorkspaceSession(manualOperations, metadataOperations, batch, describeBatchFailure,
+            LyricsWorkspace({ LyricsWorkspaceSession(manualOperations, metadataOperations, tutorialPreferences, batch, describeBatchFailure,
                 timingTransport, calibration, SpwTimingAudioDecoder(timingRuntime, TimingRuntimeInstall(channel), performance)) }, ::toastWarning)
         }
         hostUi = performance.measure(Operation.HOST_START) {
@@ -374,10 +378,10 @@ private class PluginRuntimeSession : AutoCloseable {
         toastWarning(if (settings?.resetSelection() == true) "已恢复默认歌词排序。关闭并重新打开设置可查看默认顺序。" else "重置未完成，请重新打开设置后重试。")
     }
 
-    fun resetMetadataTutorial() {
+    fun resetTutorials() {
         if (resetTutorialState?.invoke() == true) {
-            workspace?.resetMetadataTutorial()
-            toastWarning("已重置元数据编辑教程，进入元数据编辑页即可从头查看。")
+            workspace?.resetTutorials()
+            toastWarning("已重置全部教程，进入手动搜索、元数据编辑或批量管理页即可从头查看。")
         } else toastWarning("教程重置未完成，请检查插件数据目录的写入权限后重试。")
     }
 

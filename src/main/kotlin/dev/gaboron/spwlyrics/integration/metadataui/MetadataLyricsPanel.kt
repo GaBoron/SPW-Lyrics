@@ -1,5 +1,7 @@
 package dev.gaboron.spwlyrics.integration.metadataui
 
+import dev.gaboron.spwlyrics.integration.tutorialui.tutorialTarget
+
 import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
@@ -18,11 +20,11 @@ internal fun MetadataLyricsPanel(controller: MetadataEditorController, timing: L
     view: MetadataLyricsView, selectView: (MetadataLyricsView) -> Unit, modifier: Modifier) {
     val state = controller.state
     val focused = view == MetadataLyricsView.TIMING
-    Column(modifier.metadataTutorialTarget(MetadataTutorialTarget.LYRICS), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier.tutorialTarget(MetadataTutorialTarget.LYRICS), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         LyricsTabs(MetadataLyricsView.entries.map { it.title }, view.ordinal,
             { selectView(MetadataLyricsView.entries[it]) }, compact = focused)
         LyricsPageTransition(view, { it.ordinal }, Modifier.weight(1f).fillMaxWidth()) { section ->
-            if (section == MetadataLyricsView.TIMING) TimingPanel(timing, Modifier.metadataTutorialTarget(MetadataTutorialTarget.TIMING_CONTROLS))
+            if (section == MetadataLyricsView.TIMING) TimingPanel(timing, Modifier.tutorialTarget(MetadataTutorialTarget.TIMING_CONTROLS))
             else LyricsSection(Modifier.fillMaxSize()) {
                 Box(Modifier.fillMaxSize().padding(16.dp)) {
                     when (section) {

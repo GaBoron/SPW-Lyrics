@@ -16,6 +16,7 @@ import com.moriafly.salt.ui.*
 import dev.gaboron.spwlyrics.domain.CandidateScore
 import dev.gaboron.spwlyrics.integration.composeui.*
 import dev.gaboron.spwlyrics.integration.workspace.*
+import dev.gaboron.spwlyrics.integration.tutorialui.tutorialTarget
 
 @Composable
 internal fun ManualCandidateList(state: ManualSearchState, select: (CandidateScore) -> Unit, selectSort: (CandidateColumn) -> Unit, modifier: Modifier) {
@@ -55,11 +56,13 @@ internal fun ManualCandidateList(state: ManualSearchState, select: (CandidateSco
                     else -> {
                         LazyColumn(Modifier.fillMaxSize().padding(end = 10.dp), state = list, contentPadding = PaddingValues(4.dp)) {
                             items(rows) { row ->
-                                ManualCandidateRow(row, row == rows.getOrNull(selectedIndex), !state.mutating,
-                                    automatic = state.isAutomatic(row), applied = state.isApplied(row)) {
-                                    focus.requestFocus(); select(row)
+                                Column(if (row == rows.first()) Modifier.tutorialTarget(ManualTutorialTarget.RESULTS) else Modifier) {
+                                    ManualCandidateRow(row, row == rows.getOrNull(selectedIndex), !state.mutating,
+                                        automatic = state.isAutomatic(row), applied = state.isApplied(row)) {
+                                        focus.requestFocus(); select(row)
+                                    }
+                                    LyricsListDivider()
                                 }
-                                LyricsListDivider()
                             }
                         }
                         VerticalScrollbar(rememberScrollbarAdapter(list), Modifier.align(Alignment.CenterEnd).fillMaxHeight())

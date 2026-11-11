@@ -8,13 +8,14 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import dev.gaboron.spwlyrics.integration.batchui.BatchProcessingContent
+import dev.gaboron.spwlyrics.integration.batchui.*
 import dev.gaboron.spwlyrics.integration.composeui.*
-import dev.gaboron.spwlyrics.integration.manualui.ManualSearchContent
+import dev.gaboron.spwlyrics.integration.manualui.*
 import dev.gaboron.spwlyrics.integration.metadataui.MetadataDiscardDialog
 import dev.gaboron.spwlyrics.integration.metadataui.MetadataEditorContent
 import dev.gaboron.spwlyrics.integration.metadataui.MetadataWriteDialog
-import dev.gaboron.spwlyrics.integration.metadataui.MetadataTutorialHost
+import dev.gaboron.spwlyrics.integration.metadataui.MetadataTutorialDemo
+import dev.gaboron.spwlyrics.integration.tutorialui.TutorialHost
 import dev.gaboron.spwlyrics.integration.metadataui.MetadataTutorialStep
 
 @Composable
@@ -30,23 +31,10 @@ internal fun LyricsWorkspaceContent(session: LyricsWorkspaceSession, close: () -
             LyricsWorkspaceHeader(session.page, focused, session::select) { session.requestClose(close) }
             LyricsPageTransition(session.page, { it.ordinal }, Modifier.weight(1f).fillMaxWidth()) { page ->
                 pages.SaveableStateProvider(page.name) {
-                    if (page == LyricsToolPage.METADATA) {
-                        val state = session.metadata.state
-                        MetadataTutorialHost(session.metadataTutorial,
-                            available = !state.busy && state.onlineImport == null && state.pendingWrite == null && state.pendingDiscard == null) { step, demo ->
-                            LyricsViewport(Modifier.fillMaxSize()) {
-                                val editor = if (step == MetadataTutorialStep.ONLINE_PREVIEW)
-                                    demo?.importingEditor else demo?.editor
-                                MetadataEditorContent(editor ?: session.metadata, demo?.timing ?: session.timing,
-                                    session.lyricsView, session::selectLyricsView, step)
-                            }
-                        }
-                    } else LyricsViewport(Modifier.fillMaxSize()) {
-                        when (page) {
-                            LyricsToolPage.SEARCH -> ManualSearchContent(session.manual)
-                            LyricsToolPage.BATCH -> BatchProcessingContent(session.batch, session.batchMetadata)
-                            LyricsToolPage.METADATA -> Unit
-                        }
+                    when (page) {
+                        LyricsToolPage.SEARCH -> ManualTutorialPage(session)
+                        LyricsToolPage.METADATA -> MetadataTutorialPage(session)
+                        LyricsToolPage.BATCH -> BatchTutorialPage(session)
                     }
                 }
             }
@@ -56,4 +44,46 @@ internal fun LyricsWorkspaceContent(session: LyricsWorkspaceSession, close: () -
     MetadataDiscardDialog(session.batchMetadata)
     MetadataWriteDialog(session.metadata)
     MetadataWriteDialog(session.batchMetadata)
+}
+
+@Composable
+private fun MetadataTutorialPage(session: LyricsWorkspaceSession) {
+    val state = session.metadata.state
+    TutorialHost(session.metadataTutorial,
+        available = session.page == LyricsToolPage.METADATA && !state.busy && state.onlineImport == null && state.pendingWrite == null && state.pendingDiscard == null,
+        createDemo = ::MetadataTutorialDemo) { step, demo ->
+        key(demo) {
+            LyricsViewport(Modifier.fillMaxSize()) {
+                val editor = if (step == MetadataTutorialStep.ONLINE_PREVIEW) demo?.importingEditor else demo?.editor
+                MetadataEditorContent(editor ?: session.metadata, demo?.timing ?: session.timing,
+                    session.lyricsView, session::selectLyricsView, step)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ManualTutorialPage(session: LyricsWorkspaceSession) {
+    TutorialHost(session.manualTutorial,
+        available = session.page == LyricsToolPage.SEARCH && !session.manual.state.mutating && !session.manual.state.metadataOnly,
+        createDemo = ::ManualTutorialDemo) { step, demo ->
+        key(demo) {
+            LyricsViewport(Modifier.fillMaxSize()) { ManualSearchContent(demo?.controller ?: session.manual, step) }
+        }
+    }
+}
+
+@Composable
+private fun BatchTutorialPage(session: LyricsWorkspaceSession) {
+    val state = session.batchMetadata.state
+    TutorialHost(session.batchTutorial,
+        available = session.page == LyricsToolPage.BATCH && !session.batch.state.active && !state.busy && state.pendingDiscard == null && state.pendingWrite == null,
+        createDemo = ::BatchTutorialDemo) { step, demo ->
+        val controller = remember(demo, step?.scene) { demo?.controller(step?.scene ?: BatchTutorialScene.READY) }
+        key(demo) {
+            LyricsViewport(Modifier.fillMaxSize()) {
+                BatchProcessingContent(controller ?: session.batch, demo?.metadata?.editor ?: session.batchMetadata, step)
+            }
+        }
+    }
 }

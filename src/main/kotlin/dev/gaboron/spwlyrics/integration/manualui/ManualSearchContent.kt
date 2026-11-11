@@ -9,12 +9,14 @@ import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.dp
 import dev.gaboron.spwlyrics.integration.composeui.*
 import dev.gaboron.spwlyrics.integration.workspace.*
+import dev.gaboron.spwlyrics.integration.tutorialui.tutorialTarget
 
 @Composable
-internal fun ManualSearchContent(controller: ManualSearchController) {
+internal fun ManualSearchContent(controller: ManualSearchController, tutorial: ManualTutorialStep? = null) {
     val state = controller.state
     val searchFocus = remember { FocusRequester() }
     var detail by rememberSaveable { mutableStateOf(false) }
+    val shownDetail = tutorial?.preview ?: detail
     Column(Modifier.fillMaxSize().onPreviewKeyEvent {
         if (it.type != KeyEventType.KeyDown) false else when {
             it.isCtrlPressed && it.key == Key.F -> { searchFocus.requestFocus(); true }
@@ -28,21 +30,22 @@ internal fun ManualSearchContent(controller: ManualSearchController) {
             val wide = maxWidth >= 900.dp
             if (wide) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 ManualCandidateList(state, { controller.select(it); detail = true }, controller::sort, Modifier.weight(1f).fillMaxHeight())
-                ManualPreviewContent(controller, Modifier.weight(1.05f).fillMaxHeight())
+                ManualPreviewContent(controller, Modifier.weight(1.05f).fillMaxHeight(), tutorial)
             } else Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                LyricsTabs(listOf("搜索结果", "歌词预览"), if (detail) 1 else 0, { detail = it == 1 })
-                LyricsPageTransition(detail, { if (it) 1 else 0 }, Modifier.weight(1f).fillMaxWidth()) { preview ->
-                    if (preview) ManualPreviewContent(controller, Modifier.fillMaxSize())
+                LyricsTabs(listOf("搜索结果", "歌词预览"), if (shownDetail) 1 else 0, { detail = it == 1 })
+                LyricsPageTransition(shownDetail, { if (it) 1 else 0 }, Modifier.weight(1f).fillMaxWidth()) { preview ->
+                    if (preview) ManualPreviewContent(controller, Modifier.fillMaxSize(), tutorial)
                     else ManualCandidateList(state, { controller.select(it); detail = true }, controller::sort, Modifier.fillMaxSize())
                 }
             }
         }
         LyricsActionBar {
-            DesktopButton("恢复自动匹配", controller::useAutomatic, enabled = state.canMutate)
+            DesktopButton("恢复自动匹配", controller::useAutomatic, Modifier.tutorialTarget(ManualTutorialTarget.RECOVERY), enabled = state.canMutate)
             DesktopButton("切回本地歌词", controller::useLocal, enabled = state.canMutate)
-            DesktopButton("应用元数据", controller::editMetadata, enabled = !state.busy && state.selected != null)
+            DesktopButton("应用元数据", controller::editMetadata, Modifier.tutorialTarget(ManualTutorialTarget.IMPORT), enabled = !state.busy && state.selected != null)
             DesktopTooltip("仅更改当前歌曲使用的歌词，不修改歌曲文件") {
                 DesktopButton(if (state.selectedIsApplied) "已应用" else "应用歌词", controller::apply,
+                    Modifier.tutorialTarget(ManualTutorialTarget.APPLY),
                     enabled = state.canMutate && state.document != null && !state.selectedIsApplied,
                     primary = true, glyph = DesktopGlyph.Check)
             }
@@ -51,14 +54,14 @@ internal fun ManualSearchContent(controller: ManualSearchController) {
 }
 
 @Composable
-private fun ManualPreviewContent(controller: ManualSearchController, modifier: Modifier) {
+private fun ManualPreviewContent(controller: ManualSearchController, modifier: Modifier, tutorial: ManualTutorialStep?) {
     val state = controller.state
     BoxWithConstraints(modifier) {
         val metadataHeight = ((maxHeight - 160.dp) / 2).coerceIn(48.dp, 240.dp)
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            ManualLyricsPreview(state, Modifier.weight(1f).fillMaxWidth())
-            ManualMetadataViewer(state, metadataHeight)
-            ManualDelayEditor(state, controller)
+            ManualLyricsPreview(state, Modifier.weight(1f).fillMaxWidth().tutorialTarget(ManualTutorialTarget.PREVIEW))
+            ManualMetadataViewer(state, metadataHeight, forceExpanded = tutorial == ManualTutorialStep.METADATA)
+            ManualDelayEditor(state, controller, forceExpanded = tutorial == ManualTutorialStep.DELAY)
         }
     }
 }

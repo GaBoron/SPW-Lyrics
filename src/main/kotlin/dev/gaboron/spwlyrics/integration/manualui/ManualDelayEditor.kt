@@ -10,14 +10,15 @@ import androidx.compose.ui.unit.dp
 import com.moriafly.salt.ui.*
 import dev.gaboron.spwlyrics.integration.composeui.*
 import dev.gaboron.spwlyrics.integration.workspace.LyricsSection
+import dev.gaboron.spwlyrics.integration.tutorialui.tutorialTarget
 
 @OptIn(UnstableSaltUiApi::class)
 @Composable
-internal fun ManualDelayEditor(state: ManualSearchState, controller: ManualSearchController) {
+internal fun ManualDelayEditor(state: ManualSearchState, controller: ManualSearchController, forceExpanded: Boolean = false) {
     var expanded by rememberSaveable { mutableStateOf(false) }
-    LyricsSection {
+    LyricsSection(Modifier.tutorialTarget(ManualTutorialTarget.DELAY)) {
         Item(onClick = { expanded = !expanded }, text = "时间调整", sub = "已保存 ${state.savedDelay} ms")
-        AnimatedVisibility(expanded, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+        AnimatedVisibility(expanded || forceExpanded, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
           Column {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically) {

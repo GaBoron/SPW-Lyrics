@@ -1,5 +1,7 @@
 package dev.gaboron.spwlyrics.integration.metadataui
 
+import dev.gaboron.spwlyrics.integration.tutorialui.tutorialTarget
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -20,7 +22,7 @@ internal fun MetadataCoverPanel(controller: MetadataEditorController) {
         MetadataImportValue(state.draft.cover, state.importBefore?.cover, state.importBefore != null, { it == null }) {
             MetadataCoverPreview(it, "歌曲封面")
         }
-        Row(Modifier.fillMaxWidth().metadataTutorialTarget(MetadataTutorialTarget.COVER), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth().tutorialTarget(MetadataTutorialTarget.COVER), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             DesktopButton("选图", controller::importCover,
                 Modifier.weight(1f).semantics { contentDescription = "选择封面图片" }, enabled = enabled)
             DesktopButton("移除", controller::removeCover,

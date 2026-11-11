@@ -1,5 +1,7 @@
 package dev.gaboron.spwlyrics.integration.metadataui
 
+import dev.gaboron.spwlyrics.integration.tutorialui.tutorialTarget
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -16,7 +18,7 @@ internal fun MetadataFieldsPanel(controller: MetadataEditorController, modifier:
     LyricsScroll(modifier) {
         MetadataCoverPanel(controller)
         AudioMetadataField.entries.forEach { field ->
-            val target = if (field == AudioMetadataField.TITLE) Modifier.metadataTutorialTarget(MetadataTutorialTarget.FIELDS) else Modifier
+            val target = if (field == AudioMetadataField.TITLE) Modifier.tutorialTarget(MetadataTutorialTarget.FIELDS) else Modifier
             Column(target, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(field.label, color = SaltTheme.colors.subText, style = SaltTheme.textStyles.sub)
                 val multiple = field in listOf(AudioMetadataField.ARTIST, AudioMetadataField.ALBUM_ARTIST, AudioMetadataField.COMPOSER, AudioMetadataField.LYRICIST, AudioMetadataField.GENRE, AudioMetadataField.COMMENT)

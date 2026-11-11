@@ -1,5 +1,7 @@
 package dev.gaboron.spwlyrics.integration.metadataui
 
+import dev.gaboron.spwlyrics.integration.tutorialui.tutorialTarget
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -25,7 +27,7 @@ internal fun MetadataImportPanel(controller: MetadataEditorController, pending: 
         LyricsScroll(Modifier.weight(1f).fillMaxWidth()) {
             pending.notice?.let { LyricsStatus(it) }
             pending.fields.filterValues(String::isNotBlank).forEach { (field, value) ->
-                val target = if (field == AudioMetadataField.YEAR) Modifier.metadataTutorialTarget(MetadataTutorialTarget.IMPORT_PREVIEW) else Modifier
+                val target = if (field == AudioMetadataField.YEAR) Modifier.tutorialTarget(MetadataTutorialTarget.IMPORT_PREVIEW) else Modifier
                 Column(target, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     DesktopCheck(field in pending.selected, { controller.selectImport(field, field !in pending.selected) }, enabled, field.label)
                     Text(value, Modifier.padding(start = 28.dp), color = SaltTheme.colors.text)

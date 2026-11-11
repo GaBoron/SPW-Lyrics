@@ -1,19 +1,20 @@
 package dev.gaboron.spwlyrics.integration.metadataui
 
-import androidx.compose.runtime.*
+import dev.gaboron.spwlyrics.integration.tutorialui.TutorialStep
+import dev.gaboron.spwlyrics.integration.tutorialui.TutorialTarget
 
-internal enum class MetadataTutorialTarget {
+internal enum class MetadataTutorialTarget : TutorialTarget {
     FILE, COVER, FIELDS, ONLINE, IMPORT, IMPORT_PREVIEW, LYRICS, LYRIC_ACTIONS, LINE, WORDS, TIMING_CONTROLS, FORMAT, SAVE
 }
 
 /** A read-only tour: steps select presentation only, never editor commands or draft data. */
 internal enum class MetadataTutorialStep(
-    val title: String,
-    val detail: String,
-    val target: MetadataTutorialTarget,
+    override val title: String,
+    override val detail: String,
+    override val target: MetadataTutorialTarget,
     val view: MetadataLyricsView = MetadataLyricsView.STRUCTURED,
     val fields: Boolean = false,
-) {
+) : TutorialStep {
     OPEN("先确认正在编辑哪首歌",
         "这里是歌曲读取区。正式编辑时，点击“打开歌曲”选择文件，或点“读取当前歌曲”。顶部路径就是保存目标，切歌不会自动更换它。\n\n现在展示的是虚拟歌曲《星光来信》。跟随气泡认识控件，完成后会回到你的真实草稿。",
         MetadataTutorialTarget.FILE),
@@ -60,49 +61,6 @@ internal enum class MetadataTutorialStep(
         "核对顶部路径和当前草稿后，点击“写入歌曲文件”，或按 Ctrl+S。出现格式损失提示时，可继续写入、改选格式或返回编辑。\n\n写入才会修改音频。保存后歌词会刷新，歌曲标签和封面可重新扫描 SPW 曲库更新。",
         MetadataTutorialTarget.SAVE),
     RELOAD("重新读取与下次查看",
-        "“重新读取”或 F5 重载顶部路径的文件。有未保存修改时，可保存并继续、放弃修改或继续编辑。\n\n教程完成或跳过后不再自动出现；想重看可在插件配置中点击“重置元数据编辑教程”。现在可以按自己的需要开始编辑了。",
+        "“重新读取”或 F5 重载顶部路径的文件。有未保存修改时，可保存并继续、放弃修改或继续编辑。\n\n教程完成或跳过后不再自动出现；想重看可在插件配置中点击“重置全部教程”。现在可以按自己的需要开始编辑了。",
         MetadataTutorialTarget.FILE),
-}
-
-/** Session progress survives tab changes; only completion or explicit skipping is persisted. */
-internal class MetadataTutorialController(
-    completed: () -> Boolean,
-    private val saveCompleted: (Boolean) -> Boolean,
-    private val onFinished: () -> Unit = {},
-) {
-    var active by mutableStateOf(!completed())
-        private set
-    var index by mutableIntStateOf(0)
-        private set
-    var error by mutableStateOf<String?>(null)
-        private set
-    val step get() = MetadataTutorialStep.entries[index]
-
-    fun previous() {
-        index = (index - 1).coerceAtLeast(0)
-        error = null
-    }
-    fun next() {
-        if (index == MetadataTutorialStep.entries.lastIndex) finish()
-        else {
-            index++
-            error = null
-        }
-    }
-
-    fun finish() {
-        if (!active) return
-        if (saveCompleted(true)) {
-            active = false
-            error = null
-            onFinished()
-        }
-        else error = "未能记住教程状态，请检查插件数据目录的写入权限后重试。"
-    }
-
-    fun reset() {
-        index = 0
-        active = true
-        error = null
-    }
 }

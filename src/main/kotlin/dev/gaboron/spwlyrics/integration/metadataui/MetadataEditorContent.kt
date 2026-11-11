@@ -1,5 +1,7 @@
 package dev.gaboron.spwlyrics.integration.metadataui
 
+import dev.gaboron.spwlyrics.integration.tutorialui.tutorialTarget
+
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -34,7 +36,7 @@ internal fun MetadataEditorContent(controller: MetadataEditorController, timing:
         else false
     }, verticalArrangement = Arrangement.spacedBy(gap)) {
         AnimatedVisibility(!focused, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
-            Column(Modifier.metadataTutorialTarget(MetadataTutorialTarget.FILE), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.tutorialTarget(MetadataTutorialTarget.FILE), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     DesktopButton("打开歌曲", controller::openFile, enabled = !state.busy, glyph = DesktopGlyph.Library)
                     DesktopButton("读取当前歌曲", controller::current, enabled = !state.busy, loading = state.busy)

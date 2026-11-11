@@ -1,5 +1,7 @@
 package dev.gaboron.spwlyrics.integration.metadataui
 
+import dev.gaboron.spwlyrics.integration.tutorialui.tutorialTarget
+
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
@@ -41,17 +43,17 @@ internal fun MetadataEditorActions(controller: MetadataEditorController, focused
                 androidx.compose.animation.AnimatedVisibility(!focused, enter = fadeIn() + slideInHorizontally { -it / 8 },
                     exit = fadeOut() + slideOutHorizontally { -it / 8 }) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        DesktopButton("在线匹配信息与封面", controller::openSearch, Modifier.metadataTutorialTarget(MetadataTutorialTarget.ONLINE),
+                        DesktopButton("在线匹配信息与封面", controller::openSearch, Modifier.tutorialTarget(MetadataTutorialTarget.ONLINE),
                             enabled = state.loaded != null && !state.busy, glyph = DesktopGlyph.Search)
-                        DesktopButton("导入歌词", controller::importLyrics, Modifier.metadataTutorialTarget(MetadataTutorialTarget.IMPORT),
+                        DesktopButton("导入歌词", controller::importLyrics, Modifier.tutorialTarget(MetadataTutorialTarget.IMPORT),
                             enabled = state.loaded != null && !state.busy)
-                        Box(Modifier.metadataTutorialTarget(MetadataTutorialTarget.FORMAT)) {
+                        Box(Modifier.tutorialTarget(MetadataTutorialTarget.FORMAT)) {
                             MetadataFormatPicker(state.format, controller::format, enabled = !state.busy)
                         }
                     }
                 }
             }
-            DesktopButton("写入歌曲文件", controller::save, Modifier.metadataTutorialTarget(MetadataTutorialTarget.SAVE),
+            DesktopButton("写入歌曲文件", controller::save, Modifier.tutorialTarget(MetadataTutorialTarget.SAVE),
                 enabled = state.canSave, primary = true, glyph = DesktopGlyph.Check)
         }
     }

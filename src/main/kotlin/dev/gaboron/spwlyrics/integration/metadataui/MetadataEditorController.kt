@@ -30,8 +30,6 @@ import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 
 internal interface MetadataEditorOperations {
-    fun tutorialCompleted(): Boolean = false
-    fun saveTutorialCompleted(value: Boolean): Boolean = true
     fun lyricsFormat(): MetadataLyricsFormat = MetadataLyricsFormat.TTML
     fun saveLyricsFormat(format: MetadataLyricsFormat): Boolean = true
     fun currentAudioPath(): String?

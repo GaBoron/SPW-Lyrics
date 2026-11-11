@@ -13,24 +13,25 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.moriafly.salt.ui.*
 import dev.gaboron.spwlyrics.integration.workspace.*
+import dev.gaboron.spwlyrics.integration.tutorialui.tutorialTarget
 
 @OptIn(UnstableSaltUiApi::class)
 @Composable
-internal fun ManualMetadataViewer(state: ManualSearchState, maxBodyHeight: Dp) {
+internal fun ManualMetadataViewer(state: ManualSearchState, maxBodyHeight: Dp, forceExpanded: Boolean = false) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     val candidate = state.selected?.candidate
     val groups = remember(candidate, state.lyricsMetadata) { ManualMetadataPresentation.groups(candidate, state.lyricsMetadata) }
     val count = groups.sumOf { it.entries.size }
     val scroll = rememberScrollState()
     LaunchedEffect(candidate?.source, candidate?.remoteId) { scroll.scrollTo(0) }
-    LyricsSection {
+    LyricsSection(Modifier.tutorialTarget(ManualTutorialTarget.METADATA)) {
         Item({ expanded = !expanded }, text = "元数据查看", sub = when {
             candidate == null -> "选择一份歌词查看"
             state.previewing -> "正在加载歌词元数据…"
             count == 0 -> "暂无元数据"
             else -> "$count 项"
         })
-        AnimatedVisibility(expanded, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+        AnimatedVisibility(expanded || forceExpanded, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
             Box(Modifier.fillMaxWidth().heightIn(max = maxBodyHeight)) {
                 SelectionContainer {
                     Column(Modifier.fillMaxWidth().verticalScroll(scroll).padding(16.dp).padding(end = 12.dp),
