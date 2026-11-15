@@ -19,7 +19,8 @@ import dev.gaboron.spwlyrics.integration.composeui.LocalDesktopPopupMaterial
 /** Retain the host composition/state while hiding its page ink beneath the transparent workspace. */
 @Composable
 internal fun HostLyricsSurface(bridge: HostUiBridge, workspace: LyricsWorkspace) {
-    val visibleSession = workspace.session.takeUnless { bridge.playerVisible() }
+    // Compose the destination while the player recedes so its fade can overlap the sheet motion.
+    val visibleSession = workspace.session
     val active = visibleSession != null
     Box(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxSize().drawWithContent { if (!active) drawContent() }
@@ -34,7 +35,7 @@ internal fun HostLyricsSurface(bridge: HostUiBridge, workspace: LyricsWorkspace)
             bridge.capture(currentComposer)
         }
         val dark = bridge.isDarkTheme()
-        LyricsTransition(visibleSession, Modifier.fillMaxSize()) { session ->
+        LyricsTransition(visibleSession, Modifier.fillMaxSize(), initialValue = null) { session ->
             if (session != null) CompositionLocalProvider(LocalDesktopPopupMaterial provides bridge.popupSurface) {
                 HostLyricsPage(workspace, dark, session, bridge::back)
             }

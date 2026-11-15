@@ -3,6 +3,8 @@ package dev.gaboron.spwlyrics.integration.workspace
 import androidx.compose.animation.*
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.rememberTransition
 import androidx.compose.foundation.background
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -13,8 +15,14 @@ import com.moriafly.salt.ui.SaltTheme
 
 /** Short, bounded transitions respond to navigation without moving the surrounding layout. */
 @Composable
-internal fun <T> LyricsTransition(value: T, modifier: Modifier = Modifier, content: @Composable (T) -> Unit) {
-    Crossfade(value, modifier, animationSpec = tween(180), label = "lyrics content", content = content)
+@OptIn(ExperimentalAnimationApi::class)
+internal fun <T> LyricsTransition(value: T, modifier: Modifier = Modifier, initialValue: T = value,
+    content: @Composable (T) -> Unit) {
+    // An explicit initial value also animates a workspace first mounted with an active session.
+    val state = remember { MutableTransitionState(initialValue) }
+    state.targetState = value
+    val transition = rememberTransition(state, label = "lyrics content")
+    transition.Crossfade(modifier, animationSpec = tween(180), content = content)
 }
 
 /** Adjacent tabs share a horizontal axis, including when a user reverses an unfinished transition. */
