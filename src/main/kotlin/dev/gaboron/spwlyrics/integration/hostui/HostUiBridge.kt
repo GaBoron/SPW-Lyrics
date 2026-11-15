@@ -31,6 +31,10 @@ internal class HostUiBridge(val targets: HostUiDiscovery.Targets, private val lo
     private val collapsePlayer = method(targets.collapsePlayer())
     private val playerState = field(targets.playerState())
     private val playerExpanded = method(targets.playerExpanded())
+    private val playerSheet = playerState.type.methods.single { it.parameterCount == 0 &&
+        !it.returnType.isPrimitive && it.returnType != Void.TYPE && it.declaringClass == playerState.type }
+    private val playerProgress = playerSheet.returnType.methods.single {
+        it.parameterCount == 0 && it.returnType == Float::class.javaPrimitiveType }
     private val hostBack = method(targets.back())
     private val stack = field(targets.backStack())
     private val navigatorType = stack.declaringClass
@@ -89,6 +93,12 @@ internal class HostUiBridge(val targets: HostUiDiscovery.Targets, private val lo
     }
 
     fun playerExpanded(): Boolean = navigator?.let { playerExpanded.invoke(playerState.get(it)) as Boolean } == true
+
+    /** Expansion is a target; the sheet still covers the workspace throughout its closing slide. */
+    fun playerVisible(): Boolean = navigator?.let { host ->
+        val state = playerState.get(host)
+        playerExpanded.invoke(state) == true || (playerProgress.invoke(playerSheet.invoke(state)) as Number).toFloat() > 0f
+    } == true
 
     fun back() {
         if (playerExpanded()) replay { hostBack.invoke(navigator) }
