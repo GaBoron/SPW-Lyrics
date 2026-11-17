@@ -70,6 +70,13 @@
           "summary": "在文件资源管理器中打开已缓存的歌词",
           "arrow_type": "none",
           "on_click": "dev.gaboron.spwlyrics.integration.SpwLyricsActions.openCacheFolder"
+        },
+        {
+          "type": "button",
+          "title": "赞助支持（爱发电）",
+          "summary": "https://afdian.com/a/gaboron",
+          "arrow_type": "link",
+          "on_click": "dev.gaboron.spwlyrics.integration.SpwLyricsActions.openSponsor"
         }
       ]
     }

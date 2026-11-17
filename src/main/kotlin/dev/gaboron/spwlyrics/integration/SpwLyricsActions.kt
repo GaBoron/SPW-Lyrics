@@ -17,6 +17,9 @@ object SpwLyricsActions {
     fun openCacheFolder() = PluginRuntime.openCacheFolder()
 
     @JvmStatic
+    fun openSponsor() = PluginRuntime.openSponsor()
+
+    @JvmStatic
     fun resetLyricsOrder() = PluginRuntime.resetLyricsOrder()
 
     @JvmStatic

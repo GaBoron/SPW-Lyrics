@@ -15,7 +15,8 @@
 <p align="center">
   <a href="https://github.com/GaBoron/SPW-Lyrics/releases/latest">下载插件</a> ·
   <a href="docs/使用说明.md">使用说明</a> ·
-  <a href="docs/常见问题.md">常见问题</a>
+  <a href="docs/常见问题.md">常见问题</a> ·
+  <a href="https://afdian.com/a/gaboron">赞助支持（爱发电）</a>
 </p>
 
 播放歌曲即可自动获取歌词；结果不合适时，可以在 SPW 内搜索、预览并手动选择。也可编辑歌曲标签、封面和内嵌歌词，或批量处理音乐库。

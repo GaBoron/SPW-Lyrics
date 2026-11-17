@@ -31,7 +31,16 @@ internal class LyricsUiStateStore(private val path: Path) {
     fun rememberTutorialCompleted(page: String, value: Boolean): Boolean = write("${page}TutorialCompleted", value.toString())
 
     @Synchronized
-    fun resetTutorials(): Boolean = write(listOf("search", "metadata", "batch").associate { "${it}TutorialCompleted" to "false" })
+    fun claimSponsorTutorial(page: String): Boolean {
+        val first = values.getProperty("sponsorTutorial")?.takeIf { it.isNotBlank() }
+        return if (first != null) first == page else write("sponsorTutorial", page)
+    }
+
+    @Synchronized
+    fun resetTutorials(): Boolean = write(
+        listOf("search", "metadata", "batch").associate { "${it}TutorialCompleted" to "false" } +
+            ("sponsorTutorial" to ""),
+    )
 
     @Synchronized
     fun rememberLyricsFormat(value: String): Boolean = write("lyricsFormat", value)

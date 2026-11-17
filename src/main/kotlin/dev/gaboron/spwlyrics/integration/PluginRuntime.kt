@@ -91,6 +91,7 @@ object PluginRuntime {
     fun openWorkspace() { session?.openWorkspace() }
     fun timingSeeked() { session?.timingSeeked() }
     fun openCacheFolder() { session?.openCacheFolder() }
+    fun openSponsor() { session?.openSponsor() }
     fun resetLyricsOrder() { session?.resetLyricsOrder() }
     fun resetTutorials() { session?.resetTutorials() }
 }
@@ -288,6 +289,7 @@ private class PluginRuntimeSession : AutoCloseable {
         val tutorialPreferences = object : TutorialPreferences {
             override fun completed(kind: TutorialKind) = uiState.tutorialCompleted(kind.storageKey)
             override fun saveCompleted(kind: TutorialKind, value: Boolean) = uiState.rememberTutorialCompleted(kind.storageKey, value)
+            override fun claimSponsorTutorial(kind: TutorialKind) = uiState.claimSponsorTutorial(kind.storageKey)
         }
         workspace = performance.measure(Operation.WORKSPACE) {
             LyricsWorkspace({ LyricsWorkspaceSession(manualOperations, metadataOperations, tutorialPreferences, batch, describeBatchFailure,
@@ -394,6 +396,11 @@ private class PluginRuntimeSession : AutoCloseable {
     fun timingSeeked() { timingPlayback?.seeked() }
     fun openCacheFolder() {
         if (cacheFolderOpener?.open() != true) toastWarning("无法打开 SPW Lyrics 本地缓存文件夹。")
+    }
+    fun openSponsor() {
+        runCatching(SponsorLink::open).onFailure {
+            toastWarning("无法打开赞助页面，请手动访问：${SponsorLink.URL}")
+        }
     }
     fun resetLyricsOrder() {
         toastWarning(if (settings?.resetSelection() == true) "已恢复默认歌词排序。关闭并重新打开设置可查看默认顺序。" else "重置未完成，请重新打开设置后重试。")

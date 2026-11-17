@@ -15,6 +15,7 @@ internal enum class TutorialKind(val storageKey: String) { SEARCH("search"), MET
 internal interface TutorialPreferences {
     fun completed(kind: TutorialKind): Boolean
     fun saveCompleted(kind: TutorialKind, value: Boolean): Boolean
+    fun claimSponsorTutorial(kind: TutorialKind): Boolean
 }
 
 /** Each page owns session progress; completion and skipping persist independently. */
@@ -23,6 +24,7 @@ internal class TutorialController<S : TutorialStep>(
     completed: () -> Boolean,
     private val saveCompleted: (Boolean) -> Boolean,
     private val onFinished: () -> Unit = {},
+    private val claimSponsorship: () -> Boolean = { false },
 ) {
     init { require(steps.isNotEmpty()) }
     var active by mutableStateOf(!completed())
@@ -31,7 +33,14 @@ internal class TutorialController<S : TutorialStep>(
         private set
     var error by mutableStateOf<String?>(null)
         private set
+    var showSponsorship by mutableStateOf(false)
+        private set
     val step get() = steps[index]
+
+    /** Claim from the visible host, so controller creation order cannot choose the first tutorial. */
+    fun opened() {
+        if (active) showSponsorship = claimSponsorship()
+    }
 
     fun previous() {
         index = (index - 1).coerceAtLeast(0)
@@ -59,5 +68,6 @@ internal class TutorialController<S : TutorialStep>(
         index = 0
         active = true
         error = null
+        showSponsorship = false
     }
 }

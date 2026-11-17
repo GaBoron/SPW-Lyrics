@@ -40,6 +40,7 @@ import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import com.moriafly.salt.ui.SaltTheme
 import com.moriafly.salt.ui.Text
+import dev.gaboron.spwlyrics.integration.SponsorLink
 import dev.gaboron.spwlyrics.integration.composeui.DesktopButton
 import dev.gaboron.spwlyrics.integration.composeui.LocalDesktopPopupMaterial
 import kotlinx.coroutines.delay
@@ -76,6 +77,7 @@ internal fun Modifier.tutorialTarget(target: TutorialTarget): Modifier {
 internal fun <S : TutorialStep, D : AutoCloseable> TutorialHost(controller: TutorialController<S>, available: Boolean, createDemo: () -> D,
     content: @Composable (S?, D?) -> Unit) {
     val step = controller.step.takeIf { controller.active && available }
+    SideEffect { if (step != null) controller.opened() }
     val demo = remember(step != null) { if (step != null) createDemo() else null }
     val anchors = remember(demo) { TutorialAnchors() }
     var retainedTarget by remember(demo) { mutableStateOf<Rect?>(null) }
@@ -118,6 +120,7 @@ private fun <S : TutorialStep> TutorialOverlay(controller: TutorialController<S>
     val position = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
     var positioned by remember { mutableStateOf(false) }
     val scroll = rememberScrollState()
+    var sponsorError by remember { mutableStateOf<String?>(null) }
     val progress by animateFloatAsState((controller.index + 1f) / controller.steps.size,
         tween(300), label = "tutorial progress")
     LaunchedEffect(controller.index) {
@@ -185,6 +188,16 @@ private fun <S : TutorialStep> TutorialOverlay(controller: TutorialController<S>
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(step.title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                         Text(step.detail)
+                        if (index == controller.steps.lastIndex && controller.showSponsorship) {
+                            Text("如果 SPW Lyrics 对你有帮助，欢迎通过爱发电赞助支持。", color = SaltTheme.colors.subText)
+                            DesktopButton("赞助支持（爱发电）", {
+                                sponsorError = null
+                                runCatching(SponsorLink::open).onFailure {
+                                    sponsorError = "无法打开赞助页面，请手动访问：${SponsorLink.URL}"
+                                }
+                            })
+                            sponsorError?.let { Text(it, color = SaltTheme.colors.error) }
+                        }
                     }
                 }
                 controller.error?.let { Text(it, color = SaltTheme.colors.error) }

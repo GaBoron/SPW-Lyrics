@@ -69,7 +69,8 @@ internal class LyricsWorkspaceSession(
     }
 
     private fun <S : TutorialStep> tutorial(kind: TutorialKind, steps: List<S>, finished: () -> Unit) =
-        TutorialController(steps, { tutorialPreferences.completed(kind) }, { tutorialPreferences.saveCompleted(kind, it) }, finished)
+        TutorialController(steps, { tutorialPreferences.completed(kind) }, { tutorialPreferences.saveCompleted(kind, it) },
+            onFinished = finished, claimSponsorship = { tutorialPreferences.claimSponsorTutorial(kind) })
 
     fun resetTutorials() {
         manualTutorial.reset()
