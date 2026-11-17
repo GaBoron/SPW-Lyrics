@@ -84,3 +84,20 @@ tasks.named<Zip>("plugin") {
 }
 
 apply(from = "gradle/lrcshare-access.gradle.kts")
+
+// Keep regression checks independent of a host process and a test framework.
+kotlin.sourceSets.named("test") { kotlin.setSrcDirs(listOf("test")) }
+dependencies { testImplementation(kotlin("stdlib")) }
+configurations.testCompileOnly { extendsFrom(configurations.compileOnly.get()) }
+val regressionTest = tasks.register<JavaExec>("regressionTest") {
+    group = "verification"
+    description = "Run deterministic regression checks without SPW or network access"
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath + sourceSets["main"].compileClasspath
+    mainClass.set("dev.gaboron.spwlyrics.regression.RegressionChecks")
+}
+tasks.test {
+    dependsOn(regressionTest)
+    // Assertions execute above; there are no JUnit tests to discover.
+    enabled = false
+}
